@@ -28,7 +28,7 @@ cmd_list = [
 		'git add pytest.ini',
 		'git add setup.py',
 		'git add requirements.txt',
-		"git commit -am 'Deploying pylib'",
+		"git commit -am 'Deploying_pylib'",
 
 		]
 
@@ -36,8 +36,9 @@ for cmd in cmd_list:
 	print('--------------')
 	print(cmd)
 	print('')
-	ans = subprocess.check_output(cmd)
+	cmd2 = cmd.split(' ')
+	ans = subprocess.check_output(cmd2)
 	print(ans)
 
 
-"To finish the process, you can execute 'git rm deploy_pylib.py'"
+print("To finish the process, you can execute 'git rm deploy_pylib.py'")
