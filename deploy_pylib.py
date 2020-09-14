@@ -2,7 +2,7 @@
 import subprocess
 import os
 
-libname = 
+libname = 'repo_tools'
 
 
 with open('setup.py','r') as f:
