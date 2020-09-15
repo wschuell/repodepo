@@ -1,11 +1,13 @@
 language: python
+# services:
+#   - postgresql
+#   - docker
 python:
-  - "2.7"
-  - "3.4"
-  - "3.6"
+  - "3.7"
 before_install:
  - sudo apt-get update -qq
-
+# before_script:
+#   - psql -c 'create database travis_ci_test;' -U postgres
 install:
   - pip install codecov pytest-cov
   - pip install -r requirements.txt
