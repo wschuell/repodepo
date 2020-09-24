@@ -104,10 +104,35 @@ class Database(object):
 			self.connection.commit()
 		elif self.db_type == 'postgres':
 			self.cursor.execute('''
-				CREATE TABLE IF NOT EXISTS projects(
+				CREATE TABLE IF NOT EXISTS sources(
 				id BIGSERIAL PRIMARY KEY,
-				name TEXT UNIQUE,
-				created_at TIMESTAMP NOT NULL
+				name TEXT NOT NULL UNIQUE,
+				url_root TEXT NOT NULL UNIQUE
+				);
+
+				CREATE TABLE IF NOT EXISTS repositories(
+				id BIGSERIAL PRIMARY KEY,
+				source BIGINT REFERENCES sources(id) ON DELETE CASCADE,
+				owner TEXT,
+				name TEXT,
+				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				-- updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				UNIQUE(source,owner,name)
+				);
+
+				CREATE TABLE IF NOT EXISTS download_attempts(
+				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
+				attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				success BOOLEAN DEFAULT false
+				);
+
+
+				CREATE TABLE IF NOT EXISTS urls(
+				source BIGINT REFERENCES sources(id) ON DELETE CASCADE,
+				repo_url TEXT NOT NULL,
+				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
+				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				PRIMARY KEY(source,repo_url)
 				);
 				''')
 
@@ -120,8 +145,8 @@ class Database(object):
 		'''
 		logger.info('Cleaning database')
 		self.cursor.execute('DROP TABLE IF EXISTS download_attempts;')
-		self.cursor.execute('DROP TABLE IF EXISTS repositories;')
 		self.cursor.execute('DROP TABLE IF EXISTS urls;')
+		self.cursor.execute('DROP TABLE IF EXISTS repositories;')
 		self.cursor.execute('DROP TABLE IF EXISTS sources;')
 		self.connection.commit()
 
