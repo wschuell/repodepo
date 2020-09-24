@@ -172,12 +172,10 @@ class Database(object):
 		'''
 		if self.db_type == 'postgres':
 			self.cursor.execute(''' INSERT INTO sources(name,url_root)
-				 VALUES(
-								%s,%s) ON CONFLICT DO NOTHING;''',(source,source_urlroot))
+				 VALUES(%s,%s) ON CONFLICT DO NOTHING;''',(source,source_urlroot))
 		else:
-			self.cursor.execute(''' INSERT INTO sources(name,url_root)
-				 VALUES(
-								?,?) ON CONFLICT DO NOTHING;''',(source,source_urlroot))
+			self.cursor.execute(''' INSERT OR IGNORE INTO sources(name,url_root)
+				 VALUES(?,?);''',(source,source_urlroot))
 		self.connection.commit()
 
 	def register_url(self,source,repo_url,repo_id=None):
