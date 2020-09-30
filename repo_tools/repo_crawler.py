@@ -5,6 +5,7 @@ import copy
 import pygit2
 import logging
 import numpy as np
+import datetime
 
 from .repo_database import Database
 
@@ -33,7 +34,7 @@ class RepoCrawler(object):
 	A folder can be specified as root (default '.'), where the DB lies, and repos are cloned in its subfolder: PATH/cloned_repos
 
 	'''
-	def __init__(self,folder='.',ssh_mode=False,ssh_key=os.path.join(os.environ['HOME'],'.ssh/id_rsa'),**db_cfg):
+	def __init__(self,folder='.',ssh_mode=False,ssh_key=os.path.join(os.environ['HOME'],'.ssh/id_rsa'),db_folder=None,**db_cfg):
 		# self.repo_list = []
 		# self.add_list(repo_list)
 		self.folder = folder
@@ -46,7 +47,9 @@ class RepoCrawler(object):
 		else:
 			self.callbacks = None
 
-		self.set_db(**db_cfg)
+		if db_folder is None:
+			db_folder = self.folder
+		self.set_db(db_folder=db_folder,**db_cfg)
 
 	def add_list(self,repo_list,source,source_urlroot):
 		'''
@@ -54,7 +57,7 @@ class RepoCrawler(object):
 		Or simply code an option to disable checks
 		'''
 		repo_list = copy.deepcopy(repo_list) #deepcopy to avoid unwanted modif of default arg
-		
+
 		self.db.register_source(source=source,source_urlroot=source_urlroot)
 
 		for r in repo_list:
@@ -72,7 +75,8 @@ class RepoCrawler(object):
 		# 	if r_f not in self.repo_list:
 		# 		self.repo_list.append(r_f)
 
-	def set_db(self,db=None,db_folder=None,db_name='',db_user='postgres',db_host='localhost',db_type='sqlite',db_port=5432):
+	# def set_db(self,db=None,db_folder=None,db_name='',db_user='postgres',db_host='localhost',db_type='sqlite',db_port=5432):
+	def set_db(self,db=None,**db_cfg):
 		'''
 		Sets up the database
 		'''
@@ -86,7 +90,7 @@ class RepoCrawler(object):
 
 	def repo_formatting(self,repo,source_urlroot):
 		'''
-		Formatting repositories so that they match the expected syntax 'user/project' 
+		Formatting repositories so that they match the expected syntax 'user/project'
 		'''
 		r = copy.copy(repo)
 		for start_str in [
@@ -154,7 +158,7 @@ class RepoCrawler(object):
 
 	def clone(self,source,name,owner,source_urlroot,force=False,replace=False,update=False):
 		'''
-		Cloning one repo. 
+		Cloning one repo.
 		Skipping if folder exists by default; not if force=True, in this case delete folder and restart
 		Executing update_repo if repo already exists and update is True
 
@@ -170,6 +174,11 @@ class RepoCrawler(object):
 				self.update_repo(source=source,name=name,owner=owner,source_urlroot=source_urlroot)
 			else:
 				self.logger.info('Repo {}/{}/{} already exists'.format(source,owner,name))
+				repo_id = self.db.get_repo_id(source=source,name=name,owner=owner)
+				if self.db.get_last_dl(repo_id=repo_id,success=True) is None:
+					repo_obj = self.get_repo(source=source,owner=owner,name=name)
+					last_commit_time = datetime.datetime.fromtimestamp(repo_obj.revparse_single('HEAD').commit_time)
+					self.db.submit_download_attempt(source=source,owner=owner,repo=name,success=True,dl_time=last_commit_time)
 		else:
 			repo_id = self.db.get_repo_id(source=source,name=name,owner=owner)
 			if self.db.db_type == 'postgres':
@@ -188,16 +197,113 @@ class RepoCrawler(object):
 				self.db.submit_download_attempt(success=success,source=source,repo=name,owner=owner)
 			else:
 				self.logger.info('Skipping repo {}/{}/{}, already failed to download'.format(source,owner,name))
-			
+
 	def update_repo(self,name,source,source_urlroot,owner):
 		'''
 		git fetch on repo
 		cloning if folder not existing
 		'''
 		self.logger.info('Updating repo {}/{}/{}'.format(source,owner,name))
-		repo_folder = os.path.join(self.folder,'cloned_repos',repo)
+		repo_folder = os.path.join(self.folder,'cloned_repos',source,owner,name)
 
 		repo_obj = pygit2.Repository(os.path.join(repo_folder,'.git'))
-		repo_obj.remotes["origin"].fetch(callbacks=self.callbacks)
+		try:
+			repo_obj.remotes["origin"].fetch(callbacks=self.callbacks)
+			success = True
+		except pygit2.GitError as e:
+			self.logger.info('Git Error for repo {}/{}/{}'.format(source,owner,name))
+			success = False
+
+		self.db.submit_download_attempt(success=success,source=source,repo=name,owner=owner)
+
+	def get_repo(self,name,source,owner):
+		'''
+		Returns the pygit2 repository object
+		'''
+		repo_folder = os.path.join(self.folder,'cloned_repos',source,owner,name)
+		if not os.path.exists(repo_folder):
+			raise ValueError('Repository {}/{}/{} not found in cloned_repos folder'.format(source,owner,name))
+		else:
+			return pygit2.Repository(os.path.join(repo_folder,'.git'))
 
 
+	def list_commits(self,name,source,owner,basic_info_only=False,repo_id=None):
+		'''
+		Listing the commits of a repository
+		'''
+		repo_obj = self.get_repo(source=source,name=name,owner=owner)
+		if repo_id is None: # Letting the possibility to preset repo_id to avoid cursor recursive usage
+			repo_id = self.db.get_repo_id(source=source,name=name,owner=owner)
+		# repo_obj.walk(repo.head.target, pygit2.GIT_SORT_TOPOLOGICAL | pygit2.GIT_SORT_REVERSE)
+		for commit in repo_obj.walk(repo_obj.head.target, pygit2.GIT_SORT_TIME | pygit2.GIT_SORT_REVERSE):
+			if basic_info_only:
+				yield {
+						'author_email':commit.author.email,
+						'author_name':commit.author.name,
+						'time':commit.commit_time,
+						'time_offset':commit.commit_time_offset,
+						'sha':commit.hex,
+						'parents':[pid.hex for pid in commit.parent_ids],
+						'repo_id':repo_id,
+						}
+			else:
+				if commit.parents:
+					diff_obj = repo_obj.diff(commit.parents[0],commit)# Inverted order wrt the expected one, to have expected values for insertions and deletions
+					insertions = diff_obj.stats.insertions
+					deletions = diff_obj.stats.deletions
+				else:
+					diff_obj = commit.tree.diff_to_tree()
+					# re-inverting insertions and deletions, to get expected values
+					deletions = diff_obj.stats.insertions
+					insertions = diff_obj.stats.deletions
+				yield {
+						'author_email':commit.author.email,
+						'author_name':commit.author.name,
+						'time':commit.commit_time,
+						'time_offset':commit.commit_time_offset,
+						'sha':commit.hex,
+						'parents':[pid.hex for pid in commit.parent_ids],
+						'insertions':insertions,
+						'deletions':deletions,
+						'total':insertions+deletions,
+						'repo_id':repo_id,
+						}
+
+
+	def fill_commit_info(self,force=False):
+		'''
+		Filling in authors, commits and parenthood using Database object methods
+		'''
+
+		self.db.cursor.execute('SELECT MAX(updated_at) FROM full_updates;')
+		last_fu = self.db.cursor.fetchone()[0]
+
+		self.db.cursor.execute('SELECT MAX(attempted_at) FROM download_attempts WHERE success;')
+		last_dl = self.db.cursor.fetchone()[0]
+		
+		print(last_fu,last_dl)
+
+		if force or (last_fu is None) or (last_fu<last_dl): 
+			
+			self.logger.info('Filling in users')
+
+			for repo_info in self.db.get_repo_list(option='basicinfo_dict'):
+				self.db.fill_authors(self.list_commits(basic_info_only=True,**repo_info))
+			self.db.create_indexes(table='users')
+			
+			self.logger.info('Filling in commits')
+
+			for repo_info in self.db.get_repo_list(option='basicinfo_dict'):
+				self.db.fill_commits(self.list_commits(basic_info_only=False,**repo_info))
+			self.db.create_indexes(table='commits')
+
+			self.logger.info('Filling in commit parents')
+	
+			for repo_info in self.db.get_repo_list(option='basicinfo_dict'):
+				self.db.fill_commit_parents(self.list_commits(basic_info_only=True,**repo_info))
+			self.db.create_indexes(table='commit_parents')
+
+			self.db.cursor.execute('INSERT INTO full_updates(updated_at) VALUES((SELECT CURRENT_TIMESTAMP));')
+			self.db.connection.commit()
+		else:
+			self.logger.info('Skipping filling of commits info')

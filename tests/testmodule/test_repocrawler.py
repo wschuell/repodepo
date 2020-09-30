@@ -52,3 +52,13 @@ def test_clone_inexistant(testrc):
 	testrc.add_list(['wschuell/experiment_manager','flowersteam/naminggamesal'],source='GitHub',source_urlroot='github.com')
 	testrc.add_list(['wschuell/inexistantrepo'],source='GitHub',source_urlroot='github.com')
 	testrc.clone_all()
+
+def test_gitfetch(testrc):
+	testrc.add_list(['wschuell/experiment_manager','flowersteam/naminggamesal'],source='GitHub',source_urlroot='github.com')
+	testrc.clone_all()
+	testrc.clone_all(update=True)
+
+def test_fillcommits(testrc):
+	testrc.add_list(['wschuell/experiment_manager','flowersteam/naminggamesal'],source='GitHub',source_urlroot='github.com')
+	testrc.clone_all()
+	testrc.fill_commit_info()

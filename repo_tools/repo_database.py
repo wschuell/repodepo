@@ -71,7 +71,7 @@ class Database(object):
 				CREATE TABLE IF NOT EXISTS sources(
 				id INTEGER PRIMARY KEY,
 				name TEXT NOT NULL UNIQUE,
-				url_root TEXT NOt NULL UNIQUE
+				url_root TEXT NOT NULL UNIQUE
 				);
 
 				CREATE TABLE IF NOT EXISTS repositories(
@@ -80,7 +80,7 @@ class Database(object):
 				owner TEXT,
 				name TEXT,
 				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-				-- updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				updated_at TIMESTAMP DEFAULT NULL,
 				UNIQUE(source,owner,name)
 				);
 
@@ -97,6 +97,20 @@ class Database(object):
 				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
 				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 				PRIMARY KEY(source,repo_url)
+				);
+
+				CREATE TABLE IF NOT EXISTS table_updates(
+				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
+				table_name TEXT,
+				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				latest_commit_time TIMESTAMP DEFAULT NULL,
+				PRIMARY KEY(repo_id,table_name)
+				);
+
+				CREATE INDEX IF NOT EXISTS table_updates_idx ON table_updates(repo_id,table_name,updated_at);
+
+				CREATE TABLE IF NOT EXISTS full_updates(
+				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 				);
 				'''
 			for q in DB_INIT.split(';')[:-1]:
@@ -116,7 +130,7 @@ class Database(object):
 				owner TEXT,
 				name TEXT,
 				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-				-- updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 				UNIQUE(source,owner,name)
 				);
 
@@ -134,6 +148,19 @@ class Database(object):
 				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 				PRIMARY KEY(source,repo_url)
 				);
+
+				CREATE TABLE IF NOT EXISTS table_updates(
+				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
+				table_name TEXT,
+				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				latest_commit_time TIMESTAMP DEFAULT NULL,
+				);
+
+				CREATE INDEX IF NOT EXISTS table_updates_idx ON table_updates(repo_id,table_name,updated_at);
+
+				CREATE TABLE IF NOT EXISTS full_updates(
+				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+				);
 				''')
 
 			self.connection.commit()
@@ -144,6 +171,8 @@ class Database(object):
 		If there is a change in structure in the init script, this method should be called to 'reset' the state of the database
 		'''
 		logger.info('Cleaning database')
+		self.cursor.execute('DROP TABLE IF EXISTS full_updates;')
+		self.cursor.execute('DROP TABLE IF EXISTS table_updates;')
 		self.cursor.execute('DROP TABLE IF EXISTS download_attempts;')
 		self.cursor.execute('DROP TABLE IF EXISTS urls;')
 		self.cursor.execute('DROP TABLE IF EXISTS repositories;')
@@ -225,14 +254,14 @@ class Database(object):
 			return None
 		else:
 			return repo_id[0]
-		
-	def submit_download_attempt(self,source,owner,repo,success):
+
+	def submit_download_attempt(self,source,owner,repo,success,dl_time=None):
 		'''
 		Registers a repository if not already done, plus the download attempt
 		'''
 		#Getting repo id
 		repo_id = self.get_repo_id(name=repo,source=source,owner=owner)
-		
+
 		#creating if not existing
 		if repo_id is None:
 			if self.db_type == 'postgres':
@@ -246,14 +275,36 @@ class Database(object):
 									?,
 									?);''',(source,owner,repo))
 			repo_id = self.get_repo_id(name=repo,source=source,owner=owner)
-		
+
 		#inserting download attempt
-		if self.db_type == 'postgres':
-			self.cursor.execute(''' INSERT INTO download_attempts(repo_id,success)
-			 VALUES(%s,%s);''',(repo_id,success))
+		if dl_time is None:
+			if self.db_type == 'postgres':
+				self.cursor.execute(''' INSERT INTO download_attempts(repo_id,success)
+				 VALUES(%s,%s);''',(repo_id,success))
+				if success:
+					self.cursor.execute(''' UPDATE repositories SET updated_at=(SELECT CURRENT_TIMESTAMP)
+				WHERE id=%s;''',(repo_id,))
+	
+			else:
+				self.cursor.execute(''' INSERT INTO download_attempts(repo_id,success)
+				 VALUES(?,?);''',(repo_id,success))
+				if success:
+					self.cursor.execute(''' UPDATE repositories SET updated_at=(SELECT CURRENT_TIMESTAMP)
+				WHERE id=?;''',(repo_id,))
 		else:
-			self.cursor.execute(''' INSERT INTO download_attempts(repo_id,success)
-			 VALUES(?,?);''',(repo_id,success))
+			if self.db_type == 'postgres':
+				self.cursor.execute(''' INSERT INTO download_attempts(repo_id,success,attempted_at)
+				 VALUES(%s,%s,%s);''',(repo_id,success,dl_time))
+				if success:
+					self.cursor.execute(''' UPDATE repositories SET updated_at=%s,
+				WHERE id=%s;''',(dl_time,repo_id,))
+	
+			else:
+				self.cursor.execute(''' INSERT INTO download_attempts(repo_id,success,attempted_at)
+				 VALUES(?,?,?);''',(repo_id,success,dl_time))
+				if success:
+					self.cursor.execute(''' UPDATE repositories SET updated_at=?
+				WHERE id=?;''',(dl_time,repo_id,))
 		self.connection.commit()
 
 	def get_repo_list(self,option='all'):
@@ -269,6 +320,15 @@ class Database(object):
 				ORDER BY s.name,r.owner,r.name
 				;''')
 			return list(self.cursor.fetchall())
+		elif option == 'basicinfo_dict':
+			self.cursor.execute('''
+				SELECT s.name,r.owner,r.name,r.id
+				FROM repositories r
+				INNER JOIN sources s
+				ON s.id=r.source
+				ORDER BY s.name,r.owner,r.name
+				;''')
+			return [{'source':r[0],'owner':r[1],'name':r[2],'repo_id':r[3]} for r in self.cursor.fetchall()]
 
 		elif option == 'no_dl':
 
@@ -282,9 +342,207 @@ class Database(object):
 				GROUP BY s.name,s.url_root,r.owner,r.name
 				HAVING COUNT(*)=0
 				ORDER BY s.name,r.owner,r.name
-				
+
 				;''')
 			return list(self.cursor.fetchall())
 
 		else:
 			raise ValueError('Unknown option for repo_list: {}'.format(option))
+		
+
+	def fill_authors(self,commit_info_list):
+		'''
+		Creating table if necessary.
+		Filling authors in table.
+		'''
+		#creating table
+		if self.db_type == 'postgres':
+			self.cursor.execute('''
+				CREATE TABLE IF NOT EXISTS users(
+				id BIGSERIAL PRIMARY KEY,
+				name TEXT,
+				email TEXT UNIQUE,
+				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+				);
+				''')
+		else:
+			self.cursor.execute('''
+				CREATE TABLE IF NOT EXISTS users(
+				id INTEGER PRIMARY KEY,
+				name TEXT,
+				email TEXT UNIQUE,
+				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+				);
+				''')
+
+		# filling in data
+		if self.db_type == 'postgres':
+			extras.execute_batch(self.cursor,'''
+				INSERT INTO users(name,email) VALUES(%s,%s)
+				ON CONFLICT DO NOTHING;
+				''',((c['author_name'],c['author_email']) for c in commit_info_list))
+		else:
+			self.cursor.executemany('''
+				INSERT OR IGNORE INTO users(name,email) VALUES(?,?)
+				;
+				''',((c['author_name'],c['author_email']) for c in commit_info_list))
+
+	def fill_commits(self,commit_info_list):
+		'''
+		Creating table if necessary.
+		Filling authors in table.
+		'''
+		#creating table
+		if self.db_type == 'postgres':
+			self.cursor.execute('''
+				CREATE TABLE IF NOT EXISTS commits(
+				id BIGSERIAL PRIMARY KEY,
+				sha TEXT,
+				author_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
+				created_at TIMESTAMP,
+				insertions INT,
+				deletions INT,
+				UNIQUE(sha)
+				);
+				''')
+		else:
+			self.cursor.execute('''
+				CREATE TABLE IF NOT EXISTS commits(
+				id INTEGER PRIMARY KEY,
+				sha TEXT,
+				author_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
+				created_at TIMESTAMP,
+				insertions INTEGER,
+				deletions INTEGER,
+				UNIQUE(sha)
+				);
+				''')
+
+		# filling in data
+		if self.db_type == 'postgres':
+			extras.execute_batch(self.cursor,'''
+				INSERT INTO commits(sha,author_id,repo_id,created_at,insertions,deletions)
+					VALUES(%s,
+							(SELECT id FROM users WHERE email=%s),
+							%s,
+							%s,
+							%s,
+							%s
+							)
+				ON CONFLICT DO NOTHING;
+				''',((c['sha'],c['author_email'],c['repo_id'],datetime.datetime.fromtimestamp(c['time']),c['insertions'],c['deletions'],) for c in commit_info_list))
+		else:
+			self.cursor.executemany('''
+				INSERT OR IGNORE INTO commits(sha,author_id,repo_id,created_at,insertions,deletions)
+					VALUES(?,
+							(SELECT id FROM users WHERE email=?),
+							?,
+							?,
+							?,
+							?
+							);
+				''',((c['sha'],c['author_email'],c['repo_id'],datetime.datetime.fromtimestamp(c['time']),c['insertions'],c['deletions'],) for c in commit_info_list))
+
+
+	def fill_commit_parents(self,commit_info_list):
+		'''
+		Creating table if necessary.
+		Filling authors in table.
+		'''
+		#creating table
+		if self.db_type == 'postgres':
+			self.cursor.execute('''
+				CREATE TABLE IF NOT EXISTS commit_parents(
+				child_id BIGINT REFERENCES commits(id) ON DELETE CASCADE,
+				parent_id BIGINT REFERENCES commits(id) ON DELETE CASCADE,
+				rank INT,
+				PRIMARY KEY(child_id,parent_id),
+				UNIQUE(parent_id,child_id,rank)
+				);
+				''')
+		else:
+			self.cursor.execute('''
+				CREATE TABLE IF NOT EXISTS commit_parents(
+				child_id INTEGER REFERENCES commits(id) ON DELETE CASCADE,
+				parent_id INTEGER REFERENCES commits(id) ON DELETE CASCADE,
+				rank INTEGER,
+				PRIMARY KEY(child_id,parent_id),
+				UNIQUE(parent_id,child_id,rank)
+				);
+				''')
+
+		def transformed_list(cil):
+			for c in cil:
+				c_id = c['sha']
+				for r,p_id in enumerate(c['parents']):
+					yield (c_id,p_id,r)
+
+		# filling in data
+		if self.db_type == 'postgres':
+			extras.execute_batch(self.cursor,'''
+				INSERT INTO commit_parents(child_id,parent_id,rank)
+					VALUES(
+							(SELECT id FROM commits WHERE sha=%s),
+							(SELECT id FROM commits WHERE sha=%s),
+							%s)
+				ON CONFLICT DO NOTHING;
+				''',transformed_list(commit_info_list))
+		else:
+			self.cursor.executemany('''
+				INSERT OR IGNORE INTO commit_parents(child_id,parent_id,rank)
+					VALUES(
+							(SELECT id FROM commits WHERE sha=?),
+							(SELECT id FROM commits WHERE sha=?),
+							?);
+				''',transformed_list(commit_info_list))
+
+
+	def create_indexes(self,table=None):
+		'''
+		Creating indexes for the various tables that are not specified at table creation, where insertion time could be impacted by their presence
+		'''
+		if table == 'user' or table is None:
+			self.logger.info('Creating indexes for table user')
+			self.cursor.execute('''
+				CREATE INDEX IF NOT EXISTS user_names_idx ON users(name)
+				;''')
+		elif table == 'commits' or table is None:
+			self.logger.info('Creating indexes for table commits')
+			self.cursor.execute('''
+				CREATE INDEX IF NOT EXISTS commits_ac_idx ON commits(author_id,created_at)
+				;''')
+			self.cursor.execute('''
+				CREATE INDEX IF NOT EXISTS commits_rc_idx ON commits(repo_id,created_at)
+				;''')
+			self.cursor.execute('''
+				CREATE INDEX IF NOT EXISTS commits_cra_idx ON commits(created_at,repo_id,author_id)
+				;''')
+		elif table == 'commit_parents' or table is None:
+			self.logger.info('Creating indexes for table commit_parents')
+			pass
+		self.connection.commit()
+
+	def get_last_dl(self,repo_id,success=None):
+		'''
+		gets last download time as datetime object
+		success None: no selection on success
+		succes bool: selection on success
+		'''
+		if self.db_type == 'postgres':
+			self.cursor.execute('''
+				SELECT MAX(attempted_at)
+					FROM download_attempts
+					WHERE repo_id=%s AND (%s IS NULL OR success=%s)
+				;''',(repo_id,success,success))
+		else:
+
+			self.cursor.execute('''
+				SELECT MAX(attempted_at)
+					FROM download_attempts
+					WHERE repo_id=? AND (? IS NULL OR success=?)
+				;''',(repo_id,success,success))
+		ans = self.cursor.fetchone()
+		if ans is not None:
+			return ans[0]
