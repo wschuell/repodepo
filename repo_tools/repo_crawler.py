@@ -275,7 +275,7 @@ class RepoCrawler(object):
 		Filling in authors, commits and parenthood using Database object methods
 		'''
 
-		self.db.cursor.execute('SELECT MAX(updated_at) FROM full_updates;')
+		self.db.cursor.execute('''SELECT MAX(updated_at) FROM full_updates WHERE update_type='commits';''')
 		last_fu = self.db.cursor.fetchone()[0]
 
 		self.db.cursor.execute('SELECT MAX(attempted_at) FROM download_attempts WHERE success;')
@@ -303,7 +303,16 @@ class RepoCrawler(object):
 				self.db.fill_commit_parents(self.list_commits(basic_info_only=True,**repo_info))
 			self.db.create_indexes(table='commit_parents')
 
-			self.db.cursor.execute('INSERT INTO full_updates(updated_at) VALUES((SELECT CURRENT_TIMESTAMP));')
+			self.db.cursor.execute('''INSERT INTO full_updates(update_type,updated_at) VALUES('commits',(SELECT CURRENT_TIMESTAMP));''')
 			self.db.connection.commit()
 		else:
 			self.logger.info('Skipping filling of commits info')
+
+	def fill_stars(self,force=False):
+		'''
+		Filling stars (only from github for the moment)
+		'''
+		# create tables
+		# check full updates
+		# query github through pygithub / or through curl
+		pass

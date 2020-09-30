@@ -110,6 +110,7 @@ class Database(object):
 				CREATE INDEX IF NOT EXISTS table_updates_idx ON table_updates(repo_id,table_name,updated_at);
 
 				CREATE TABLE IF NOT EXISTS full_updates(
+				update_type TEXT,
 				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 				);
 				'''
@@ -154,6 +155,7 @@ class Database(object):
 				table_name TEXT,
 				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 				latest_commit_time TIMESTAMP DEFAULT NULL,
+				PRIMARY KEY(repo_id,table_name)
 				);
 
 				CREATE INDEX IF NOT EXISTS table_updates_idx ON table_updates(repo_id,table_name,updated_at);

@@ -9,7 +9,7 @@ import shutil
 #### Parameters
 dbtype_list = [
 	'sqlite',
-	# 'postgres'
+	'postgres'
 	]
 @pytest.fixture(params=dbtype_list)
 def dbtype(request):
