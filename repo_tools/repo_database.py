@@ -113,6 +113,17 @@ class Database(object):
 				update_type TEXT,
 				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 				);
+
+				CREATE TABLE IF NOT EXISTS stars(
+				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
+				login TEXT NOT NULL,
+				starred_at TIMESTAMP NOT NULL,
+				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				PRIMARY KEY(repo_id,login)
+				);
+
+				CREATE INDEX IF NOT EXISTS stars_idx ON stars(repo_id,starred_at);
+				CREATE INDEX IF NOT EXISTS stars_idx2 ON stars(repo_id,created_at);
 				'''
 			for q in DB_INIT.split(';')[:-1]:
 				self.cursor.execute(q)
@@ -164,6 +175,17 @@ class Database(object):
 				update_type TEXT,
 				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 				);
+
+				CREATE TABLE IF NOT EXISTS stars(
+				repo_id BIGINT REFERENCES repositories(id),
+				login TEXT NOT NULL,
+				starred_at TIMESTAMP NOT NULL,
+				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				PRIMARY KEY(repo_id,login)
+				);
+
+				CREATE INDEX IF NOT EXISTS stars_idx ON stars(repo_id,starred_at);
+				CREATE INDEX IF NOT EXISTS stars_idx2 ON stars(repo_id,created_at);
 				''')
 
 			self.connection.commit()
@@ -174,6 +196,7 @@ class Database(object):
 		If there is a change in structure in the init script, this method should be called to 'reset' the state of the database
 		'''
 		logger.info('Cleaning database')
+		self.cursor.execute('DROP TABLE IF EXISTS stars;')
 		self.cursor.execute('DROP TABLE IF EXISTS full_updates;')
 		self.cursor.execute('DROP TABLE IF EXISTS table_updates;')
 		self.cursor.execute('DROP TABLE IF EXISTS download_attempts;')
@@ -287,7 +310,7 @@ class Database(object):
 				if success:
 					self.cursor.execute(''' UPDATE repositories SET updated_at=(SELECT CURRENT_TIMESTAMP)
 				WHERE id=%s;''',(repo_id,))
-	
+
 			else:
 				self.cursor.execute(''' INSERT INTO download_attempts(repo_id,success)
 				 VALUES(?,?);''',(repo_id,success))
@@ -301,7 +324,7 @@ class Database(object):
 				if success:
 					self.cursor.execute(''' UPDATE repositories SET updated_at=%s,
 				WHERE id=%s;''',(dl_time,repo_id,))
-	
+
 			else:
 				self.cursor.execute(''' INSERT INTO download_attempts(repo_id,success,attempted_at)
 				 VALUES(?,?,?);''',(repo_id,success,dl_time))
@@ -351,7 +374,7 @@ class Database(object):
 
 		else:
 			raise ValueError('Unknown option for repo_list: {}'.format(option))
-		
+
 
 	def fill_authors(self,commit_info_list):
 		'''
@@ -549,3 +572,69 @@ class Database(object):
 		ans = self.cursor.fetchone()
 		if ans is not None:
 			return ans[0]
+
+	def get_source_info(self,source):
+		'''
+		Returns source_urlroot if source exists, otherwise throws and error
+		'''
+		if self.db_type == 'postgres':
+			self.cursor.execute('SELECT id,url_root FROM sources WHERE name=%s;',(source,))
+		else:
+			self.cursor.execute('SELECT id,url_root FROM sources WHERE name=?;',(source,))
+		ans = self.cursor.fetchone()
+		if ans is None:
+			raise ValueError('Unregistered source {}'.format(source))
+		else:
+			return ans
+
+	def get_last_star(self,source,repo,owner):
+		'''
+		returns a dict with created_at, starred_at and login for the last registered star. All to None if does not exist
+		'''
+		repo_id = self.get_repo_id(name=repo,owner=owner,source=source)
+		if self.db_type == 'postgres':
+			self.cursor.execute('''SELECT created_at,starred_at,login FROM stars WHERE repo_id=%s
+									ORDER BY created_at DESC LIMIT 1;''',(repo_id,))
+		else:
+			self.cursor.execute('''SELECT created_at,starred_at,login FROM stars WHERE repo_id=?
+									ORDER BY created_at DESC LIMIT 1;''',(repo_id,))
+		ans = self.cursor.fetchone()
+		if ans is None:
+			return {'created_at':None,'starred_at':None,'login':None}
+		else:
+			return {'created_at':ans[0],'starred_at':ans[1],'login':ans[2]}
+
+	def count_stars(self,source,repo,owner):
+		'''
+		Counts registered starring events of a repo
+		'''
+		repo_id = self.get_repo_id(name=repo,owner=owner,source=source)
+		if self.db_type == 'postgres':
+			self.cursor.execute('''SELECT COUNT(*) FROM stars WHERE repo_id=%s;''',(repo_id,))
+		else:
+			self.cursor.execute('''SELECT COUNT(*) FROM stars WHERE repo_id=?;''',(repo_id,))
+		ans = self.cursor.fetchone()[0] # When no count, result is (None,)
+		if ans is None:
+			return 0
+		else:
+			return ans
+
+	def insert_stars(self,stars_list,commit=True):
+		'''
+		Inserts starring events.
+		commit defines the behavior at the end, commit of the transaction or not. Committing externally allows to do it only when all stars for a repo have been added
+		'''
+		if self.db_type == 'postgres':
+			extras.execute_batch(self.cursor,'''
+				INSERT INTO stars(starred_at,login,repo_id)
+				VALUES(%s,%s,%s)
+				ON CONFLICT DO NOTHING
+				;''',((s['starred_at'],s['login'],s['repo_id']) for s in stars_list))
+		else:
+			self.cursor.executemany('''
+				INSERT OR IGNORE INTO stars(starred_at,login,repo_id)
+				VALUES(?,?,?)
+				;''',((s['starred_at'],s['login'],s['repo_id']) for s in stars_list))
+
+		if commit:
+			self.connection.commit()

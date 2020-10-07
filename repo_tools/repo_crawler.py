@@ -6,6 +6,10 @@ import pygit2
 import logging
 import numpy as np
 import datetime
+import glob
+import github
+import calendar
+import time
 
 from .repo_database import Database
 
@@ -16,6 +20,7 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 logger.setLevel(logging.INFO)
+
 
 class RepoSyntaxError(ValueError):
 	'''
@@ -51,14 +56,17 @@ class RepoCrawler(object):
 			db_folder = self.folder
 		self.set_db(db_folder=db_folder,**db_cfg)
 
-	def add_list(self,repo_list,source,source_urlroot):
+	def add_list(self,repo_list,source,source_urlroot=None):
 		'''
 		Behaving like an ordered set, if performance becomes an issue it could be useful to use OrderedSet implementation
 		Or simply code an option to disable checks
 		'''
 		repo_list = copy.deepcopy(repo_list) #deepcopy to avoid unwanted modif of default arg
 
-		self.db.register_source(source=source,source_urlroot=source_urlroot)
+		if source_urlroot is None:
+			source_id,source_urlroot = self.db.get_source_info(source=source) # throws ValueError if source not registered
+		else:
+			self.db.register_source(source=source,source_urlroot=source_urlroot)
 
 		for r in repo_list:
 			self.db.register_url(repo_url=r,source=source)
@@ -129,7 +137,19 @@ class RepoCrawler(object):
 		else:
 			self.add_list(repos)
 
-
+	def add_all_from_folder(self):
+		'''
+		Checks the folder and imports all projects present
+		'''
+		sources = [os.path.basename(p) for p in glob.glob(os.path.join(self.folder,'cloned_repos','*'))]
+		for source in sources:
+			self.logger.info('Scanning repositories for source {}, folder {}'.format(source,os.path.join(self.folder,'cloned_repos',source)))
+			user_folders = glob.glob(os.path.join(self.folder,'cloned_repos',source,'*'))
+			repos = []
+			for user_folder in user_folders:
+				repos += ['/'.join([os.path.basename(os.path.dirname(p)),os.path.basename(p)]) for p in glob.glob(os.path.join(user_folder,'*'))]
+			self.add_list(repo_list=repos,source=source)
+			self.logger.info('Found {} repositories for source {}'.format(len(repos),source))
 
 	def build_url(self,name,owner,source_urlroot):
 		'''
@@ -280,17 +300,16 @@ class RepoCrawler(object):
 
 		self.db.cursor.execute('SELECT MAX(attempted_at) FROM download_attempts WHERE success;')
 		last_dl = self.db.cursor.fetchone()[0]
-		
-		print(last_fu,last_dl)
 
-		if force or (last_fu is None) or (last_fu<last_dl): 
-			
+
+		if force or (last_fu is None) or (last_fu<last_dl):
+
 			self.logger.info('Filling in users')
 
 			for repo_info in self.db.get_repo_list(option='basicinfo_dict'):
 				self.db.fill_authors(self.list_commits(basic_info_only=True,**repo_info))
 			self.db.create_indexes(table='users')
-			
+
 			self.logger.info('Filling in commits')
 
 			for repo_info in self.db.get_repo_list(option='basicinfo_dict'):
@@ -298,7 +317,7 @@ class RepoCrawler(object):
 			self.db.create_indexes(table='commits')
 
 			self.logger.info('Filling in commit parents')
-	
+
 			for repo_info in self.db.get_repo_list(option='basicinfo_dict'):
 				self.db.fill_commit_parents(self.list_commits(basic_info_only=True,**repo_info))
 			self.db.create_indexes(table='commit_parents')
@@ -308,11 +327,83 @@ class RepoCrawler(object):
 		else:
 			self.logger.info('Skipping filling of commits info')
 
-	def fill_stars(self,force=False):
+	def fill_stars(self,force=False,querymin_threshold=50,per_page=100,repo_list=None):
 		'''
 		Filling stars (only from github for the moment)
+		force can be True, or an integer representing an acceptable delay in seconds for age of last update
 		'''
-		# create tables
-		# check full updates
-		# query github through pygithub / or through curl
-		pass
+		if not hasattr(self,'github_requesters'):
+			self.set_github_requesters(per_page=per_page)
+
+		if repo_list is None:
+			#build repo list
+			repo_list = []
+			for r in self.db.get_repo_list():
+				# created_at = self.db.get_last_star(source=r['source'],repo=r['name'],owner=r['owner'])['created_at']
+				created_at = self.db.get_last_star(source=r[0],repo=r[3],owner=r[2])['created_at']
+				if (force==True) or (created_at is None) or (isinstance(force,int) and time.time()-created_at.timestamp()>force):
+					# repo_list.append('{}/{}'.format(r['name'],r['owner']))
+					repo_list.append('{}/{}'.format(r[2],r[3]))
+
+		requester_gen = self.get_github_requester(querymin_threshold=querymin_threshold)
+		while len(repo_list):
+			current_repo = repo_list[0]
+			owner,repo_name = current_repo.split('/')
+			source = 'GitHub'
+			repo_id = self.db.get_repo_id(owner=owner,source=source,name=repo_name)
+			requester = next(requester_gen)
+			repo_apiobj = requester.get_repo(current_repo)
+			remaining = requester.get_rate_limit().core.remaining
+			while remaining > querymin_threshold:
+				nb_stars = self.db.count_stars(source=source,repo=repo_name,owner=owner)
+				# sg_list = list(repo_apiobj.get_stargazers_with_dates()[nb_stars:nb_stars+per_page])
+				sg_list = list(repo_apiobj.get_stargazers_with_dates().get_page(int(nb_stars/per_page)))
+				remaining -= 1
+				if nb_stars < per_page*(int(nb_stars/per_page))+len(sg_list):
+					self.db.insert_stars(stars_list=[{'repo_id':repo_id,'source':source,'repo':repo_name,'owner':owner,'starred_at':sg.starred_at,'login':sg.user.login} for sg in sg_list],commit=False)
+				else:
+					self.logger.info('Filled stars for repo {}/{}: {}'.format(owner,repo_name,nb_stars))
+					self.db.connection.commit()
+					repo_list.pop(0)
+					break
+
+	def set_github_requesters(self,api_keys_file=None,per_page=100):
+		'''
+		Setting github requesters
+		api keys file syntax, per line: API#notes
+		'''
+		if api_keys_file is None:
+			api_keys_file = os.path.join(self.folder,'github_api_keys.txt')
+		if os.path.exists(api_keys_file):
+			with open(api_keys_file,'r') as f:
+				api_keys = [l.split('#')[0] for l in f.read().split('\n')]
+		else:
+			api_keys = []
+
+		self.github_requesters = [github.Github(per_page=per_page)]
+		for ak in set(api_keys):
+			g = github.Github(ak,per_page=per_page)
+			try:
+				g.get_rate_limit()
+			except:
+				self.logger.info('API key starting with "{}" and of length {} not valid'.format(ak[:5],len(ak)))
+			else:
+				self.github_requesters.append(g)
+
+	def get_github_requester(self,querymin_threshold=50):
+		'''
+		Going through requesters respecting threshold of minimum remaining api queries
+		'''
+		while True:
+			for i,rq in enumerate(self.github_requesters):
+				self.logger.info('Using github requester {}, {} queries remaining'.format(i,rq.get_rate_limit().core.remaining))
+				# time.sleep(0.5)
+				while rq.get_rate_limit().core.remaining > querymin_threshold:
+					yield rq
+			if any(((rq.get_rate_limit().core.remaining > querymin_threshold) for rq in self.github_requesters)):
+				continue
+			else:
+				earliest_reset = min([rq.get_rate_limit().core.resettimetuple() for rq in self.github_requesters])
+				time_to_reset =  calendar.timegm(earliest_reset) - calendar.timegm(time.gmtime())
+				self.logger.info('Waiting for reset of at least one github requester, sleeping {} seconds'.format(time_to_reset+1))
+				time.sleep(time_to_reset+1)
