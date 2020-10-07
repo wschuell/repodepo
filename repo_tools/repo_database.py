@@ -35,7 +35,7 @@ class Database(object):
 	By default SQLite is used, but PostgreSQL is also an option
 	'''
 
-	def __init__(self,db_type='sqlite',db_name='repo_tools',db_folder='.',db_user='postgres',port='5432',host='localhost',password=None,clean_first=False):
+	def __init__(self,db_type='sqlite',db_name='repo_tools',db_folder='.',db_user='postgres',port='5432',host='localhost',password=None,clean_first=False,do_init=True,timeout=5):
 		self.db_type = db_type
 		if db_type == 'sqlite':
 			if db_name.startswith(':memory:'):
@@ -46,7 +46,7 @@ class Database(object):
 				self.db_path = os.path.join(db_folder,'{}.db'.format(db_name))
 				if not os.path.exists(db_folder):
 					os.makedirs(db_folder)
-				self.connection = sqlite3.connect(self.db_path)
+				self.connection = sqlite3.connect(self.db_path,timeout=timeout)
 			self.cursor = self.connection.cursor()
 		elif db_type == 'postgres':
 			if password is not None:
@@ -58,8 +58,26 @@ class Database(object):
 
 		if clean_first:
 			self.clean_db()
-		self.init_db()
+		if do_init:
+			self.init_db()
 		self.logger = logger
+
+		#storing info to be able to copy the db and have independent cursor/connection
+		self.db_conninfo = {
+				'db_type':db_type,
+				'db_name':db_name,
+				'db_folder':db_folder,
+				'db_user':db_user,
+				'port':port,
+				'host':host,
+				'password':password,
+		}
+
+	def copy(self,timeout=30):
+		'''
+		Returns a copy, without init, with independent connection and cursor
+		'''
+		return self.__class__(do_init=False,timeout=timeout,**self.db_conninfo)
 
 	def init_db(self):
 		'''

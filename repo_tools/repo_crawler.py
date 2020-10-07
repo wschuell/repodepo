@@ -10,6 +10,11 @@ import glob
 import github
 import calendar
 import time
+import random
+
+import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor
+
 
 from .repo_database import Database
 
@@ -137,10 +142,34 @@ class RepoCrawler(object):
 		else:
 			self.add_list(repos)
 
-	def add_all_from_folder(self):
+	def add_all_from_folder(self,clean=True,rename=True):
 		'''
 		Checks the folder and imports all projects present
 		'''
+		if rename:
+			to_rename = glob.glob(os.path.join(self.folder,'cloned_repos','*','*','*.git'))
+			for p in to_rename:
+				shutil.move(p,p[:-4])
+			if to_rename:
+				self.logger.info('Renamed {} repository folders'.format(len(to_rename)))
+
+		if clean:
+
+			repos_to_clean =  [p for p in glob.glob(os.path.join(self.folder,'cloned_repos','*','*','*')) if len(glob.glob(os.path.join(p,'*'))) == 0]
+			for rc in repos_to_clean:
+				shutil.rmtree(rc)
+
+			users_to_clean =  [p for p in glob.glob(os.path.join(self.folder,'cloned_repos','*','*')) if len(glob.glob(os.path.join(p,'*'))) == 0]
+			for uc in users_to_clean:
+				shutil.rmtree(uc)
+
+			sources_to_clean = [p for p in glob.glob(os.path.join(self.folder,'cloned_repos','*')) if len(glob.glob(os.path.join(p,'*'))) == 0]
+			for sc in sources_to_clean:
+				shutil.rmtree(sc)
+
+			if repos_to_clean or users_to_clean or sources_to_clean:
+				self.logger.info('Cleaned {} repo folders, {} user folders, {} source folders'.format(len(repos_to_clean),len(users_to_clean),len(sources_to_clean)))
+
 		sources = [os.path.basename(p) for p in glob.glob(os.path.join(self.folder,'cloned_repos','*'))]
 		for source in sources:
 			self.logger.info('Scanning repositories for source {}, folder {}'.format(source,os.path.join(self.folder,'cloned_repos',source)))
@@ -307,19 +336,31 @@ class RepoCrawler(object):
 			self.logger.info('Filling in users')
 
 			for repo_info in self.db.get_repo_list(option='basicinfo_dict'):
-				self.db.fill_authors(self.list_commits(basic_info_only=True,**repo_info))
+				try:
+					self.db.fill_authors(self.list_commits(basic_info_only=True,**repo_info))
+				except:
+					self.logger.error('Error with {}'.format(repo_info))
+					raise
 			self.db.create_indexes(table='users')
 
 			self.logger.info('Filling in commits')
 
 			for repo_info in self.db.get_repo_list(option='basicinfo_dict'):
-				self.db.fill_commits(self.list_commits(basic_info_only=False,**repo_info))
+				try:
+					self.db.fill_commits(self.list_commits(basic_info_only=False,**repo_info))
+				except:
+					self.logger.error('Error with {}'.format(repo_info))
+					raise
 			self.db.create_indexes(table='commits')
 
 			self.logger.info('Filling in commit parents')
 
 			for repo_info in self.db.get_repo_list(option='basicinfo_dict'):
-				self.db.fill_commit_parents(self.list_commits(basic_info_only=True,**repo_info))
+				try:
+					self.db.fill_commit_parents(self.list_commits(basic_info_only=True,**repo_info))
+				except:
+					self.logger.error('Error with {}'.format(repo_info))
+					raise
 			self.db.create_indexes(table='commit_parents')
 
 			self.db.cursor.execute('''INSERT INTO full_updates(update_type,updated_at) VALUES('commits',(SELECT CURRENT_TIMESTAMP));''')
@@ -327,10 +368,12 @@ class RepoCrawler(object):
 		else:
 			self.logger.info('Skipping filling of commits info')
 
-	def fill_stars(self,force=False,querymin_threshold=50,per_page=100,repo_list=None):
+	def fill_stars(self,force=False,querymin_threshold=50,per_page=100,repo_list=None,workers=1,in_thread=False):
 		'''
 		Filling stars (only from github for the moment)
 		force can be True, or an integer representing an acceptable delay in seconds for age of last update
+
+		Using 'last star' to discard already processed repos. This will lead to repos with 0 stars to always be requeried. Should use a repo_updates table instead
 		'''
 		if not hasattr(self,'github_requesters'):
 			self.set_github_requesters(per_page=per_page)
@@ -341,31 +384,52 @@ class RepoCrawler(object):
 			for r in self.db.get_repo_list():
 				# created_at = self.db.get_last_star(source=r['source'],repo=r['name'],owner=r['owner'])['created_at']
 				created_at = self.db.get_last_star(source=r[0],repo=r[3],owner=r[2])['created_at']
-				if (force==True) or (created_at is None) or (isinstance(force,int) and time.time()-created_at.timestamp()>force):
+				
+				if isinstance(created_at,str):
+					created_at = datetime.datetime.strptime(created_at,'%Y-%m-%d %H:%M:%S')
+
+
+				if (force==True) or (created_at is None) or ((not isinstance(force,bool)) and time.time()-created_at.timestamp()>force):
 					# repo_list.append('{}/{}'.format(r['name'],r['owner']))
 					repo_list.append('{}/{}'.format(r[2],r[3]))
 
-		requester_gen = self.get_github_requester(querymin_threshold=querymin_threshold)
-		while len(repo_list):
-			current_repo = repo_list[0]
-			owner,repo_name = current_repo.split('/')
-			source = 'GitHub'
-			repo_id = self.db.get_repo_id(owner=owner,source=source,name=repo_name)
-			requester = next(requester_gen)
-			repo_apiobj = requester.get_repo(current_repo)
-			remaining = requester.get_rate_limit().core.remaining
-			while remaining > querymin_threshold:
-				nb_stars = self.db.count_stars(source=source,repo=repo_name,owner=owner)
-				# sg_list = list(repo_apiobj.get_stargazers_with_dates()[nb_stars:nb_stars+per_page])
-				sg_list = list(repo_apiobj.get_stargazers_with_dates().get_page(int(nb_stars/per_page)))
-				remaining -= 1
-				if nb_stars < per_page*(int(nb_stars/per_page))+len(sg_list):
-					self.db.insert_stars(stars_list=[{'repo_id':repo_id,'source':source,'repo':repo_name,'owner':owner,'starred_at':sg.starred_at,'login':sg.user.login} for sg in sg_list],commit=False)
-				else:
-					self.logger.info('Filled stars for repo {}/{}: {}'.format(owner,repo_name,nb_stars))
-					self.db.connection.commit()
-					repo_list.pop(0)
-					break
+		if workers == 1:
+			requester_gen = self.get_github_requester(querymin_threshold=querymin_threshold)
+			if in_thread:
+				db = self.db.copy()
+			else:
+				db = self.db
+			while len(repo_list):
+				current_repo = repo_list[0]
+				owner,repo_name = current_repo.split('/')
+				source = 'GitHub'
+				repo_id = db.get_repo_id(owner=owner,source=source,name=repo_name)
+				requester = next(requester_gen)
+				repo_apiobj = requester.get_repo(current_repo)
+				while requester.get_rate_limit().core.remaining > querymin_threshold:
+					nb_stars = db.count_stars(source=source,repo=repo_name,owner=owner)
+					# sg_list = list(repo_apiobj.get_stargazers_with_dates()[nb_stars:nb_stars+per_page])
+					sg_list = list(repo_apiobj.get_stargazers_with_dates().get_page(int(nb_stars/per_page)))
+
+					if nb_stars < per_page*(int(nb_stars/per_page))+len(sg_list):
+						# if in_thread:
+						if db.db_type == 'sqlite' and in_thread:
+							time.sleep(random.random()) # to avoid database locked issues, and smooth a bit concurrency
+						db.insert_stars(stars_list=[{'repo_id':repo_id,'source':source,'repo':repo_name,'owner':owner,'starred_at':sg.starred_at,'login':sg.user.login} for sg in sg_list],commit=False)
+					else:
+						self.logger.info('Filled stars for repo {}/{}: {}'.format(owner,repo_name,nb_stars))
+						db.connection.commit()
+						repo_list.pop(0)
+						break
+		else:
+			with ThreadPoolExecutor(max_workers=workers) as executor:
+				futures = []
+				for repo in repo_list:
+					futures.append(executor.submit(self.fill_stars,repo_list=[repo],workers=1,per_page=per_page,querymin_threshold=querymin_threshold,in_thread=True))
+				# for future in concurrent.futures.as_completed(futures):
+				# 	pass
+				for future in futures:
+					future.result()
 
 	def set_github_requesters(self,api_keys_file=None,per_page=100):
 		'''
@@ -403,7 +467,7 @@ class RepoCrawler(object):
 			if any(((rq.get_rate_limit().core.remaining > querymin_threshold) for rq in self.github_requesters)):
 				continue
 			else:
-				earliest_reset = min([rq.get_rate_limit().core.resettimetuple() for rq in self.github_requesters])
-				time_to_reset =  calendar.timegm(earliest_reset) - calendar.timegm(time.gmtime())
+				earliest_reset = min([calendar.timegm(rq.get_rate_limit().core.reset.timetuple()) for rq in self.github_requesters])
+				time_to_reset =  earliest_reset - calendar.timegm(time.gmtime())
 				self.logger.info('Waiting for reset of at least one github requester, sleeping {} seconds'.format(time_to_reset+1))
 				time.sleep(time_to_reset+1)
