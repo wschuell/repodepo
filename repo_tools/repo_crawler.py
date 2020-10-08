@@ -475,8 +475,10 @@ class RepoCrawler(object):
 		else:
 			api_keys = []
 
-		if len(os.environ['GITHUB_API_KEY']):
-			api_keys.append(os.environ['GH_API_KEY'])
+		try:
+			api_keys.append(os.environ['GITHUB_API_KEY'])
+		except KeyError:
+			pass
 
 		self.github_requesters = [github.Github(per_page=per_page)]
 		for ak in set(api_keys):

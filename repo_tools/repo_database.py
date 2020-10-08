@@ -678,7 +678,7 @@ class Database(object):
 		if self.db_type == 'postgres':
 			self.cursor.execute('''INSERT INTO table_updates(repo_id,table_name,success)
 				VALUES(%s,%s,%s)
-				ON CONFLICT(repo_id,table_name) DO UPDATE SET success=%s AND updated_at=(SELECT CURRENT_TIMESTAMP)
+				ON CONFLICT(repo_id,table_name) DO UPDATE SET success=%s, updated_at=(SELECT CURRENT_TIMESTAMP)
 				;''', (repo_id,table,success,success))
 		else:
 			self.cursor.execute('''INSERT OR REPLACE INTO table_updates(repo_id,table_name,success)
