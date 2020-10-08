@@ -62,3 +62,8 @@ def test_fillcommits(testrc):
 	testrc.add_list(['wschuell/experiment_manager','flowersteam/naminggamesal'],source='GitHub',source_urlroot='github.com')
 	testrc.clone_all()
 	testrc.fill_commit_info()
+
+def test_stars(testrc):
+	testrc.add_list(['wschuell/experiment_manager','flowersteam/naminggamesal'],source='GitHub',source_urlroot='github.com')
+	testrc.clone_all()
+	testrc.fill_stars()
