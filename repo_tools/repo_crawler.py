@@ -331,7 +331,7 @@ class RepoCrawler(object):
 		last_dl = self.db.cursor.fetchone()[0]
 
 
-		if force or (last_fu is None) or (last_fu<last_dl):
+		if force or (last_fu is None) or (last_dl is not None and last_fu<last_dl):
 
 			self.logger.info('Filling in users')
 
@@ -373,25 +373,47 @@ class RepoCrawler(object):
 		Filling stars (only from github for the moment)
 		force can be True, or an integer representing an acceptable delay in seconds for age of last update
 
-		Using 'last star' to discard already processed repos. This will lead to repos with 0 stars to always be requeried. Should use a repo_updates table instead
+		Checking if an entry exists in table_updates with repo_id and table_name stars
+
+		repo syntax: (source,owner,name,repo_id,star_update)
 		'''
 		if not hasattr(self,'github_requesters'):
 			self.set_github_requesters(per_page=per_page)
 
+		# if repo_list is None:
+		# 	#build repo list
+		# 	repo_list = []
+		# 	for r in self.db.get_repo_list(option='basicinfo_dict'):
+		# 		# created_at = self.db.get_last_star(source=r['source'],repo=r['name'],owner=r['owner'])['created_at']
+		# 		created_at = self.db.get_last_star(source=r[0],repo=r[2],owner=r[1])['created_at']
+
+		# 		if isinstance(created_at,str):
+		# 			created_at = datetime.datetime.strptime(created_at,'%Y-%m-%d %H:%M:%S')
+
+
+		# 		if (force==True) or (created_at is None) or ((not isinstance(force,bool)) and time.time()-created_at.timestamp()>force):
+		# 			# repo_list.append('{}/{}'.format(r['name'],r['owner']))
+		# 			# repo_list.append('{}/{}'.format(r[2],r[3]))
+		# 			repo_list.append(r)
+
 		if repo_list is None:
 			#build repo list
 			repo_list = []
-			for r in self.db.get_repo_list():
+			for r in self.db.get_repo_list(option='starinfo'):
 				# created_at = self.db.get_last_star(source=r['source'],repo=r['name'],owner=r['owner'])['created_at']
-				created_at = self.db.get_last_star(source=r[0],repo=r[3],owner=r[2])['created_at']
-				
+				# created_at = self.db.get_last_star(source=r[0],repo=r[2],owner=r[1])['created_at']
+				# created_at = self.db.get_last_star(source=r[0],repo=r[2],owner=r[1])['created_at']
+				source,owner,repo_name,repo_id,created_at = current_repo[:5]
+
 				if isinstance(created_at,str):
 					created_at = datetime.datetime.strptime(created_at,'%Y-%m-%d %H:%M:%S')
 
 
 				if (force==True) or (created_at is None) or ((not isinstance(force,bool)) and time.time()-created_at.timestamp()>force):
 					# repo_list.append('{}/{}'.format(r['name'],r['owner']))
-					repo_list.append('{}/{}'.format(r[2],r[3]))
+					# repo_list.append('{}/{}'.format(r[2],r[3]))
+					repo_list.append(r)
+
 
 		if workers == 1:
 			requester_gen = self.get_github_requester(querymin_threshold=querymin_threshold)
@@ -401,26 +423,35 @@ class RepoCrawler(object):
 				db = self.db
 			while len(repo_list):
 				current_repo = repo_list[0]
-				owner,repo_name = current_repo.split('/')
-				source = 'GitHub'
-				repo_id = db.get_repo_id(owner=owner,source=source,name=repo_name)
+				# owner,repo_name = current_repo.split('/')
+				# source = 'GitHub'
+				# repo_id = db.get_repo_id(owner=owner,source=source,name=repo_name)
+				source,owner,repo_name,repo_id = current_repo[:4]
 				requester = next(requester_gen)
-				repo_apiobj = requester.get_repo(current_repo)
-				while requester.get_rate_limit().core.remaining > querymin_threshold:
-					nb_stars = db.count_stars(source=source,repo=repo_name,owner=owner)
-					# sg_list = list(repo_apiobj.get_stargazers_with_dates()[nb_stars:nb_stars+per_page])
-					sg_list = list(repo_apiobj.get_stargazers_with_dates().get_page(int(nb_stars/per_page)))
+				try:
+					repo_apiobj = requester.get_repo('{}/{}'.format(owner,repo_name))
+				except github.GithubException:
+					self.logger.info('No such repository: {}/{}'.format(owner,repo_name))
+					db.insert_update(repo_id=repo_id,table='stars',success=False)
+					repo_list.pop(0)
+				else:
+					while requester.get_rate_limit().core.remaining > querymin_threshold:
+						nb_stars = db.count_stars(source=source,repo=repo_name,owner=owner)
+						# sg_list = list(repo_apiobj.get_stargazers_with_dates()[nb_stars:nb_stars+per_page])
+						sg_list = list(repo_apiobj.get_stargazers_with_dates().get_page(int(nb_stars/per_page)))
 
-					if nb_stars < per_page*(int(nb_stars/per_page))+len(sg_list):
-						# if in_thread:
-						if db.db_type == 'sqlite' and in_thread:
-							time.sleep(random.random()) # to avoid database locked issues, and smooth a bit concurrency
-						db.insert_stars(stars_list=[{'repo_id':repo_id,'source':source,'repo':repo_name,'owner':owner,'starred_at':sg.starred_at,'login':sg.user.login} for sg in sg_list],commit=False)
-					else:
-						self.logger.info('Filled stars for repo {}/{}: {}'.format(owner,repo_name,nb_stars))
-						db.connection.commit()
-						repo_list.pop(0)
-						break
+						if nb_stars < per_page*(int(nb_stars/per_page))+len(sg_list):
+							# if in_thread:
+							if db.db_type == 'sqlite' and in_thread:
+								time.sleep(random.random()) # to avoid database locked issues, and smooth a bit concurrency
+							db.insert_stars(stars_list=[{'repo_id':repo_id,'source':source,'repo':repo_name,'owner':owner,'starred_at':sg.starred_at,'login':sg.user.login} for sg in sg_list],commit=False)
+						else:
+							self.logger.info('Filled stars for repo {}/{}: {}'.format(owner,repo_name,nb_stars))
+							db.insert_update(repo_id=repo_id,table='stars',success=True)
+							db.connection.commit()
+							repo_list.pop(0)
+							break
+
 		else:
 			with ThreadPoolExecutor(max_workers=workers) as executor:
 				futures = []

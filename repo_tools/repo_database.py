@@ -121,6 +121,7 @@ class Database(object):
 				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
 				table_name TEXT,
 				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				success BOOLEAN DEFAULT 1,
 				latest_commit_time TIMESTAMP DEFAULT NULL,
 				PRIMARY KEY(repo_id,table_name)
 				);
@@ -182,6 +183,7 @@ class Database(object):
 				CREATE TABLE IF NOT EXISTS table_updates(
 				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
 				table_name TEXT,
+				success BOOLEAN DEFAULT true,
 				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 				latest_commit_time TIMESTAMP DEFAULT NULL,
 				PRIMARY KEY(repo_id,table_name)
@@ -373,6 +375,30 @@ class Database(object):
 				ORDER BY s.name,r.owner,r.name
 				;''')
 			return [{'source':r[0],'owner':r[1],'name':r[2],'repo_id':r[3]} for r in self.cursor.fetchall()]
+
+		elif option == 'starinfo_dict':
+			self.cursor.execute('''
+				SELECT s.name,r.owner,r.name,r.id,tu.updated_at
+				FROM repositories r
+				INNER JOIN sources s
+				ON s.id=r.source
+				LEFT OUTER JOIN table_updates tu
+				ON tu.repo_id=r.id AND tu.table_name='stars'
+				ORDER BY s.name,r.owner,r.name
+				;''')
+			return [{'source':r[0],'owner':r[1],'name':r[2],'repo_id':r[3],'last_star_update':r[4]} for r in self.cursor.fetchall()]
+
+		elif option == 'starinfo':
+			self.cursor.execute('''
+				SELECT s.name,r.owner,r.name,r.id,tu.updated_at
+				FROM repositories r
+				INNER JOIN sources s
+				ON s.id=r.source
+				LEFT OUTER JOIN table_updates tu
+				ON tu.repo_id=r.id AND tu.table_name='stars'
+				ORDER BY s.name,r.owner,r.name
+				;''')
+			return list(self.cursor.fetchall())
 
 		elif option == 'no_dl':
 
@@ -656,3 +682,18 @@ class Database(object):
 
 		if commit:
 			self.connection.commit()
+
+	def insert_update(self,table,repo_id,success=True):
+		'''
+		Inserting an update in table_updates
+		'''
+		if self.db_type == 'postgres':
+			self.cursor.execute('''INSERT INTO table_updates(repo_id,table_name,success)
+				VALUES(%s,%s,%s)
+				ON CONFLICT(repo_id,table_name) UPDATE SET success=%s AND updated_at=(SELECT CURRENT_TIMESTAMP)
+				;''', (repo_id,table,success))
+		else:
+			self.cursor.execute('''INSERT OR REPLACE INTO table_updates(repo_id,table_name,success)
+				VALUES(?,?,?)
+				;''', (repo_id,table,success))
+		self.connection.commit()
