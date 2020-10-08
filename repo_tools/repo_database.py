@@ -143,7 +143,33 @@ class Database(object):
 
 				CREATE INDEX IF NOT EXISTS stars_idx ON stars(repo_id,starred_at);
 				CREATE INDEX IF NOT EXISTS stars_idx2 ON stars(repo_id,created_at);
-				'''
+
+				CREATE TABLE IF NOT EXISTS users(
+				id INTEGER PRIMARY KEY,
+				name TEXT,
+				email TEXT UNIQUE,
+				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+				);
+
+				CREATE TABLE IF NOT EXISTS commits(
+				id INTEGER PRIMARY KEY,
+				sha TEXT,
+				author_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
+				created_at TIMESTAMP,
+				insertions INTEGER,
+				deletions INTEGER,
+				UNIQUE(sha)
+				);
+
+				CREATE TABLE IF NOT EXISTS commit_parents(
+				child_id INTEGER REFERENCES commits(id) ON DELETE CASCADE,
+				parent_id INTEGER REFERENCES commits(id) ON DELETE CASCADE,
+				rank INTEGER,
+				PRIMARY KEY(child_id,parent_id),
+				UNIQUE(parent_id,child_id,rank)
+				);
+		'''
 			for q in DB_INIT.split(';')[:-1]:
 				self.cursor.execute(q)
 			self.connection.commit()
@@ -206,6 +232,32 @@ class Database(object):
 
 				CREATE INDEX IF NOT EXISTS stars_idx ON stars(repo_id,starred_at);
 				CREATE INDEX IF NOT EXISTS stars_idx2 ON stars(repo_id,created_at);
+
+			CREATE TABLE IF NOT EXISTS users(
+				id BIGSERIAL PRIMARY KEY,
+				name TEXT,
+				email TEXT UNIQUE,
+				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+				);
+
+				CREATE TABLE IF NOT EXISTS commits(
+				id BIGSERIAL PRIMARY KEY,
+				sha TEXT,
+				author_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
+				created_at TIMESTAMP,
+				insertions INT,
+				deletions INT,
+				UNIQUE(sha)
+				);
+
+				CREATE TABLE IF NOT EXISTS commit_parents(
+				child_id BIGINT REFERENCES commits(id) ON DELETE CASCADE,
+				parent_id BIGINT REFERENCES commits(id) ON DELETE CASCADE,
+				rank INT,
+				PRIMARY KEY(child_id,parent_id),
+				UNIQUE(parent_id,child_id,rank)
+				);
 				''')
 
 			self.connection.commit()
@@ -425,25 +477,6 @@ class Database(object):
 		Creating table if necessary.
 		Filling authors in table.
 		'''
-		#creating table
-		if self.db_type == 'postgres':
-			self.cursor.execute('''
-				CREATE TABLE IF NOT EXISTS users(
-				id BIGSERIAL PRIMARY KEY,
-				name TEXT,
-				email TEXT UNIQUE,
-				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-				);
-				''')
-		else:
-			self.cursor.execute('''
-				CREATE TABLE IF NOT EXISTS users(
-				id INTEGER PRIMARY KEY,
-				name TEXT,
-				email TEXT UNIQUE,
-				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-				);
-				''')
 
 		# filling in data
 		if self.db_type == 'postgres':
@@ -462,33 +495,6 @@ class Database(object):
 		Creating table if necessary.
 		Filling authors in table.
 		'''
-		#creating table
-		if self.db_type == 'postgres':
-			self.cursor.execute('''
-				CREATE TABLE IF NOT EXISTS commits(
-				id BIGSERIAL PRIMARY KEY,
-				sha TEXT,
-				author_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
-				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
-				created_at TIMESTAMP,
-				insertions INT,
-				deletions INT,
-				UNIQUE(sha)
-				);
-				''')
-		else:
-			self.cursor.execute('''
-				CREATE TABLE IF NOT EXISTS commits(
-				id INTEGER PRIMARY KEY,
-				sha TEXT,
-				author_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
-				created_at TIMESTAMP,
-				insertions INTEGER,
-				deletions INTEGER,
-				UNIQUE(sha)
-				);
-				''')
 
 		# filling in data
 		if self.db_type == 'postgres':
@@ -521,27 +527,6 @@ class Database(object):
 		Creating table if necessary.
 		Filling authors in table.
 		'''
-		#creating table
-		if self.db_type == 'postgres':
-			self.cursor.execute('''
-				CREATE TABLE IF NOT EXISTS commit_parents(
-				child_id BIGINT REFERENCES commits(id) ON DELETE CASCADE,
-				parent_id BIGINT REFERENCES commits(id) ON DELETE CASCADE,
-				rank INT,
-				PRIMARY KEY(child_id,parent_id),
-				UNIQUE(parent_id,child_id,rank)
-				);
-				''')
-		else:
-			self.cursor.execute('''
-				CREATE TABLE IF NOT EXISTS commit_parents(
-				child_id INTEGER REFERENCES commits(id) ON DELETE CASCADE,
-				parent_id INTEGER REFERENCES commits(id) ON DELETE CASCADE,
-				rank INTEGER,
-				PRIMARY KEY(child_id,parent_id),
-				UNIQUE(parent_id,child_id,rank)
-				);
-				''')
 
 		def transformed_list(cil):
 			for c in cil:
