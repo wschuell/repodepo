@@ -268,6 +268,9 @@ class Database(object):
 		If there is a change in structure in the init script, this method should be called to 'reset' the state of the database
 		'''
 		logger.info('Cleaning database')
+		self.cursor.execute('DROP TABLE IF EXISTS commit_parents;')
+		self.cursor.execute('DROP TABLE IF EXISTS commits;')
+		self.cursor.execute('DROP TABLE IF EXISTS users;')
 		self.cursor.execute('DROP TABLE IF EXISTS stars;')
 		self.cursor.execute('DROP TABLE IF EXISTS full_updates;')
 		self.cursor.execute('DROP TABLE IF EXISTS table_updates;')
