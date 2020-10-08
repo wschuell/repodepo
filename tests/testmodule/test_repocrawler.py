@@ -63,12 +63,7 @@ def test_fillcommits(testrc):
 	testrc.clone_all()
 	testrc.fill_commit_info()
 
-def test_stars(testrc):
-	testrc.add_list(['wschuell/experiment_manager','flowersteam/naminggamesal'],source='GitHub',source_urlroot='github.com')
-	testrc.clone_all()
-	testrc.fill_stars(querymin_threshold=0)
-
 def test_stars_workers(testrc):
-	testrc.add_list(['wschuell/experiment_manager','flowersteam/naminggamesal'],source='GitHub',source_urlroot='github.com')
+	testrc.add_list(['wschuell/experiment_manager'],source='GitHub',source_urlroot='github.com')
 	testrc.clone_all()
 	testrc.fill_stars(workers=3,querymin_threshold=0)
