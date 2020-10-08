@@ -67,3 +67,8 @@ def test_stars(testrc):
 	testrc.add_list(['wschuell/experiment_manager','flowersteam/naminggamesal'],source='GitHub',source_urlroot='github.com')
 	testrc.clone_all()
 	testrc.fill_stars()
+
+def test_stars_workers(testrc):
+	testrc.add_list(['wschuell/experiment_manager','flowersteam/naminggamesal'],source='GitHub',source_urlroot='github.com')
+	testrc.clone_all()
+	testrc.fill_stars(workers=3)
