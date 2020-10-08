@@ -403,7 +403,7 @@ class RepoCrawler(object):
 				# created_at = self.db.get_last_star(source=r['source'],repo=r['name'],owner=r['owner'])['created_at']
 				# created_at = self.db.get_last_star(source=r[0],repo=r[2],owner=r[1])['created_at']
 				# created_at = self.db.get_last_star(source=r[0],repo=r[2],owner=r[1])['created_at']
-				source,owner,repo_name,repo_id,created_at = current_repo[:5]
+				source,owner,repo_name,repo_id,created_at = r[:5]
 
 				if isinstance(created_at,str):
 					created_at = datetime.datetime.strptime(created_at,'%Y-%m-%d %H:%M:%S')
