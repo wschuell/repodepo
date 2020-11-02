@@ -99,15 +99,9 @@ class Database(object):
 				name TEXT,
 				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 				updated_at TIMESTAMP DEFAULT NULL,
+				cloned BOOLEAN DEFAULT 0,
 				UNIQUE(source,owner,name)
 				);
-
-				CREATE TABLE IF NOT EXISTS download_attempts(
-				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
-				attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-				success BOOLEAN DEFAULT 0
-				);
-
 
 				CREATE TABLE IF NOT EXISTS urls(
 				source INTEGER REFERENCES sources(id) ON DELETE CASCADE,
@@ -193,15 +187,9 @@ class Database(object):
 				name TEXT,
 				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				cloned BOOLEAN DEFAULT false,
 				UNIQUE(source,owner,name)
 				);
-
-				CREATE TABLE IF NOT EXISTS download_attempts(
-				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
-				attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-				success BOOLEAN DEFAULT false
-				);
-
 
 				CREATE TABLE IF NOT EXISTS urls(
 				source BIGINT REFERENCES sources(id) ON DELETE CASCADE,
@@ -278,30 +266,32 @@ class Database(object):
 		logger.info('Cleaning database')
 		self.cursor.execute('DROP TABLE IF EXISTS commit_parents;')
 		self.cursor.execute('DROP TABLE IF EXISTS commits;')
+		self.cursor.execute('DROP TABLE IF EXISTS table_updates;')
 		self.cursor.execute('DROP TABLE IF EXISTS users;')
 		self.cursor.execute('DROP TABLE IF EXISTS stars;')
 		self.cursor.execute('DROP TABLE IF EXISTS full_updates;')
-		self.cursor.execute('DROP TABLE IF EXISTS table_updates;')
 		self.cursor.execute('DROP TABLE IF EXISTS download_attempts;')
 		self.cursor.execute('DROP TABLE IF EXISTS urls;')
 		self.cursor.execute('DROP TABLE IF EXISTS repositories;')
 		self.cursor.execute('DROP TABLE IF EXISTS sources;')
 		self.connection.commit()
 
-	def register_repo(self,source,owner,repo):
+	def register_repo(self,source,owner,repo,cloned=False):
 		'''
 		Putting a repo in the database
 		'''
 		if self.db_type == 'postgres':
-			self.cursor.execute(''' INSERT INTO repositories(source,owner,name)
+			self.cursor.execute(''' INSERT INTO repositories(source,owner,name,cloned)
 				 VALUES((SELECT id FROM sources WHERE name=%s),
 								%s,
-								%s) ON CONFLICT DO NOTHING; ''',(source,owner,repo))
+								%s,
+								%s) ON CONFLICT DO NOTHING; ''',(source,owner,repo,cloned))
 		else:
-			self.cursor.execute(''' INSERT OR IGNORE INTO repositories(source,owner,name)
+			self.cursor.execute(''' INSERT OR IGNORE INTO repositories(source,owner,name,cloned)
 				 VALUES((SELECT id FROM sources WHERE name=?),
 								?,
-								?);''',(source,owner,repo))
+								?,
+								?);''',(source,owner,repo,cloned))
 		self.connection.commit()
 
 	def register_source(self,source,source_urlroot):
@@ -388,31 +378,31 @@ class Database(object):
 		#inserting download attempt
 		if dl_time is None:
 			if self.db_type == 'postgres':
-				self.cursor.execute(''' INSERT INTO download_attempts(repo_id,success)
-				 VALUES(%s,%s);''',(repo_id,success))
+				self.cursor.execute(''' INSERT INTO table_updates(repo_id,table_name,success)
+				 VALUES(%s,'clones',%s);''',(repo_id,success))
 				if success:
-					self.cursor.execute(''' UPDATE repositories SET updated_at=(SELECT CURRENT_TIMESTAMP)
+					self.cursor.execute(''' UPDATE repositories SET updated_at=(SELECT CURRENT_TIMESTAMP) AND cloned=true
 				WHERE id=%s;''',(repo_id,))
 
 			else:
-				self.cursor.execute(''' INSERT INTO download_attempts(repo_id,success)
-				 VALUES(?,?);''',(repo_id,success))
+				self.cursor.execute(''' INSERT INTO table_updates(repo_id,table_name,success)
+				 VALUES(?,'clones',?);''',(repo_id,success))
 				if success:
-					self.cursor.execute(''' UPDATE repositories SET updated_at=(SELECT CURRENT_TIMESTAMP)
+					self.cursor.execute(''' UPDATE repositories SET updated_at=(SELECT CURRENT_TIMESTAMP) AND cloned=true
 				WHERE id=?;''',(repo_id,))
 		else:
 			if self.db_type == 'postgres':
-				self.cursor.execute(''' INSERT INTO download_attempts(repo_id,success,attempted_at)
-				 VALUES(%s,%s,%s);''',(repo_id,success,dl_time))
+				self.cursor.execute(''' INSERT INTO table_updates(repo_id,table_name,success,updated_at)
+				 VALUES(%s,'clones',%s,%s);''',(repo_id,success,dl_time))
 				if success:
-					self.cursor.execute(''' UPDATE repositories SET updated_at=%s,
+					self.cursor.execute(''' UPDATE repositories SET updated_at=%s AND cloned=true
 				WHERE id=%s;''',(dl_time,repo_id,))
 
 			else:
-				self.cursor.execute(''' INSERT INTO download_attempts(repo_id,success,attempted_at)
-				 VALUES(?,?,?);''',(repo_id,success,dl_time))
+				self.cursor.execute(''' INSERT INTO table_updates(repo_id,table_name,success,updated_at)
+				 VALUES(?,'clones',?,?);''',(repo_id,success,dl_time))
 				if success:
-					self.cursor.execute(''' UPDATE repositories SET updated_at=?
+					self.cursor.execute(''' UPDATE repositories SET updated_at=? AND cloned=true
 				WHERE id=?;''',(dl_time,repo_id,))
 		self.connection.commit()
 
@@ -426,6 +416,24 @@ class Database(object):
 				FROM repositories r
 				INNER JOIN sources s
 				ON s.id=r.source
+				ORDER BY s.name,r.owner,r.name
+				;''')
+			return list(self.cursor.fetchall())
+		elif option == 'only_cloned':
+			self.cursor.execute('''
+				SELECT s.name,s.url_root,r.owner,r.name
+				FROM repositories r
+				INNER JOIN sources s
+				ON s.id=r.source AND r.cloned
+				ORDER BY s.name,r.owner,r.name
+				;''')
+			return list(self.cursor.fetchall())
+		elif option == 'only_not_cloned':
+			self.cursor.execute('''
+				SELECT s.name,s.url_root,r.owner,r.name
+				FROM repositories r
+				INNER JOIN sources s
+				ON s.id=r.source AND NOT r.cloned
 				ORDER BY s.name,r.owner,r.name
 				;''')
 			return list(self.cursor.fetchall())
@@ -470,10 +478,10 @@ class Database(object):
 				FROM repositories r
 				INNER JOIN sources s
 				ON s.id=r.source
-				INNER JOIN download_attempts da
-				ON da.repo_id=r.id
+				LEFT JOIN table_updates tu
+				ON tu.repo_id=r.id AND tu.table_name='clones'
 				GROUP BY s.name,s.url_root,r.owner,r.name
-				HAVING COUNT(*)=0
+				HAVING COUNT(tu.repo_id)=0
 				ORDER BY s.name,r.owner,r.name
 
 				;''')
@@ -598,16 +606,16 @@ class Database(object):
 		'''
 		if self.db_type == 'postgres':
 			self.cursor.execute('''
-				SELECT MAX(attempted_at)
-					FROM download_attempts
-					WHERE repo_id=%s AND (%s IS NULL OR success=%s)
+				SELECT MAX(updated_at)
+					FROM table_updates
+					WHERE repo_id=%s AND table_name='clones' AND (%s IS NULL OR success=%s)
 				;''',(repo_id,success,success))
 		else:
 
 			self.cursor.execute('''
-				SELECT MAX(attempted_at)
-					FROM download_attempts
-					WHERE repo_id=? AND (? IS NULL OR success=?)
+				SELECT MAX(updated_at)
+					FROM table_updates
+					WHERE repo_id=? AND table_name='clones' AND (? IS NULL OR success=?)
 				;''',(repo_id,success,success))
 		ans = self.cursor.fetchone()
 		if ans is not None:
@@ -693,3 +701,14 @@ class Database(object):
 				VALUES(?,?,?)
 				;''', (repo_id,table,success))
 		self.connection.commit()
+
+	def set_cloned(self,repo_id,autocommit=True):
+		'''
+		Setting cloned to true for a given repository
+		'''
+		if self.db_type == 'postgres':
+			self.cursor.execute('''UPDATE repositories SET cloned=true WHERE id=%s;''',(repo_id,))
+		else:
+			self.cursor.execute('''UPDATE repositories SET cloned=true WHERE id=?;''',(repo_id,))
+		if autocommit:
+			self.connection.commit()

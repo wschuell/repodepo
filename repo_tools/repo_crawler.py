@@ -61,7 +61,7 @@ class RepoCrawler(object):
 			db_folder = self.folder
 		self.set_db(db_folder=db_folder,**db_cfg)
 
-	def add_list(self,repo_list,source,source_urlroot=None):
+	def add_list(self,repo_list,source,source_urlroot=None,cloned=False):
 		'''
 		Behaving like an ordered set, if performance becomes an issue it could be useful to use OrderedSet implementation
 		Or simply code an option to disable checks
@@ -81,8 +81,10 @@ class RepoCrawler(object):
 				pass
 			else:
 				owner,repo = r_f.split('/')
-				self.db.register_repo(repo=repo,owner=owner,source=source)
+				self.db.register_repo(repo=repo,owner=owner,source=source,cloned=cloned)
 				repo_id = self.db.get_repo_id(name=repo,owner=owner,source=source)
+				if cloned:
+					self.set_init_dl(repo=repo,owner=owner,source=source,repo_id=repo_id)
 				self.db.update_url(source=source,repo_url=r,repo_id=repo_id)
 
 		# 	if r_f not in self.repo_list:
@@ -145,6 +147,9 @@ class RepoCrawler(object):
 	def add_all_from_folder(self,clean=True,rename=True):
 		'''
 		Checks the folder and imports all projects present
+
+		Renaming if repo was cloned with .git extension in folder name
+		Cleaning (ie deleting folder potentially with upper level folders) if empty folder
 		'''
 		if rename:
 			to_rename = glob.glob(os.path.join(self.folder,'cloned_repos','*','*','*.git'))
@@ -177,7 +182,7 @@ class RepoCrawler(object):
 			repos = []
 			for user_folder in user_folders:
 				repos += ['/'.join([os.path.basename(os.path.dirname(p)),os.path.basename(p)]) for p in glob.glob(os.path.join(user_folder,'*'))]
-			self.add_list(repo_list=repos,source=source)
+			self.add_list(repo_list=repos,source=source,cloned=True)
 			self.logger.info('Found {} repositories for source {}'.format(len(repos),source))
 
 	def build_url(self,name,owner,source_urlroot):
@@ -198,20 +203,37 @@ class RepoCrawler(object):
 		if not os.path.exists(os.path.join(self.folder,'cloned_repos')):
 			os.makedirs(os.path.join(self.folder,'cloned_repos'))
 
-	def clone_all(self,force=False,update=False):
-		repo_list = self.db.get_repo_list()
+	def clone_all(self,force=False,update=False,failed=False):
+		if force or update:
+			option = 'all'
+		elif failed:
+			option = 'only_not_cloned'
+		else:
+			option = 'no_dl'
+
+		repo_list = self.db.get_repo_list(option=option)
+		print(repo_list)
 		for i,r in enumerate(repo_list):
 			source,source_urlroot,owner,name = r
 			self.logger.info('Repo {}/{}'.format(i+1,len(repo_list)))
-			self.clone(source=source,name=name,owner=owner,source_urlroot=source_urlroot,force=force,update=update)
+			self.clone(source=source,name=name,owner=owner,source_urlroot=source_urlroot,update=update)
 
-	def clone(self,source,name,owner,source_urlroot,force=False,replace=False,update=False):
+	def set_init_dl(self,repo_id,source,owner,repo):
+		'''
+		Sets a download attempt in the database, with update time being the time of the last commit
+		This is used when for a newly created database cloned repos are already present in the folder
+		'''
+		if self.db.get_last_dl(repo_id=repo_id,success=True) is None:
+			repo_obj = self.get_repo(source=source,owner=owner,name=repo)
+			last_commit_time = datetime.datetime.fromtimestamp(repo_obj.revparse_single('HEAD').commit_time)
+			self.db.submit_download_attempt(source=source,owner=owner,repo=repo,success=True,dl_time=last_commit_time)
+
+	def clone(self,source,name,owner,source_urlroot,replace=False,update=False):
 		'''
 		Cloning one repo.
-		Skipping if folder exists by default; not if force=True, in this case delete folder and restart
+		Skipping if folder exists by default; not if replace=True in this case delete folder and restart
 		Executing update_repo if repo already exists and update is True
 
-		Returns the status of the cloning process
 		'''
 		repo_folder = os.path.join(self.folder,'cloned_repos',source,owner,name)
 		if os.path.exists(repo_folder):
@@ -224,28 +246,26 @@ class RepoCrawler(object):
 			else:
 				self.logger.info('Repo {}/{}/{} already exists'.format(source,owner,name))
 				repo_id = self.db.get_repo_id(source=source,name=name,owner=owner)
-				if self.db.get_last_dl(repo_id=repo_id,success=True) is None:
-					repo_obj = self.get_repo(source=source,owner=owner,name=name)
-					last_commit_time = datetime.datetime.fromtimestamp(repo_obj.revparse_single('HEAD').commit_time)
-					self.db.submit_download_attempt(source=source,owner=owner,repo=name,success=True,dl_time=last_commit_time)
+				self.set_init_dl(repo_id=repo_id,source=source,repo=name,owner=owner)
+				self.db.set_cloned(repo_id=repo_id)
 		else:
 			repo_id = self.db.get_repo_id(source=source,name=name,owner=owner)
-			if self.db.db_type == 'postgres':
-				self.db.cursor.execute('SELECT * FROM download_attempts WHERE repo_id=%s LIMIT 1;',(repo_id,))
-			else:
-				self.db.cursor.execute('SELECT * FROM download_attempts WHERE repo_id=? LIMIT 1;',(repo_id,))
+			# if self.db.db_type == 'postgres':
+			# 	self.db.cursor.execute('SELECT * FROM download_attempts WHERE repo_id=%s LIMIT 1;',(repo_id,))
+			# else:
+			# 	self.db.cursor.execute('SELECT * FROM download_attempts WHERE repo_id=? LIMIT 1;',(repo_id,))
 
-			if (self.db.cursor.fetchone() is None) or force:
-				self.logger.info('Cloning repo {}/{}/{}'.format(source,owner,name))
-				try:
-					pygit2.clone_repository(url=self.build_url(source_urlroot=source_urlroot,name=name,owner=owner),path=repo_folder,callbacks=self.callbacks)
-					success = True
-				except pygit2.GitError as e:
-					self.logger.info('Git Error for repo {}/{}/{}'.format(source,owner,name))
-					success = False
-				self.db.submit_download_attempt(success=success,source=source,repo=name,owner=owner)
-			else:
-				self.logger.info('Skipping repo {}/{}/{}, already failed to download'.format(source,owner,name))
+			# if (self.db.cursor.fetchone() is None) or force:
+			self.logger.info('Cloning repo {}/{}/{}'.format(source,owner,name))
+			try:
+				pygit2.clone_repository(url=self.build_url(source_urlroot=source_urlroot,name=name,owner=owner),path=repo_folder,callbacks=self.callbacks)
+				success = True
+			except pygit2.GitError as e:
+				self.logger.info('Git Error for repo {}/{}/{}'.format(source,owner,name))
+				success = False
+			self.db.submit_download_attempt(success=success,source=source,repo=name,owner=owner)
+			# else:
+			# 	self.logger.info('Skipping repo {}/{}/{}, already failed to download'.format(source,owner,name))
 
 	def update_repo(self,name,source,source_urlroot,owner):
 		'''
@@ -327,7 +347,7 @@ class RepoCrawler(object):
 		self.db.cursor.execute('''SELECT MAX(updated_at) FROM full_updates WHERE update_type='commits';''')
 		last_fu = self.db.cursor.fetchone()[0]
 
-		self.db.cursor.execute('SELECT MAX(attempted_at) FROM download_attempts WHERE success;')
+		self.db.cursor.execute('''SELECT MAX(updated_at) FROM table_updates WHERE table_name='clones' AND success;''')
 		last_dl = self.db.cursor.fetchone()[0]
 
 
