@@ -117,22 +117,6 @@ class Database(object):
 				PRIMARY KEY(source,repo_url)
 				);
 
-				CREATE TABLE IF NOT EXISTS table_updates(
-				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
-				table_name TEXT,
-				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-				success BOOLEAN DEFAULT 1,
-				latest_commit_time TIMESTAMP DEFAULT NULL,
-				PRIMARY KEY(repo_id,table_name)
-				);
-
-				CREATE INDEX IF NOT EXISTS table_updates_idx ON table_updates(repo_id,table_name,updated_at);
-
-				CREATE TABLE IF NOT EXISTS full_updates(
-				update_type TEXT,
-				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-				);
-
 				CREATE TABLE IF NOT EXISTS stars(
 				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
 				login TEXT NOT NULL,
@@ -148,8 +132,11 @@ class Database(object):
 				id INTEGER PRIMARY KEY,
 				name TEXT,
 				email TEXT UNIQUE,
+				github_login TEXT,
 				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 				);
+
+				CREATE INDEX IF NOT EXISTS users_gh_idx ON users(github_login);
 
 				CREATE TABLE IF NOT EXISTS commits(
 				id INTEGER PRIMARY KEY,
@@ -168,6 +155,24 @@ class Database(object):
 				rank INTEGER,
 				PRIMARY KEY(child_id,parent_id),
 				UNIQUE(parent_id,child_id,rank)
+				);
+
+				CREATE TABLE IF NOT EXISTS table_updates(
+				id INTEGER PRIMARY KEY,
+				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
+				user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+				table_name TEXT,
+				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				success BOOLEAN DEFAULT 1,
+				latest_commit_time TIMESTAMP DEFAULT NULL
+				);
+
+				CREATE INDEX IF NOT EXISTS table_updates_idx ON table_updates(repo_id,table_name,updated_at);
+				CREATE INDEX IF NOT EXISTS table_updates_user_idx ON table_updates(user_id,table_name,updated_at);
+
+				CREATE TABLE IF NOT EXISTS full_updates(
+				update_type TEXT,
+				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 				);
 		'''
 			for q in DB_INIT.split(';')[:-1]:
@@ -206,22 +211,6 @@ class Database(object):
 				PRIMARY KEY(source,repo_url)
 				);
 
-				CREATE TABLE IF NOT EXISTS table_updates(
-				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
-				table_name TEXT,
-				success BOOLEAN DEFAULT true,
-				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-				latest_commit_time TIMESTAMP DEFAULT NULL,
-				PRIMARY KEY(repo_id,table_name)
-				);
-
-				CREATE INDEX IF NOT EXISTS table_updates_idx ON table_updates(repo_id,table_name,updated_at);
-
-				CREATE TABLE IF NOT EXISTS full_updates(
-				update_type TEXT,
-				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-				);
-
 				CREATE TABLE IF NOT EXISTS stars(
 				repo_id BIGINT REFERENCES repositories(id),
 				login TEXT NOT NULL,
@@ -237,6 +226,7 @@ class Database(object):
 				id BIGSERIAL PRIMARY KEY,
 				name TEXT,
 				email TEXT UNIQUE,
+				github_login TEXT,
 				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 				);
 
@@ -257,6 +247,24 @@ class Database(object):
 				rank INT,
 				PRIMARY KEY(child_id,parent_id),
 				UNIQUE(parent_id,child_id,rank)
+				);
+
+				CREATE TABLE IF NOT EXISTS table_updates(
+				id BIGSERIAL PRIMARY KEY,
+				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
+				user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+				table_name TEXT,
+				success BOOLEAN DEFAULT true,
+				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				latest_commit_time TIMESTAMP DEFAULT NULL
+				);
+
+				CREATE INDEX IF NOT EXISTS table_updates_idx ON table_updates(repo_id,table_name,updated_at);
+				CREATE INDEX IF NOT EXISTS table_updates_user_idx ON table_updates(user_id,table_name,updated_at);
+
+				CREATE TABLE IF NOT EXISTS full_updates(
+				update_type TEXT,
+				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 				);
 				''')
 
@@ -445,7 +453,7 @@ class Database(object):
 
 		elif option == 'starinfo':
 			self.cursor.execute('''
-				SELECT s.name,r.owner,r.name,r.id,tu.updated_at
+				SELECT s.name,r.owner,r.name,r.id,tu.updated_at,tu.success
 				FROM repositories r
 				INNER JOIN sources s
 				ON s.id=r.source
