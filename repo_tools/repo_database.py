@@ -381,28 +381,28 @@ class Database(object):
 				self.cursor.execute(''' INSERT INTO table_updates(repo_id,table_name,success)
 				 VALUES(%s,'clones',%s);''',(repo_id,success))
 				if success:
-					self.cursor.execute(''' UPDATE repositories SET updated_at=(SELECT CURRENT_TIMESTAMP) AND cloned=true
+					self.cursor.execute(''' UPDATE repositories SET updated_at=(SELECT CURRENT_TIMESTAMP), cloned=true
 				WHERE id=%s;''',(repo_id,))
 
 			else:
 				self.cursor.execute(''' INSERT INTO table_updates(repo_id,table_name,success)
 				 VALUES(?,'clones',?);''',(repo_id,success))
 				if success:
-					self.cursor.execute(''' UPDATE repositories SET updated_at=(SELECT CURRENT_TIMESTAMP) AND cloned=true
+					self.cursor.execute(''' UPDATE repositories SET updated_at=(SELECT CURRENT_TIMESTAMP), cloned=1
 				WHERE id=?;''',(repo_id,))
 		else:
 			if self.db_type == 'postgres':
 				self.cursor.execute(''' INSERT INTO table_updates(repo_id,table_name,success,updated_at)
 				 VALUES(%s,'clones',%s,%s);''',(repo_id,success,dl_time))
 				if success:
-					self.cursor.execute(''' UPDATE repositories SET updated_at=%s AND cloned=true
+					self.cursor.execute(''' UPDATE repositories SET updated_at=%s, cloned=true
 				WHERE id=%s;''',(dl_time,repo_id,))
 
 			else:
 				self.cursor.execute(''' INSERT INTO table_updates(repo_id,table_name,success,updated_at)
 				 VALUES(?,'clones',?,?);''',(repo_id,success,dl_time))
 				if success:
-					self.cursor.execute(''' UPDATE repositories SET updated_at=? AND cloned=true
+					self.cursor.execute(''' UPDATE repositories SET updated_at=?, cloned=1
 				WHERE id=?;''',(dl_time,repo_id,))
 		self.connection.commit()
 
@@ -709,6 +709,6 @@ class Database(object):
 		if self.db_type == 'postgres':
 			self.cursor.execute('''UPDATE repositories SET cloned=true WHERE id=%s;''',(repo_id,))
 		else:
-			self.cursor.execute('''UPDATE repositories SET cloned=true WHERE id=?;''',(repo_id,))
+			self.cursor.execute('''UPDATE repositories SET cloned=1 WHERE id=?;''',(repo_id,))
 		if autocommit:
 			self.connection.commit()
