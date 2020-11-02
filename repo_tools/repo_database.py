@@ -687,19 +687,18 @@ class Database(object):
 		if commit:
 			self.connection.commit()
 
-	def insert_update(self,table,repo_id,success=True):
+	def insert_update(self,table,repo_id=None,user_id=None,success=True):
 		'''
 		Inserting an update in table_updates
 		'''
 		if self.db_type == 'postgres':
-			self.cursor.execute('''INSERT INTO table_updates(repo_id,table_name,success)
-				VALUES(%s,%s,%s)
-				ON CONFLICT(repo_id,table_name) DO UPDATE SET success=%s, updated_at=(SELECT CURRENT_TIMESTAMP)
-				;''', (repo_id,table,success,success))
+			self.cursor.execute('''INSERT INTO table_updates(repo_id,user_id,table_name,success)
+				VALUES(%s,%s,%s,%s)
+				;''', (repo_id,user_id,table,success))
 		else:
-			self.cursor.execute('''INSERT OR REPLACE INTO table_updates(repo_id,table_name,success)
-				VALUES(?,?,?)
-				;''', (repo_id,table,success))
+			self.cursor.execute('''INSERT OR REPLACE INTO table_updates(repo_id,user_id,table_name,success)
+				VALUES(?,?,?,?)
+				;''', (repo_id,user_id,table,success))
 		self.connection.commit()
 
 	def set_cloned(self,repo_id,autocommit=True):
