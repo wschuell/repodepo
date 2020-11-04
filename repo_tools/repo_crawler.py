@@ -536,7 +536,7 @@ class RepoCrawler(object):
 			self.set_github_requesters()
 		while True:
 			for i,rq in enumerate(self.github_requesters):
-				self.logger.info('Using github requester {}, {} queries remaining'.format(i,rq.get_rate_limit().core.remaining))
+				self.logger.debug('Using github requester {}, {} queries remaining'.format(i,rq.get_rate_limit().core.remaining))
 				# time.sleep(0.5)
 				while rq.get_rate_limit().core.remaining > querymin_threshold:
 					yield rq
@@ -583,21 +583,25 @@ class RepoCrawler(object):
 						commit_apiobj = repo_apiobj.get_commit(commit_sha)
 					except github.GithubException:
 						self.logger.info('No such commit: {}/{}/{}'.format(repo_owner,repo_name,commit_sha))
+						commit_apiobj = None
 				except github.GithubException:
 					self.logger.info('No such repository: {}/{}'.format(repo_owner,repo_name))
 					# db.insert_update(user_id=user_id,table='stars',success=False)
 				else:
-					if commit_apiobj.author is None:
-						login = None
-						self.logger.info('No login available for user id {}'.format(user_id))
+					if commit_apiobj is None:
+						pass
 					else:
-						try:
-							login = commit_apiobj.author.login
-							self.logger.info('Found login {} for user id {}'.format(login,user_id))
-						except github.GithubException:
-							self.logger.info('No login available for user id {}, uncompletable object error'.format(user_id))
+						if commit_apiobj.author is None:
 							login = None
-					db.set_gh_login(user_id=user_id,login=login)
+							self.logger.info('No login available for user id {}'.format(user_id))
+						else:
+							try:
+								login = commit_apiobj.author.login
+								self.logger.info('Found login {} for user id {}'.format(login,user_id))
+							except github.GithubException:
+								self.logger.info('No login available for user id {}, uncompletable object error'.format(user_id))
+								login = None
+						db.set_gh_login(user_id=user_id,login=login)
 			if in_thread:
 				db.connection.close()
 		else:
@@ -605,6 +609,55 @@ class RepoCrawler(object):
 				futures = []
 				for infos in info_list:
 					futures.append(executor.submit(self.fill_gh_logins,info_list=[infos],workers=1,per_page=per_page,querymin_threshold=querymin_threshold,in_thread=True))
+				# for future in concurrent.futures.as_completed(futures):
+				# 	pass
+				for future in futures:
+					future.result()
+
+	def fill_followers(self,login_list=None,querymin_threshold=50,per_page=100,workers=1,in_thread=False,time_delay=24*3600):
+		'''
+		Getting followers for github logins. Avoiding by default logins which already have a value from less than time_delay seconds ago.
+		'''
+
+		if not hasattr(self,'github_requesters'):
+			self.set_github_requesters(per_page=per_page)
+
+		option = 'logins'
+
+		if login_list is None:
+			login_list = self.db.get_user_list(option=option,time_delay=time_delay)
+
+		if workers == 1:
+			requester_gen = self.get_github_requester(querymin_threshold=querymin_threshold)
+			if in_thread:
+				db = self.db.copy()
+			else:
+				db = self.db
+			for login in login_list:
+				self.logger.info('Filling followers for login {}'.format(login))
+				requester = next(requester_gen)
+				try:
+					user_apiobj = requester.get_user('{}'.format(login))
+				except github.GithubException:
+					self.logger.info('No such user: {}'.format(login))
+				else:
+					try:
+						followers = user_apiobj.followers
+						self.logger.info('Login {} has {} followers'.format(login,followers))
+					except github.GithubException:
+						self.logger.info('No followers info available for login {}, uncompletable object error'.format(login))
+						followers = None
+
+					db.fill_followers(followers_info_list=[(login,followers)])
+
+			if in_thread:
+				db.connection.close()
+				del db
+		else:
+			with ThreadPoolExecutor(max_workers=workers) as executor:
+				futures = []
+				for login in login_list:
+					futures.append(executor.submit(self.fill_followers,login_list=[login],workers=1,per_page=per_page,querymin_threshold=querymin_threshold,in_thread=True))
 				# for future in concurrent.futures.as_completed(futures):
 				# 	pass
 				for future in futures:

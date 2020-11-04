@@ -169,6 +169,18 @@ class Database(object):
 				update_type TEXT,
 				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 				);
+
+				CREATE TABLE IF NOT EXISTS followers(
+				id INTEGER PRIMARY KEY,
+				github_login TEXT NOT NULL,
+				followers INTEGER,
+				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+				);
+
+				CREATE INDEX IF NOT EXISTS followers_idx ON followers(github_login,created_at);
+				CREATE INDEX IF NOT EXISTS followers_idx2 ON followers(created_at);
+
+
 		'''
 			for q in DB_INIT.split(';')[:-1]:
 				self.cursor.execute(q)
@@ -256,6 +268,18 @@ class Database(object):
 				update_type TEXT,
 				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 				);
+
+
+				CREATE TABLE IF NOT EXISTS followers(
+				id BIGSERIAL PRIMARY KEY,
+				github_login TEXT NOT NULL,
+				followers BIGINT,
+				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+				);
+
+				CREATE INDEX IF NOT EXISTS followers_idx ON followers(github_login,created_at);
+				CREATE INDEX IF NOT EXISTS followers_idx2 ON followers(created_at);
+
 				''')
 
 			self.connection.commit()
@@ -266,6 +290,7 @@ class Database(object):
 		If there is a change in structure in the init script, this method should be called to 'reset' the state of the database
 		'''
 		logger.info('Cleaning database')
+		self.cursor.execute('DROP TABLE IF EXISTS followers;')
 		self.cursor.execute('DROP TABLE IF EXISTS commit_parents;')
 		self.cursor.execute('DROP TABLE IF EXISTS commits;')
 		self.cursor.execute('DROP TABLE IF EXISTS table_updates;')
@@ -512,9 +537,10 @@ class Database(object):
 		else:
 			raise ValueError('Unknown option for repo_list: {}'.format(option))
 
-	def get_user_list(self,option='all'):
+	def get_user_list(self,option='all',time_delay=24*3600):
 		'''
-		Getting a list of source,source_urlroot,owner,name
+		Getting a list of users depending on different conditions and patterns
+		time delay is used only for getting the followers, is in seconds, and returns logins that dont have a value for followers from less then 'time_delay' seconds ago
 		'''
 		if option == 'all':
 			self.cursor.execute('''
@@ -578,6 +604,7 @@ class Database(object):
 							WHERE cc.author_id=u.id ORDER BY cc.created_at DESC LIMIT 1)
 					;''')
 			return list(self.cursor.fetchall())
+
 
 		elif option == 'id_sha_repoinfo_all':
 			if self.db_type == 'postgres':
@@ -643,6 +670,32 @@ class Database(object):
 					ON r.id=c.repo_id
 					;''')
 			return list(self.cursor.fetchall())
+
+		elif option == 'logins':
+			if self.db_type == 'postgres':
+				self.cursor.execute('''
+					SELECT u.github_login FROM
+						(SELECT DISTINCT uu.github_login FROM users uu
+						WHERE uu.github_login IS NOT NULL) AS u
+					LEFT JOIN followers f
+					ON f.github_login=u.github_login
+					AND now() - f.created_at > %s*'1 second'::interval
+					GROUP BY u.github_login
+					HAVING f.github_login IS NULL
+					;''',(time_delay,))
+			else:
+				self.cursor.execute('''
+					SELECT u.github_login FROM
+						(SELECT DISTINCT uu.github_login FROM users uu
+						WHERE uu.github_login IS NOT NULL) AS u
+					LEFT JOIN followers f
+					ON f.github_login=u.github_login
+					AND (julianday('now') - julianday(f.created_at))*24*3600 > ?
+					GROUP BY u.github_login
+					HAVING f.github_login IS NULL
+					;''',(time_delay,))
+
+			return [r[0] for r in self.cursor.fetchall()]
 
 		else:
 			raise ValueError('Unknown option for user_list: {}'.format(option))
@@ -792,6 +845,25 @@ class Database(object):
 				self.cursor.execute('''UPDATE repositories SET latest_commit_time=? WHERE id=?;''',(latest_commit_time,repo_id))
 
 
+		if autocommit:
+			self.connection.commit()
+
+
+	def fill_followers(self,followers_info_list,autocommit=True):
+		'''
+		Filling in followers.
+		No table_updates entry, because the info is self-contained already in the followers table
+		'''
+		if self.db_type == 'postgres':
+			extras.execute_batch(self.cursor,'''
+				INSERT INTO followers(github_login,followers)
+				VALUES(%s,%s)
+				;''',followers_info_list)
+		else:
+			self.cursor.executemany('''
+				INSERT INTO followers(github_login,followers)
+				VALUES(?,?)
+				;''',followers_info_list)
 		if autocommit:
 			self.connection.commit()
 
