@@ -532,6 +532,8 @@ class RepoCrawler(object):
 		'''
 		Going through requesters respecting threshold of minimum remaining api queries
 		'''
+		if not hasattr(self,'github_requesters'):
+			self.set_github_requesters()
 		while True:
 			for i,rq in enumerate(self.github_requesters):
 				self.logger.info('Using github requester {}, {} queries remaining'.format(i,rq.get_rate_limit().core.remaining))
@@ -553,6 +555,9 @@ class RepoCrawler(object):
 		force: retry emails that were previously not retrievable
 		Otherwise trying all emails which have no login yet and never failed before
 		'''
+
+		if not hasattr(self,'github_requesters'):
+			self.set_github_requesters(per_page=per_page)
 
 		if force:
 			option = 'id_sha_repoinfo_all'
