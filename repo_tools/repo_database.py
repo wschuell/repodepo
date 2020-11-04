@@ -99,6 +99,7 @@ class Database(object):
 				name TEXT,
 				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 				updated_at TIMESTAMP DEFAULT NULL,
+				latest_commit_time TIMESTAMP DEFAULT NULL,
 				cloned BOOLEAN DEFAULT 0,
 				UNIQUE(source,owner,name)
 				);
@@ -187,6 +188,7 @@ class Database(object):
 				name TEXT,
 				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				latest_commit_time TIMESTAMP DEFAULT NULL,
 				cloned BOOLEAN DEFAULT false,
 				UNIQUE(source,owner,name)
 				);
@@ -447,6 +449,26 @@ class Database(object):
 				;''')
 			return [{'source':r[0],'owner':r[1],'name':r[2],'repo_id':r[3]} for r in self.cursor.fetchall()]
 
+		elif option == 'basicinfo_dict_time':
+			if self.db_type == 'postgres':
+				self.cursor.execute('''
+					SELECT s.name,r.owner,r.name,r.id,extract(epoch from r.latest_commit_time)
+					FROM repositories r
+					INNER JOIN sources s
+					ON s.id=r.source
+					ORDER BY s.name,r.owner,r.name
+					;''')
+			else:
+				self.cursor.execute('''
+					SELECT s.name,r.owner,r.name,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
+					FROM repositories r
+					INNER JOIN sources s
+					ON s.id=r.source
+					ORDER BY s.name,r.owner,r.name
+					;''')
+
+			return [{'source':r[0],'owner':r[1],'name':r[2],'repo_id':r[3],'after_time':r[4]} for r in self.cursor.fetchall()]
+
 		elif option == 'starinfo_dict':
 			self.cursor.execute('''
 				SELECT s.name,r.owner,r.name,r.id,tu.updated_at
@@ -490,32 +512,202 @@ class Database(object):
 		else:
 			raise ValueError('Unknown option for repo_list: {}'.format(option))
 
+	def get_user_list(self,option='all'):
+		'''
+		Getting a list of source,source_urlroot,owner,name
+		'''
+		if option == 'all':
+			self.cursor.execute('''
+				SELECT u.id,u.email,u.github_login
+				FROM users u
+				;''')
+			return list(self.cursor.fetchall())
+		elif option == 'id_sha_all':
+			if self.db_type == 'postgres':
+				self.cursor.execute('''
+					SELECT u.id,c.repo_id,c.sha
+					FROM users u
+					JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
+						WHERE cc.author_id=u.id ORDER BY cc.created_at DESC LIMIT 1) AS c
+					ON u.github_login IS NULL
+					;''')
+			else:
+				self.cursor.execute('''
+					SELECT u.id,c.repo_id,c.sha
+					FROM users u
+					JOIN commits c
+						ON u.github_login IS NULL AND
+						c.id IN (SELECT cc.id FROM commits cc
+							WHERE cc.author_id=u.id ORDER BY cc.created_at DESC LIMIT 1)
+					;''')
 
-	def fill_authors(self,commit_info_list):
+			return list(self.cursor.fetchall())
+
+		elif option == 'id_sha':
+			if self.db_type == 'postgres':
+				self.cursor.execute('''
+					SELECT u.id,c.repo_id,c.sha
+					FROM (
+						SELECT uu.id FROM
+					 		(SELECT uuu.id FROM users uuu
+							WHERE uuu.github_login IS NULL) AS uu
+							LEFT JOIN table_updates tu
+							ON tu.user_id=uu.id AND tu.table_name='login'
+							GROUP BY uu.id,tu.user_id
+							HAVING tu.user_id IS NULL
+						) AS u
+					JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
+						WHERE cc.author_id=u.id ORDER BY cc.created_at DESC LIMIT 1) AS c
+					ON true
+					;''')
+			else:
+				self.cursor.execute('''
+					SELECT u.id,c.repo_id,c.sha
+					FROM (
+						SELECT uu.id FROM
+					 		(SELECT uuu.id FROM users uuu
+							WHERE uuu.github_login IS NULL) AS uu
+							LEFT JOIN table_updates tu
+							ON tu.user_id=uu.id AND tu.table_name='login'
+							GROUP BY uu.id,tu.user_id
+							HAVING tu.user_id IS NULL
+						) AS u
+					JOIN commits c
+						ON
+						c.id IN (SELECT cc.id FROM commits cc
+							WHERE cc.author_id=u.id ORDER BY cc.created_at DESC LIMIT 1)
+					;''')
+			return list(self.cursor.fetchall())
+
+		elif option == 'id_sha_repoinfo_all':
+			if self.db_type == 'postgres':
+				self.cursor.execute('''
+					SELECT u.id,c.repo_id,r.owner,r.name,c.sha
+					FROM users u
+					JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
+						WHERE cc.author_id=u.id ORDER BY cc.created_at DESC LIMIT 1) AS c
+					ON u.github_login IS NULL
+					INNER JOIN repositories r
+					ON r.id=c.repo_id
+					;''')
+			else:
+				self.cursor.execute('''
+					SELECT u.id,c.repo_id,r.owner,r.name,c.sha
+					FROM users u
+					JOIN commits c
+						ON u.github_login IS NULL AND
+						c.id IN (SELECT cc.id FROM commits cc
+							WHERE cc.author_id=u.id ORDER BY cc.created_at DESC LIMIT 1)
+					INNER JOIN repositories r
+					ON r.id=c.repo_id
+					;''')
+
+			return list(self.cursor.fetchall())
+
+		elif option == 'id_sha_repoinfo':
+			if self.db_type == 'postgres':
+				self.cursor.execute('''
+					SELECT u.id,c.repo_id,r.owner,r.name,c.sha
+					FROM (
+						SELECT uu.id FROM
+					 		(SELECT uuu.id FROM users uuu
+							WHERE uuu.github_login IS NULL) AS uu
+							LEFT JOIN table_updates tu
+							ON tu.user_id=uu.id AND tu.table_name='login'
+							GROUP BY uu.id,tu.user_id
+							HAVING tu.user_id IS NULL
+						) AS u
+					JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
+						WHERE cc.author_id=u.id ORDER BY cc.created_at DESC LIMIT 1) AS c
+					ON true
+					INNER JOIN repositories r
+					ON r.id=c.repo_id
+					;''')
+			else:
+				self.cursor.execute('''
+					SELECT u.id,c.repo_id,r.owner,r.name,c.sha
+					FROM (
+						SELECT uu.id FROM
+					 		(SELECT uuu.id FROM users uuu
+							WHERE uuu.github_login IS NULL) AS uu
+							LEFT JOIN table_updates tu
+							ON tu.user_id=uu.id AND tu.table_name='login'
+							GROUP BY uu.id,tu.user_id
+							HAVING tu.user_id IS NULL
+						) AS u
+					JOIN commits c
+						ON
+						c.id IN (SELECT cc.id FROM commits cc
+							WHERE cc.author_id=u.id ORDER BY cc.created_at DESC LIMIT 1)
+					INNER JOIN repositories r
+					ON r.id=c.repo_id
+					;''')
+			return list(self.cursor.fetchall())
+
+		else:
+			raise ValueError('Unknown option for user_list: {}'.format(option))
+
+
+
+	def fill_authors(self,commit_info_list,autocommit=True):
 		'''
 		Creating table if necessary.
 		Filling authors in table.
+
+		Defining a wrapper around the commit list generator to keep track of data
+		Using generator and not lists to be able to deal with high volumes, and lets choice to caller to provide a list or generator.
 		'''
 
-		# filling in data
+
+		tracked_data = {'latest_commit_time':0,'empty':True}
+		def tracked_gen(orig_gen):
+			for c in orig_gen:
+				tracked_data['empty'] = False
+				tracked_data['last_commit'] = c
+				tracked_data['latest_commit_time'] = max(tracked_data['latest_commit_time'],c['time'])
+				yield c
+
 		if self.db_type == 'postgres':
 			extras.execute_batch(self.cursor,'''
 				INSERT INTO users(name,email) VALUES(%s,%s)
 				ON CONFLICT DO NOTHING;
-				''',((c['author_name'],c['author_email']) for c in commit_info_list))
+				''',((c['author_name'],c['author_email']) for c in tracked_gen(commit_info_list)))
+
+
+
 		else:
 			self.cursor.executemany('''
 				INSERT OR IGNORE INTO users(name,email) VALUES(?,?)
 				;
-				''',((c['author_name'],c['author_email']) for c in commit_info_list))
+				''',((c['author_name'],c['author_email']) for c in tracked_gen(commit_info_list)))
 
-	def fill_commits(self,commit_info_list):
+
+		if not tracked_data['empty']:
+			repo_id = tracked_data['last_commit']['repo_id']
+			latest_commit_time = datetime.datetime.fromtimestamp(tracked_data['latest_commit_time'])
+			if self.db_type == 'postgres':
+				self.cursor.execute('''INSERT INTO table_updates(repo_id,table_name,latest_commit_time) VALUES(%s,'users',%s) ;''',(repo_id,latest_commit_time))
+			else:
+				self.cursor.execute('''INSERT INTO table_updates(repo_id,table_name,latest_commit_time) VALUES(?,'users',?) ;''',(repo_id,latest_commit_time))
+
+
+		if autocommit:
+			self.connection.commit()
+
+	def fill_commits(self,commit_info_list,autocommit=True):
 		'''
 		Creating table if necessary.
-		Filling authors in table.
+		Filling commits in table.
 		'''
 
-		# filling in data
+		tracked_data = {'latest_commit_time':0,'empty':True}
+		def tracked_gen(orig_gen):
+			for c in orig_gen:
+				tracked_data['last_commit'] = c
+				tracked_data['empty'] = False
+				tracked_data['latest_commit_time'] = max(tracked_data['latest_commit_time'],c['time'])
+				yield c
+
 		if self.db_type == 'postgres':
 			extras.execute_batch(self.cursor,'''
 				INSERT INTO commits(sha,author_id,repo_id,created_at,insertions,deletions)
@@ -527,7 +719,8 @@ class Database(object):
 							%s
 							)
 				ON CONFLICT DO NOTHING;
-				''',((c['sha'],c['author_email'],c['repo_id'],datetime.datetime.fromtimestamp(c['time']),c['insertions'],c['deletions'],) for c in commit_info_list))
+				''',((c['sha'],c['author_email'],c['repo_id'],datetime.datetime.fromtimestamp(c['time']),c['insertions'],c['deletions'],) for c in tracked_gen(commit_info_list)))
+
 		else:
 			self.cursor.executemany('''
 				INSERT OR IGNORE INTO commits(sha,author_id,repo_id,created_at,insertions,deletions)
@@ -538,22 +731,37 @@ class Database(object):
 							?,
 							?
 							);
-				''',((c['sha'],c['author_email'],c['repo_id'],datetime.datetime.fromtimestamp(c['time']),c['insertions'],c['deletions'],) for c in commit_info_list))
+				''',((c['sha'],c['author_email'],c['repo_id'],datetime.datetime.fromtimestamp(c['time']),c['insertions'],c['deletions'],) for c in tracked_gen(commit_info_list)))
+
+		if not tracked_data['empty']:
+			repo_id = tracked_data['last_commit']['repo_id']
+			latest_commit_time = datetime.datetime.fromtimestamp(tracked_data['latest_commit_time'])
+			if self.db_type == 'postgres':
+				self.cursor.execute('''INSERT INTO table_updates(repo_id,table_name,latest_commit_time) VALUES(%s,'commits',%s) ;''',(repo_id,latest_commit_time))
+			else:
+				self.cursor.execute('''INSERT INTO table_updates(repo_id,table_name,latest_commit_time) VALUES(?,'commits',?) ;''',(repo_id,latest_commit_time))
 
 
-	def fill_commit_parents(self,commit_info_list):
+
+		if autocommit:
+			self.connection.commit()
+
+	def fill_commit_parents(self,commit_info_list,autocommit=True):
 		'''
 		Creating table if necessary.
-		Filling authors in table.
+		Filling commit parenthood in table.
 		'''
 
-		def transformed_list(cil):
-			for c in cil:
+		tracked_data = {'latest_commit_time':0,'empty':True}
+		def transformed_list(orig_gen):
+			for c in orig_gen:
+				tracked_data['last_commit'] = c
+				tracked_data['empty'] = False
+				tracked_data['latest_commit_time'] = max(tracked_data['latest_commit_time'],c['time'])
 				c_id = c['sha']
 				for r,p_id in enumerate(c['parents']):
 					yield (c_id,p_id,r)
 
-		# filling in data
 		if self.db_type == 'postgres':
 			extras.execute_batch(self.cursor,'''
 				INSERT INTO commit_parents(child_id,parent_id,rank)
@@ -563,6 +771,7 @@ class Database(object):
 							%s)
 				ON CONFLICT DO NOTHING;
 				''',transformed_list(commit_info_list))
+
 		else:
 			self.cursor.executemany('''
 				INSERT OR IGNORE INTO commit_parents(child_id,parent_id,rank)
@@ -572,6 +781,18 @@ class Database(object):
 							?);
 				''',transformed_list(commit_info_list))
 
+		if not tracked_data['empty']:
+			repo_id = tracked_data['last_commit']['repo_id']
+			latest_commit_time = datetime.datetime.fromtimestamp(tracked_data['latest_commit_time'])
+			if self.db_type == 'postgres':
+				self.cursor.execute('''INSERT INTO table_updates(repo_id,table_name,latest_commit_time) VALUES(%s,'commit_parents',%s) ;''',(repo_id,latest_commit_time))
+			else:
+				self.cursor.execute('''INSERT INTO table_updates(repo_id,table_name,latest_commit_time) VALUES(?,'commit_parents',?) ;''',(repo_id,latest_commit_time))
+
+			self.cursor.execute('''UPDATE repositories SET latest_commit_time=? WHERE id=?;''',(latest_commit_time,repo_id))
+
+		if autocommit:
+			self.connection.commit()
 
 	def create_indexes(self,table=None):
 		'''
@@ -696,7 +917,7 @@ class Database(object):
 				VALUES(%s,%s,%s,%s)
 				;''', (repo_id,user_id,table,success))
 		else:
-			self.cursor.execute('''INSERT OR REPLACE INTO table_updates(repo_id,user_id,table_name,success)
+			self.cursor.execute('''INSERT INTO table_updates(repo_id,user_id,table_name,success)
 				VALUES(?,?,?,?)
 				;''', (repo_id,user_id,table,success))
 		self.connection.commit()
@@ -709,5 +930,19 @@ class Database(object):
 			self.cursor.execute('''UPDATE repositories SET cloned=true WHERE id=%s;''',(repo_id,))
 		else:
 			self.cursor.execute('''UPDATE repositories SET cloned=1 WHERE id=?;''',(repo_id,))
+		if autocommit:
+			self.connection.commit()
+
+	def set_gh_login(self,user_id,login,autocommit=True):
+		'''
+		Sets a login for a given user (id refers to a unique email, which can refer to several logins)
+		'''
+		if self.db_type == 'postgres':
+			self.cursor.execute('''UPDATE users SET github_login=%s WHERE id=%s;''',(login,user_id))
+			self.cursor.execute('''INSERT INTO table_updates(user_id,table_name,success) VALUES(%s,'login',%s);''',(user_id,(login is not None)))
+		else:
+			self.cursor.execute('''UPDATE users SET github_login=? WHERE id=?;''',(login,user_id))
+			self.cursor.execute('''INSERT INTO table_updates(user_id,table_name,success) VALUES(?,'login',?);''',(user_id,(login is not None)))
+
 		if autocommit:
 			self.connection.commit()

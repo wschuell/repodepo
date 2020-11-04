@@ -212,7 +212,6 @@ class RepoCrawler(object):
 			option = 'no_dl'
 
 		repo_list = self.db.get_repo_list(option=option)
-		print(repo_list)
 		for i,r in enumerate(repo_list):
 			source,source_urlroot,owner,name = r
 			self.logger.info('Repo {}/{}'.format(i+1,len(repo_list)))
@@ -296,15 +295,22 @@ class RepoCrawler(object):
 			return pygit2.Repository(os.path.join(repo_folder,'.git'))
 
 
-	def list_commits(self,name,source,owner,basic_info_only=False,repo_id=None):
+	def list_commits(self,name,source,owner,basic_info_only=False,repo_id=None,after_time=None):
 		'''
 		Listing the commits of a repository
+		if after time is set to an int (unix time def) or datetime.datetime instead of None, only commits strictly after given time. Commits are listed by default from most recent to least.
 		'''
+		if isinstance(after_time,datetime.datetime):
+			after_time = datetime.datetime.timestamp(after_time)
+
 		repo_obj = self.get_repo(source=source,name=name,owner=owner)
 		if repo_id is None: # Letting the possibility to preset repo_id to avoid cursor recursive usage
 			repo_id = self.db.get_repo_id(source=source,name=name,owner=owner)
 		# repo_obj.walk(repo.head.target, pygit2.GIT_SORT_TOPOLOGICAL | pygit2.GIT_SORT_REVERSE)
-		for commit in repo_obj.walk(repo_obj.head.target, pygit2.GIT_SORT_TIME | pygit2.GIT_SORT_REVERSE):
+		# for commit in repo_obj.walk(repo_obj.head.target, pygit2.GIT_SORT_TIME | pygit2.GIT_SORT_REVERSE):
+		for commit in repo_obj.walk(repo_obj.head.target, pygit2.GIT_SORT_TIME):
+			if after_time is not None and commit.commit_time<after_time:
+				break
 			if basic_info_only:
 				yield {
 						'author_email':commit.author.email,
@@ -339,7 +345,7 @@ class RepoCrawler(object):
 						}
 
 
-	def fill_commit_info(self,force=False):
+	def fill_commit_info(self,force=False,all_commits=False):
 		'''
 		Filling in authors, commits and parenthood using Database object methods
 		'''
@@ -350,12 +356,16 @@ class RepoCrawler(object):
 		self.db.cursor.execute('''SELECT MAX(updated_at) FROM table_updates WHERE table_name='clones' AND success;''')
 		last_dl = self.db.cursor.fetchone()[0]
 
+		if all_commits:
+			option = 'basicinfo_dict'
+		else:
+			option = 'basicinfo_dict_time'
 
 		if force or (last_fu is None) or (last_dl is not None and last_fu<last_dl):
 
 			self.logger.info('Filling in users')
 
-			for repo_info in self.db.get_repo_list(option='basicinfo_dict'):
+			for repo_info in self.db.get_repo_list(option=option):
 				try:
 					self.db.fill_authors(self.list_commits(basic_info_only=True,**repo_info))
 				except:
@@ -365,7 +375,7 @@ class RepoCrawler(object):
 
 			self.logger.info('Filling in commits')
 
-			for repo_info in self.db.get_repo_list(option='basicinfo_dict'):
+			for repo_info in self.db.get_repo_list(option=option):
 				try:
 					self.db.fill_commits(self.list_commits(basic_info_only=False,**repo_info))
 				except:
@@ -375,7 +385,7 @@ class RepoCrawler(object):
 
 			self.logger.info('Filling in commit parents')
 
-			for repo_info in self.db.get_repo_list(option='basicinfo_dict'):
+			for repo_info in self.db.get_repo_list(option=option):
 				try:
 					self.db.fill_commit_parents(self.list_commits(basic_info_only=True,**repo_info))
 				except:
@@ -477,6 +487,8 @@ class RepoCrawler(object):
 							repo_list.pop(0)
 							new_repo = True
 							break
+			if in_thread:
+				db.connection.close()
 
 		else:
 			with ThreadPoolExecutor(max_workers=workers) as executor:
@@ -533,3 +545,62 @@ class RepoCrawler(object):
 				time_to_reset =  earliest_reset - calendar.timegm(time.gmtime())
 				self.logger.info('Waiting for reset of at least one github requester, sleeping {} seconds'.format(time_to_reset+1))
 				time.sleep(time_to_reset+1)
+
+
+	def fill_gh_logins(self,info_list=None,force=False,querymin_threshold=50,per_page=100,workers=1,in_thread=False):
+		'''
+		Associating emails to github logins using GitHub API
+		force: retry emails that were previously not retrievable
+		Otherwise trying all emails which have no login yet and never failed before
+		'''
+
+		if force:
+			option = 'id_sha_repoinfo_all'
+		else:
+			option = 'id_sha_repoinfo'
+
+		if info_list is None:
+			info_list = self.db.get_user_list(option=option)
+
+		if workers == 1:
+			requester_gen = self.get_github_requester(querymin_threshold=querymin_threshold)
+			if in_thread:
+				db = self.db.copy()
+			else:
+				db = self.db
+			for infos in info_list:
+				user_id,repo_id,repo_owner,repo_name,commit_sha = infos
+				self.logger.info('Filling gh login for user id {}'.format(user_id))
+				requester = next(requester_gen)
+				try:
+					repo_apiobj = requester.get_repo('{}/{}'.format(repo_owner,repo_name))
+					try:
+						commit_apiobj = repo_apiobj.get_commit(commit_sha)
+					except github.GithubException:
+						self.logger.info('No such commit: {}/{}/{}'.format(repo_owner,repo_name,commit_sha))
+				except github.GithubException:
+					self.logger.info('No such repository: {}/{}'.format(repo_owner,repo_name))
+					# db.insert_update(user_id=user_id,table='stars',success=False)
+				else:
+					if commit_apiobj.author is None:
+						login = None
+						self.logger.info('No login available for user id {}'.format(user_id))
+					else:
+						try:
+							login = commit_apiobj.author.login
+							self.logger.info('Found login {} for user id {}'.format(login,user_id))
+						except github.GithubException:
+							self.logger.info('No login available for user id {}, uncompletable object error'.format(user_id))
+							login = None
+					db.set_gh_login(user_id=user_id,login=login)
+			if in_thread:
+				db.connection.close()
+		else:
+			with ThreadPoolExecutor(max_workers=workers) as executor:
+				futures = []
+				for infos in info_list:
+					futures.append(executor.submit(self.fill_gh_logins,info_list=[infos],workers=1,per_page=per_page,querymin_threshold=querymin_threshold,in_thread=True))
+				# for future in concurrent.futures.as_completed(futures):
+				# 	pass
+				for future in futures:
+					future.result()
