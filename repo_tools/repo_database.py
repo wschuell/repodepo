@@ -679,8 +679,8 @@ class Database(object):
 						WHERE uu.github_login IS NOT NULL) AS u
 					LEFT JOIN followers f
 					ON f.github_login=u.github_login
-					AND now() - f.created_at > %s*'1 second'::interval
-					GROUP BY u.github_login
+					AND now() - f.created_at < %s*'1 second'::interval
+					GROUP BY u.github_login,f.github_login
 					HAVING f.github_login IS NULL
 					;''',(time_delay,))
 			else:
@@ -690,8 +690,8 @@ class Database(object):
 						WHERE uu.github_login IS NOT NULL) AS u
 					LEFT JOIN followers f
 					ON f.github_login=u.github_login
-					AND (julianday('now') - julianday(f.created_at))*24*3600 > ?
-					GROUP BY u.github_login
+					AND (julianday('now') - julianday(f.created_at))*24*3600 < ?
+					GROUP BY u.github_login,f.github_login
 					HAVING f.github_login IS NULL
 					;''',(time_delay,))
 
