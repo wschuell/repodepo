@@ -17,6 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 
 from .repo_database import Database
+from . import misc
 
 logger = logging.getLogger(__name__)
 ch = logging.StreamHandler()
@@ -61,7 +62,7 @@ class RepoCrawler(object):
 			db_folder = self.folder
 		self.set_db(db_folder=db_folder,**db_cfg)
 
-	def add_list(self,repo_list,source,source_urlroot=None,cloned=False):
+	def add_list(self,repo_list,source,source_urlroot=None,cloned=False): # DEPRECATED
 		'''
 		Behaving like an ordered set, if performance becomes an issue it could be useful to use OrderedSet implementation
 		Or simply code an option to disable checks
@@ -85,7 +86,7 @@ class RepoCrawler(object):
 				repo_id = self.db.get_repo_id(name=repo,owner=owner,source=source)
 				if cloned:
 					self.set_init_dl(repo=repo,owner=owner,source=source,repo_id=repo_id)
-				self.db.update_url(source=source,repo_url=r,repo_id=repo_id)
+				# self.db.update_url(source=source,repo_url=r,repo_id=repo_id) # calls deprecated function, need to adapt to register_urls
 
 		# 	if r_f not in self.repo_list:
 		# 		self.repo_list.append(r_f)
@@ -103,7 +104,7 @@ class RepoCrawler(object):
 
 
 
-	def repo_formatting(self,repo,source_urlroot):
+	def repo_formatting(self,repo,source_urlroot,output_cleaned_url=False):
 		'''
 		Formatting repositories so that they match the expected syntax 'user/project'
 		'''
@@ -123,7 +124,28 @@ class RepoCrawler(object):
 		if len(r.split('/')) != 2:
 			raise RepoSyntaxError('Repo has not expected syntax "user/project" or prefixed with {}:{}. Please fix input or update the repo_formatting method.'.format(source_urlroot,repo))
 		r = '/'.join(r.split('/')[:2])
-		return r
+		if output_cleaned_url:
+			return 'https://{}/{}'.format(source_urlroot,r)
+		else:
+			return r
+
+	def clean_url(self,url):
+		'''
+		getting a clean url based on what is available as sources, using source_urlroot values
+		returns clean_url,source_id
+		'''
+		if url is None:
+			return None
+
+		if not hasattr(self,'url_roots'):
+			self.db.cursor.execute('SELECT id,url_root FROM sources WHERE url_root IS NOT NULL;')
+			self.url_roots = list(self.db.cursor.fetchall())
+		for ur_id,ur in self.url_roots:
+			try:
+				return self.repo_formatting(repo=url,source_urlroot=ur,output_cleaned_url=True),ur_id
+			except RepoSyntaxError:
+				continue
+		return None,None
 
 	def list_missing_repos(self):
 		'''
@@ -184,6 +206,45 @@ class RepoCrawler(object):
 				repos += ['/'.join([os.path.basename(os.path.dirname(p)),os.path.basename(p)]) for p in glob.glob(os.path.join(user_folder,'*'))]
 			self.add_list(repo_list=repos,source=source,cloned=True)
 			self.logger.info('Found {} repositories for source {}'.format(len(repos),source))
+
+
+	def fill_packages(self,package_list,source,force=False,clean_urls=True):
+		'''
+		adds repositories from a package repository database (eg crates)
+		syntax of package list:
+		package id (in source), package name, created_at (datetime.datetime),repo_url
+
+		see .misc for wrappers
+		'''
+
+		if not force:
+			if self.db.db_type == 'postgres':
+				self.db.cursor.execute('SELECT * FROM packages WHERE source_id=(SELECT id FROM sources WHERE name=%s) LIMIT 1;',(source,))
+			else:
+				self.db.cursor.execute('SELECT * FROM packages WHERE source_id=(SELECT id FROM sources WHERE name=?) LIMIT 1;',(source,))
+			sample_package = self.db.cursor.fetchone()
+			if sample_package is not None:
+				self.logger.info('Skipping packages from {}'.format(source))
+			else:
+				self.fill_packages(package_list=package_list,source=source,force=True,clean_urls=clean_urls)
+		else:
+			self.logger.info('Filling packages from {}'.format(source))
+			self.db.register_source(source)
+			if clean_urls:
+				self.db.register_urls(source=source,url_list=[(p[3],*self.clean_url(p[3])) for p in package_list if p[3] is not None])
+			else:
+				self.db.register_urls(source=source,url_list=[p[3] for p in package_list if p[3] is not None])
+
+			self.logger.info('Filled URLs')
+
+
+			self.db.register_repositories(repo_info_list=[(self.clean_url(p[3])[1],self.clean_url(p[3])[0].split('/')[-2],self.clean_url(p[3])[0].split('/')[-1],self.clean_url(p[3])[0]) for p in package_list if p[3] is not None and self.clean_url(p[3])[0] is not None])
+			self.logger.info('Filled repositories')
+
+			self.db.register_packages(source=source,package_list=package_list)
+			self.logger.info('Filled packages')
+
+
 
 	def build_url(self,name,owner,source_urlroot):
 		'''

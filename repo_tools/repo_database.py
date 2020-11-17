@@ -39,14 +39,14 @@ class Database(object):
 		self.db_type = db_type
 		if db_type == 'sqlite':
 			if db_name.startswith(':memory:'):
-				self.connection = sqlite3.connect(db_name)
+				self.connection = sqlite3.connect(db_name, detect_types=sqlite3.PARSE_DECLTYPES)
 				self.in_ram = True
 			else:
 				self.in_ram = False
 				self.db_path = os.path.join(db_folder,'{}.db'.format(db_name))
 				if not os.path.exists(db_folder):
 					os.makedirs(db_folder)
-				self.connection = sqlite3.connect(self.db_path,timeout=timeout)
+				self.connection = sqlite3.connect(self.db_path,timeout=timeout, detect_types=sqlite3.PARSE_DECLTYPES)
 			self.cursor = self.connection.cursor()
 		elif db_type == 'postgres':
 			if password is not None:
@@ -89,7 +89,16 @@ class Database(object):
 				CREATE TABLE IF NOT EXISTS sources(
 				id INTEGER PRIMARY KEY,
 				name TEXT NOT NULL UNIQUE,
-				url_root TEXT NOT NULL UNIQUE
+				url_root TEXT
+				);
+
+				CREATE TABLE IF NOT EXISTS urls(
+				id INTEGER PRIMARY KEY,
+				source INTEGER REFERENCES sources(id) ON DELETE CASCADE,
+				source_root INTEGER REFERENCES sources(id) ON DELETE CASCADE,
+				url TEXT NOT NULL UNIQUE,
+				cleaned_url INTEGER REFERENCES urls(id) ON DELETE CASCADE,
+				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 				);
 
 				CREATE TABLE IF NOT EXISTS repositories(
@@ -97,19 +106,12 @@ class Database(object):
 				source INTEGER REFERENCES sources(id) ON DELETE CASCADE,
 				owner TEXT,
 				name TEXT,
+				url_id INTEGER REFERENCES urls(id) ON DELETE CASCADE,
 				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 				updated_at TIMESTAMP DEFAULT NULL,
 				latest_commit_time TIMESTAMP DEFAULT NULL,
 				cloned BOOLEAN DEFAULT 0,
 				UNIQUE(source,owner,name)
-				);
-
-				CREATE TABLE IF NOT EXISTS urls(
-				source INTEGER REFERENCES sources(id) ON DELETE CASCADE,
-				repo_url TEXT NOT NULL,
-				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
-				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-				PRIMARY KEY(source,repo_url)
 				);
 
 				CREATE TABLE IF NOT EXISTS stars(
@@ -180,6 +182,20 @@ class Database(object):
 				CREATE INDEX IF NOT EXISTS followers_idx ON followers(github_login,created_at);
 				CREATE INDEX IF NOT EXISTS followers_idx2 ON followers(created_at);
 
+				CREATE TABLE IF NOT EXISTS packages(
+				id INTEGER PRIMARY KEY,
+				source_id INTEGER REFERENCES sources(id) ON DELETE CASCADE,
+				insource_id INTEGER DEFAULT NULL,
+				name TEXT,
+				url_id INTEGER REFERENCES urls(id) ON DELETE CASCADE,
+				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
+				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				created_at TIMESTAMP DEFAULT NULL
+				);
+
+				CREATE INDEX IF NOT EXISTS packages_idx ON packages(source_id,name);
+				CREATE INDEX IF NOT EXISTS packages_date_idx ON packages(created_at);
+				CREATE INDEX IF NOT EXISTS packages_repo_idx ON packages(repo_id);
 
 		'''
 			for q in DB_INIT.split(';')[:-1]:
@@ -190,7 +206,16 @@ class Database(object):
 				CREATE TABLE IF NOT EXISTS sources(
 				id BIGSERIAL PRIMARY KEY,
 				name TEXT NOT NULL UNIQUE,
-				url_root TEXT NOT NULL UNIQUE
+				url_root TEXT
+				);
+
+				CREATE TABLE IF NOT EXISTS urls(
+				id BIGSERIAL PRIMARY KEY,
+				source BIGINT REFERENCES sources(id) ON DELETE CASCADE,
+				source_root BIGINT REFERENCES sources(id) ON DELETE CASCADE,
+				url TEXT NOT NULL UNIQUE,
+				cleaned_url BIGINT REFERENCES urls(id) ON DELETE CASCADE,
+				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 				);
 
 				CREATE TABLE IF NOT EXISTS repositories(
@@ -198,19 +223,12 @@ class Database(object):
 				source BIGINT REFERENCES sources(id) ON DELETE CASCADE,
 				owner TEXT,
 				name TEXT,
+				url_id BIGINT REFERENCES urls(id) ON DELETE CASCADE,
 				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 				latest_commit_time TIMESTAMP DEFAULT NULL,
 				cloned BOOLEAN DEFAULT false,
 				UNIQUE(source,owner,name)
-				);
-
-				CREATE TABLE IF NOT EXISTS urls(
-				source BIGINT REFERENCES sources(id) ON DELETE CASCADE,
-				repo_url TEXT NOT NULL,
-				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
-				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-				PRIMARY KEY(source,repo_url)
 				);
 
 				CREATE TABLE IF NOT EXISTS stars(
@@ -280,6 +298,20 @@ class Database(object):
 				CREATE INDEX IF NOT EXISTS followers_idx ON followers(github_login,created_at);
 				CREATE INDEX IF NOT EXISTS followers_idx2 ON followers(created_at);
 
+				CREATE TABLE IF NOT EXISTS packages(
+				id BIGSERIAL PRIMARY KEY,
+				source_id BIGINT REFERENCES sources(id) ON DELETE CASCADE,
+				insource_id BIGINT DEFAULT NULL,
+				name TEXT,
+				url_id BIGINT REFERENCES urls(id) ON DELETE CASCADE,
+				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
+				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				created_at TIMESTAMP DEFAULT NULL
+				);
+
+				CREATE INDEX IF NOT EXISTS packages_idx ON packages(source_id,name);
+				CREATE INDEX IF NOT EXISTS packages_date_idx ON packages(created_at);
+				CREATE INDEX IF NOT EXISTS packages_repo_idx ON packages(repo_id);
 				''')
 
 			self.connection.commit()
@@ -290,6 +322,7 @@ class Database(object):
 		If there is a change in structure in the init script, this method should be called to 'reset' the state of the database
 		'''
 		logger.info('Cleaning database')
+		self.cursor.execute('DROP TABLE IF EXISTS packages;')
 		self.cursor.execute('DROP TABLE IF EXISTS followers;')
 		self.cursor.execute('DROP TABLE IF EXISTS commit_parents;')
 		self.cursor.execute('DROP TABLE IF EXISTS commits;')
@@ -298,8 +331,8 @@ class Database(object):
 		self.cursor.execute('DROP TABLE IF EXISTS stars;')
 		self.cursor.execute('DROP TABLE IF EXISTS full_updates;')
 		self.cursor.execute('DROP TABLE IF EXISTS download_attempts;')
-		self.cursor.execute('DROP TABLE IF EXISTS urls;')
 		self.cursor.execute('DROP TABLE IF EXISTS repositories;')
+		self.cursor.execute('DROP TABLE IF EXISTS urls;')
 		self.cursor.execute('DROP TABLE IF EXISTS sources;')
 		self.connection.commit()
 
@@ -321,7 +354,7 @@ class Database(object):
 								?);''',(source,owner,repo,cloned))
 		self.connection.commit()
 
-	def register_source(self,source,source_urlroot):
+	def register_source(self,source,source_urlroot=None):
 		'''
 		Putting a source in the database
 		'''
@@ -333,33 +366,121 @@ class Database(object):
 				 VALUES(?,?);''',(source,source_urlroot))
 		self.connection.commit()
 
-	def register_url(self,source,repo_url,repo_id=None):
+	def register_urls(self,source,url_list):
 		'''
-		Putting URLs in the database
+		Registering URLs and potentially their cleaned version in the database
+		url_list should be [(url,cleaned_url,source_root_id)] # source is the source of the url (eg crates), source_root is the repository system source (eg github)
+		but if [url], completed by [(url,None,None)]
 		'''
+		if len(url_list)>0 and isinstance(url_list[0],str):
+			url_list = [(url,None,None) for url in url_list]
+
+
+
 		if self.db_type == 'postgres':
-			self.cursor.execute(''' INSERT INTO urls(source,repo_url,repo_id)
+			extras.execute_batch(self.cursor,''' INSERT INTO urls(source,source_root,url,cleaned_url)
 				 VALUES((SELECT id FROM sources WHERE name=%s),
-								%s,%s) ON CONFLICT DO NOTHING;''',(source,repo_url,repo_id))
+				 				%s,
+								%s,%s) ON CONFLICT(url) DO NOTHING;''',((source,source_root_id,url_cleaned,url_cleaned) for url,url_cleaned in url_list if url_cleaned is not None))
+			extras.execute_batch(self.cursor,''' UPDATE urls SET cleaned_url=id WHERE url=%s ;''',((url_cleaned,) for url,url_cleaned in url_list if url_cleaned is not None))
+			extras.execute_batch(self.cursor,''' INSERT INTO urls(source,source_root,url,cleaned_url)
+				 VALUES((SELECT id FROM sources WHERE name=%s),
+				 				%s,
+								%s,(SELECT id FROM urls WHERE url=%s)) ON CONFLICT(url) DO UPDATE
+								SET cleaned_url=excluded.cleaned_url;''',((source,source_root_id,url,url_cleaned) for url,url_cleaned in url_list))
 		else:
-			self.cursor.execute(''' INSERT OR IGNORE INTO urls(source,repo_url,repo_id)
+			self.cursor.executemany(''' INSERT INTO urls(source,source_root,url,cleaned_url)
 				 VALUES((SELECT id FROM sources WHERE name=?),
-								?,?);''',(source,repo_url,repo_id))
+				 				?,
+								?,?) ON CONFLICT(url) DO NOTHING;''',((source,source_root_id,url_cleaned,url_cleaned) for url,url_cleaned,source_root_id in url_list if url_cleaned is not None))
+			self.cursor.executemany(''' UPDATE urls SET cleaned_url=id WHERE url=?;''',((url_cleaned,) for url,url_cleaned,source_root_id in url_list if url_cleaned is not None))
+			self.cursor.executemany(''' INSERT INTO urls(source,source_root,url,cleaned_url)
+				 VALUES((SELECT id FROM sources WHERE name=?),
+				 				?,
+								?,(SELECT id FROM urls WHERE url=?)) ON CONFLICT(url) DO UPDATE
+								SET cleaned_url=excluded.cleaned_url;''',((source,source_root_id,url,url_cleaned) for url,url_cleaned,source_root_id in url_list))
+
 		self.connection.commit()
 
-	def update_url(self,source,repo_url,repo_id):
+	# def register_url(self,source,repo_url,repo_id=None): # DEPRECATED
+	# 	'''
+	# 	Putting URLs in the database
+	# 	'''
+	# 	if self.db_type == 'postgres':
+	# 		self.cursor.execute(''' INSERT INTO urls(source,repo_url,repo_id)
+	# 			 VALUES((SELECT id FROM sources WHERE name=%s),
+	# 							%s,%s) ON CONFLICT DO NOTHING;''',(source,repo_url,repo_id))
+	# 	else:
+	# 		self.cursor.execute(''' INSERT OR IGNORE INTO urls(source,repo_url,repo_id)
+	# 			 VALUES((SELECT id FROM sources WHERE name=?),
+	# 							?,?);''',(source,repo_url,repo_id))
+	# 	self.connection.commit()
+
+	# def update_url(self,source,repo_url,repo_id):
+	# 	'''
+	# 	Updating a URL in the database
+	# 	'''
+	# 	if self.db_type == 'postgres':
+	# 		self.cursor.execute(''' UPDATE urls SET repo_id=%s WHERE
+	# 			 source=(SELECT id FROM sources WHERE name=%s
+	# 							AND repo_url=%s);''',(repo_id,source,repo_url))
+	# 	else:
+	# 		self.cursor.execute(''' UPDATE urls SET repo_id=? WHERE
+	# 			 source=(SELECT id FROM sources WHERE name=?
+	# 							AND repo_url=?);''',(repo_id,source,repo_url))
+	# 	self.connection.commit()
+
+
+	def register_repositories(self,repo_info_list):
 		'''
-		Updating a URL in the database
+		repo_info_list syntax:
+		source_id, owner, name, url
 		'''
 		if self.db_type == 'postgres':
-			self.cursor.execute(''' UPDATE urls SET repo_id=%s WHERE
-				 source=(SELECT id FROM sources WHERE name=%s
-								AND repo_url=%s);''',(repo_id,source,repo_url))
+			extras.execute_batch(self.cursor,'''
+				INSERT INTO repositories(source,owner,name,url_id) VALUES(
+				%s,%s,%s,(SELECT id FROM urls WHERE url=%s)
+				) ON CONFLICT DO NOTHING
+				;''',repo_info_list)
 		else:
-			self.cursor.execute(''' UPDATE urls SET repo_id=? WHERE
-				 source=(SELECT id FROM sources WHERE name=?
-								AND repo_url=?);''',(repo_id,source,repo_url))
+			self.cursor.executemany('''
+				INSERT INTO repositories(source,owner,name,url_id) VALUES(
+				?,?,?,(SELECT id FROM urls WHERE url=?)
+				) ON CONFLICT DO NOTHING
+				;''',repo_info_list)
 		self.connection.commit()
+
+
+	def register_packages(self,source,package_list,autocommit=True):
+		'''
+		Registering packages from package list
+		URLs are supposed to be already filled
+
+		syntax of package list:
+		package id (in source), package name, created_at (datetime.datetime),repo_url
+
+		'''
+		source_id = self.get_source_info(source=source)[0]
+		if self.db_type == 'postgres':
+			extras.execute_batch(self.cursor,'''
+				INSERT INTO packages(repo_id,source_id,insource_id,name,created_at,url_id)
+				VALUES(
+					(SELECT r.id FROM urls u
+						INNER JOIN repositories r ON r.url_id=u.cleaned_url
+						AND u.url=%s),
+				%s,%s,%s,%s,(SELECT id FROM urls WHERE url=%s))
+				ON CONFLICT DO NOTHING
+				;''',((p[-1],source_id,*p) for p in package_list))
+		else:
+			self.cursor.executemany('''
+				INSERT OR IGNORE INTO packages(repo_id,source_id,insource_id,name,created_at,url_id)
+				VALUES(
+					(SELECT r.id FROM urls u
+						INNER JOIN repositories r ON r.url_id=u.cleaned_url
+						AND u.url=?),?,?,?,?,(SELECT id FROM urls WHERE url=?))
+				;''',((p[-1],source_id,*p) for p in package_list))
+		if autocommit:
+			self.connection.commit()
 
 	def get_repo_id(self,owner,name,source):
 		'''
@@ -536,6 +657,39 @@ class Database(object):
 
 		else:
 			raise ValueError('Unknown option for repo_list: {}'.format(option))
+
+	def get_user_id(self,login):
+		'''
+		Gets an id for the user login. Raises an error if not found. Takes the id with the highest number of commits corresponding to that login
+		'''
+		if self.db_type == 'postgres':
+			self.cursor.execute('''
+				SELECT u.id,COUNT(*) AS cnt FROM users u
+				INNER JOIN commits c
+				ON u.github_login=%s
+				AND u.id = c.author_id
+				GROUP BY u.id
+				ORDER BY cnt DESC
+				LIMIT 1
+				;''',(login,))
+		else:
+
+			self.cursor.execute('''
+				SELECT u.id, COUNT(*) AS cnt FROM users u
+				INNER JOIN commits c
+				ON u.github_login=?
+				AND u.id = c.author_id
+				GROUP BY u.id
+				ORDER BY cnt DESC
+				LIMIT 1
+				;''',(login,))
+
+		ans = self.cursor.fetchone()
+		if ans is None:
+			raise ValueError('Login not found: {}'.format(login))
+		else:
+			return ans[0]
+
 
 	def get_user_list(self,option='all',time_delay=24*3600):
 		'''
