@@ -376,7 +376,6 @@ class Database(object):
 			url_list = [(url,None,None) for url in url_list]
 
 
-		print(list((source,source_root_id,url_cleaned,url_cleaned) for url,url_cleaned,source_root_id  in url_list if url_cleaned is not None))
 		if self.db_type == 'postgres':
 			extras.execute_batch(self.cursor,''' INSERT INTO urls(source,source_root,url)
 				 VALUES((SELECT id FROM sources WHERE name=%s),
