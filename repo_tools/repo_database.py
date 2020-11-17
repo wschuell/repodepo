@@ -388,10 +388,10 @@ class Database(object):
 								%s,(SELECT id FROM urls WHERE url=%s)) ON CONFLICT(url) DO UPDATE
 								SET cleaned_url=excluded.cleaned_url;''',((source,source_root_id,url,url_cleaned) for url,url_cleaned,source_root_id  in url_list))
 		else:
-			self.cursor.executemany(''' INSERT INTO urls(source,source_root,url)
+			self.cursor.executemany(''' INSERT OR IGNORE INTO urls(source,source_root,url)
 				 VALUES((SELECT id FROM sources WHERE name=?),
 				 				?,
-								?) ON CONFLICT(url) DO NOTHING;''',((source,source_root_id,url_cleaned) for url,url_cleaned,source_root_id in url_list if url_cleaned is not None))
+								?);''',((source,source_root_id,url_cleaned) for url,url_cleaned,source_root_id in url_list if url_cleaned is not None))
 			self.cursor.executemany(''' UPDATE urls SET cleaned_url=id WHERE url=?;''',((url_cleaned,) for url,url_cleaned,source_root_id in url_list if url_cleaned is not None))
 			self.cursor.executemany(''' INSERT INTO urls(source,source_root,url,cleaned_url)
 				 VALUES((SELECT id FROM sources WHERE name=?),
@@ -447,9 +447,9 @@ class Database(object):
 				;''',repo_info_list)
 		else:
 			self.cursor.executemany('''
-				INSERT INTO repositories(source,owner,name,url_id) VALUES(
+				INSERT OR IGNORE INTO repositories(source,owner,name,url_id) VALUES(
 				?,?,?,(SELECT id FROM urls WHERE url=?)
-				) ON CONFLICT DO NOTHING
+				)
 				;''',repo_info_list)
 		self.connection.commit()
 
