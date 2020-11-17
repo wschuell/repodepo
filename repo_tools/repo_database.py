@@ -381,13 +381,13 @@ class Database(object):
 			extras.execute_batch(self.cursor,''' INSERT INTO urls(source,source_root,url,cleaned_url)
 				 VALUES((SELECT id FROM sources WHERE name=%s),
 				 				%s,
-								%s,%s) ON CONFLICT(url) DO NOTHING;''',((source,source_root_id,url_cleaned,url_cleaned) for url,url_cleaned in url_list if url_cleaned is not None))
-			extras.execute_batch(self.cursor,''' UPDATE urls SET cleaned_url=id WHERE url=%s ;''',((url_cleaned,) for url,url_cleaned in url_list if url_cleaned is not None))
+								%s,%s) ON CONFLICT(url) DO NOTHING;''',((source,source_root_id,url_cleaned,url_cleaned) for url,url_cleaned,source_root_id  in url_list if url_cleaned is not None))
+			extras.execute_batch(self.cursor,''' UPDATE urls SET cleaned_url=id WHERE url=%s ;''',((url_cleaned,) for url,url_cleaned,source_root_id  in url_list if url_cleaned is not None))
 			extras.execute_batch(self.cursor,''' INSERT INTO urls(source,source_root,url,cleaned_url)
 				 VALUES((SELECT id FROM sources WHERE name=%s),
 				 				%s,
 								%s,(SELECT id FROM urls WHERE url=%s)) ON CONFLICT(url) DO UPDATE
-								SET cleaned_url=excluded.cleaned_url;''',((source,source_root_id,url,url_cleaned) for url,url_cleaned in url_list))
+								SET cleaned_url=excluded.cleaned_url;''',((source,source_root_id,url,url_cleaned) for url,url_cleaned,source_root_id  in url_list))
 		else:
 			self.cursor.executemany(''' INSERT INTO urls(source,source_root,url,cleaned_url)
 				 VALUES((SELECT id FROM sources WHERE name=?),
