@@ -75,7 +75,7 @@ class RepoCrawler(object):
 			self.db.register_source(source=source,source_urlroot=source_urlroot)
 
 		for r in repo_list:
-			self.db.register_url(repo_url=r,source=source)
+			self.db.register_url(repo_url=r,source=source,clean_info=self.clean_url(r))
 			try:
 				r_f = self.repo_formatting(r,source_urlroot)
 			except RepoSyntaxError:

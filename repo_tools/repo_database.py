@@ -402,10 +402,14 @@ class Database(object):
 
 		self.connection.commit()
 
-	# def register_url(self,source,repo_url,repo_id=None): # DEPRECATED
-	# 	'''
-	# 	Putting URLs in the database
-	# 	'''
+	def register_url(self,source,repo_url,repo_id=None,clean_info=None): # DEPRECATED
+		'''
+		Putting URLs in the database
+		'''
+		if clean_info is None:
+			self.register_urls(source=source,url_list=[repo_url])
+		else:
+			self.register_urls(source=source,url_list=[(repo_url,*clean_info)])
 	# 	if self.db_type == 'postgres':
 	# 		self.cursor.execute(''' INSERT INTO urls(source,repo_url,repo_id)
 	# 			 VALUES((SELECT id FROM sources WHERE name=%s),
