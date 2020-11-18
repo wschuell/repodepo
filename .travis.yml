@@ -20,9 +20,11 @@ before_install:
  - sudo apt-get install -y libsqlite3-dev
  - sqlite3 --version
  - sudo apt-get update
+ - sudo cp /etc/postgresql/12/main/pg_hba.conf pg_hba.conf
  - sudo apt-get --yes remove postgresql\*
  - sudo apt-get install -y postgresql-12 postgresql-client-12
  - sudo sed -i 's/port = 5433/port = 5432/' /etc/postgresql/12/main/postgresql.conf
+ - sudo cp pg_hba.conf /etc/postgresql/12/main/pg_hba.conf
  - sudo service postgresql restart 12
 before_script:
   - psql -c 'create database travis_ci_test_repo_tools;' -U postgres
