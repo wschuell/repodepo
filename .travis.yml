@@ -1,7 +1,7 @@
 dist: focal
 language: python
-services:
-  - postgresql
+# services:
+#   - postgresql
 #   - docker
 addons:
   postgresql: "12"
