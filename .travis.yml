@@ -6,8 +6,12 @@ addons:
     packages:
     - postgresql-12
     - postgresql-client-12
-services:
-  - postgresql
+env:
+    global:
+        - PGVER=12
+        - PGPORT=5432
+# services:
+#   - postgresql
 #   - docker
 python:
   - "3.7"
