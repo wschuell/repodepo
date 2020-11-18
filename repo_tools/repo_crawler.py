@@ -418,9 +418,9 @@ class RepoCrawler(object):
 		last_dl = self.db.cursor.fetchone()[0]
 
 		if all_commits:
-			option = 'basicinfo_dict'
+			option = 'basicinfo_dict_cloned'
 		else:
-			option = 'basicinfo_dict_time'
+			option = 'basicinfo_dict_time_cloned'
 
 		if force or (last_fu is None) or (last_dl is not None and last_fu<last_dl):
 

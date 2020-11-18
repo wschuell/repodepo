@@ -625,6 +625,35 @@ class Database(object):
 					;''')
 
 			return [{'source':r[0],'owner':r[1],'name':r[2],'repo_id':r[3],'after_time':r[4]} for r in self.cursor.fetchall()]
+		elif option == 'basicinfo_dict_cloned':
+			self.cursor.execute('''
+				SELECT s.name,r.owner,r.name,r.id
+				FROM repositories r
+				INNER JOIN sources s
+				ON s.id=r.source AND r.cloned
+				ORDER BY s.name,r.owner,r.name
+				;''')
+			return [{'source':r[0],'owner':r[1],'name':r[2],'repo_id':r[3]} for r in self.cursor.fetchall()]
+
+		elif option == 'basicinfo_dict_time_cloned':
+			if self.db_type == 'postgres':
+				self.cursor.execute('''
+					SELECT s.name,r.owner,r.name,r.id,extract(epoch from r.latest_commit_time)
+					FROM repositories r
+					INNER JOIN sources s
+					ON s.id=r.source AND r.cloned
+					ORDER BY s.name,r.owner,r.name
+					;''')
+			else:
+				self.cursor.execute('''
+					SELECT s.name,r.owner,r.name,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
+					FROM repositories r
+					INNER JOIN sources s
+					ON s.id=r.source AND r.cloned
+					ORDER BY s.name,r.owner,r.name
+					;''')
+
+			return [{'source':r[0],'owner':r[1],'name':r[2],'repo_id':r[3],'after_time':r[4]} for r in self.cursor.fetchall()]
 
 		elif option == 'starinfo_dict':
 			self.cursor.execute('''
