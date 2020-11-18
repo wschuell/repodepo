@@ -326,7 +326,7 @@ class Database(object):
 		if self.db_type == 'sqlite' and not self.in_ram and sqlite_del:
 			del self.cursor
 			del self.connection
-			os.remove()
+			os.remove(self.db_path)
 			self.connection = sqlite3.connect(self.db_path,timeout=self.timeout, detect_types=sqlite3.PARSE_DECLTYPES)
 			self.cursor = self.connection.cursor()
 		else:
