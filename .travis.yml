@@ -2,10 +2,14 @@ dist: focal
 language: python
 env:
     global:
-        - PGVER=9.6
+        - PGVER=12
         - PGPORT=5432
 addons:
-  postgresql: "9.6"
+  postgresql: "12"
+  apt:
+    packages:
+    - postgresql-12
+    - postgresql-client-12
 # services:
 #   - postgresql
 #   - docker
@@ -16,6 +20,11 @@ before_install:
  - sudo apt-get install -y libsqlite3-dev
  - sqlite3 --version
  - sudo apt-get update
+ - sudo apt-get --yes remove postgresql\*
+ - sudo apt-get install -y postgresql-12 postgresql-client-1
+ - sudo sed -i 's/port = 5433/port = 5432/' /etc/postgresql/11/main/postgresql.conf
+ - sudo cp /etc/postgresql/{9.6,12}/main/pg_hba.conf
+ - sudo service postgresql restart 12
 before_script:
   - psql -c 'create database travis_ci_test_repo_tools;' -U postgres
 install:
