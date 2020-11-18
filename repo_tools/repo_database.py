@@ -46,6 +46,7 @@ class Database(object):
 				self.db_path = os.path.join(db_folder,'{}.db'.format(db_name))
 				if not os.path.exists(db_folder):
 					os.makedirs(db_folder)
+				self.timeout = timeout
 				self.connection = sqlite3.connect(self.db_path,timeout=timeout, detect_types=sqlite3.PARSE_DECLTYPES)
 			self.cursor = self.connection.cursor()
 		elif db_type == 'postgres':
@@ -316,25 +317,32 @@ class Database(object):
 
 			self.connection.commit()
 
-	def clean_db(self):
+	def clean_db(self,sqlite_del=True):
 		'''
 		Dropping tables
 		If there is a change in structure in the init script, this method should be called to 'reset' the state of the database
 		'''
 		logger.info('Cleaning database')
-		self.cursor.execute('DROP TABLE IF EXISTS packages;')
-		self.cursor.execute('DROP TABLE IF EXISTS followers;')
-		self.cursor.execute('DROP TABLE IF EXISTS commit_parents;')
-		self.cursor.execute('DROP TABLE IF EXISTS commits;')
-		self.cursor.execute('DROP TABLE IF EXISTS table_updates;')
-		self.cursor.execute('DROP TABLE IF EXISTS users;')
-		self.cursor.execute('DROP TABLE IF EXISTS stars;')
-		self.cursor.execute('DROP TABLE IF EXISTS full_updates;')
-		self.cursor.execute('DROP TABLE IF EXISTS download_attempts;')
-		self.cursor.execute('DROP TABLE IF EXISTS repositories;')
-		self.cursor.execute('DROP TABLE IF EXISTS urls;')
-		self.cursor.execute('DROP TABLE IF EXISTS sources;')
-		self.connection.commit()
+		if self.db_type == 'sqlite' and not self.in_ram and sqlite_del:
+			del self.cursor
+			del self.connection
+			os.remove()
+			self.connection = sqlite3.connect(self.db_path,timeout=self.timeout, detect_types=sqlite3.PARSE_DECLTYPES)
+			self.cursor = self.connection.cursor()
+		else:
+			self.cursor.execute('DROP TABLE IF EXISTS packages;')
+			self.cursor.execute('DROP TABLE IF EXISTS followers;')
+			self.cursor.execute('DROP TABLE IF EXISTS commit_parents;')
+			self.cursor.execute('DROP TABLE IF EXISTS commits;')
+			self.cursor.execute('DROP TABLE IF EXISTS table_updates;')
+			self.cursor.execute('DROP TABLE IF EXISTS users;')
+			self.cursor.execute('DROP TABLE IF EXISTS stars;')
+			self.cursor.execute('DROP TABLE IF EXISTS full_updates;')
+			self.cursor.execute('DROP TABLE IF EXISTS download_attempts;')
+			self.cursor.execute('DROP TABLE IF EXISTS repositories;')
+			self.cursor.execute('DROP TABLE IF EXISTS urls;')
+			self.cursor.execute('DROP TABLE IF EXISTS sources;')
+			self.connection.commit()
 
 	def register_repo(self,source,owner,repo,cloned=False):
 		'''
