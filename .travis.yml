@@ -1,14 +1,14 @@
 dist: focal
 language: python
-# services:
-#   - postgresql
-#   - docker
 addons:
   postgresql: "12"
   apt:
     packages:
     - postgresql-12
     - postgresql-client-12
+services:
+  - postgresql
+#   - docker
 python:
   - "3.7"
 before_install:
