@@ -369,41 +369,43 @@ class RepoCrawler(object):
 			repo_id = self.db.get_repo_id(source=source,name=name,owner=owner)
 		# repo_obj.walk(repo.head.target, pygit2.GIT_SORT_TOPOLOGICAL | pygit2.GIT_SORT_REVERSE)
 		# for commit in repo_obj.walk(repo_obj.head.target, pygit2.GIT_SORT_TIME | pygit2.GIT_SORT_REVERSE):
-		for commit in repo_obj.walk(repo_obj.head.target, pygit2.GIT_SORT_TIME):
-			if after_time is not None and commit.commit_time<after_time:
-				break
-			if basic_info_only:
-				yield {
-						'author_email':commit.author.email,
-						'author_name':commit.author.name,
-						'time':commit.commit_time,
-						'time_offset':commit.commit_time_offset,
-						'sha':commit.hex,
-						'parents':[pid.hex for pid in commit.parent_ids],
-						'repo_id':repo_id,
-						}
-			else:
-				if commit.parents:
-					diff_obj = repo_obj.diff(commit.parents[0],commit)# Inverted order wrt the expected one, to have expected values for insertions and deletions
-					insertions = diff_obj.stats.insertions
-					deletions = diff_obj.stats.deletions
+
+		if not repo_obj.is_empty:
+			for commit in repo_obj.walk(repo_obj.head.target, pygit2.GIT_SORT_TIME):
+				if after_time is not None and commit.commit_time<after_time:
+					break
+				if basic_info_only:
+					yield {
+							'author_email':commit.author.email,
+							'author_name':commit.author.name,
+							'time':commit.commit_time,
+							'time_offset':commit.commit_time_offset,
+							'sha':commit.hex,
+							'parents':[pid.hex for pid in commit.parent_ids],
+							'repo_id':repo_id,
+							}
 				else:
-					diff_obj = commit.tree.diff_to_tree()
-					# re-inverting insertions and deletions, to get expected values
-					deletions = diff_obj.stats.insertions
-					insertions = diff_obj.stats.deletions
-				yield {
-						'author_email':commit.author.email,
-						'author_name':commit.author.name,
-						'time':commit.commit_time,
-						'time_offset':commit.commit_time_offset,
-						'sha':commit.hex,
-						'parents':[pid.hex for pid in commit.parent_ids],
-						'insertions':insertions,
-						'deletions':deletions,
-						'total':insertions+deletions,
-						'repo_id':repo_id,
-						}
+					if commit.parents:
+						diff_obj = repo_obj.diff(commit.parents[0],commit)# Inverted order wrt the expected one, to have expected values for insertions and deletions
+						insertions = diff_obj.stats.insertions
+						deletions = diff_obj.stats.deletions
+					else:
+						diff_obj = commit.tree.diff_to_tree()
+						# re-inverting insertions and deletions, to get expected values
+						deletions = diff_obj.stats.insertions
+						insertions = diff_obj.stats.deletions
+					yield {
+							'author_email':commit.author.email,
+							'author_name':commit.author.name,
+							'time':commit.commit_time,
+							'time_offset':commit.commit_time_offset,
+							'sha':commit.hex,
+							'parents':[pid.hex for pid in commit.parent_ids],
+							'insertions':insertions,
+							'deletions':deletions,
+							'total':insertions+deletions,
+							'repo_id':repo_id,
+							}
 
 
 	def fill_commit_info(self,force=False,all_commits=False):
