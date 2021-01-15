@@ -17,6 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 
 from .repo_database import Database
+from . import misc
 
 logger = logging.getLogger(__name__)
 ch = logging.StreamHandler()
@@ -61,7 +62,7 @@ class RepoCrawler(object):
 			db_folder = self.folder
 		self.set_db(db_folder=db_folder,**db_cfg)
 
-	def add_list(self,repo_list,source,source_urlroot=None,cloned=False):
+	def add_list(self,repo_list,source,source_urlroot=None,cloned=False): # DEPRECATED
 		'''
 		Behaving like an ordered set, if performance becomes an issue it could be useful to use OrderedSet implementation
 		Or simply code an option to disable checks
@@ -74,7 +75,7 @@ class RepoCrawler(object):
 			self.db.register_source(source=source,source_urlroot=source_urlroot)
 
 		for r in repo_list:
-			self.db.register_url(repo_url=r,source=source)
+			self.db.register_url(repo_url=r,source=source,clean_info=self.clean_url(r))
 			try:
 				r_f = self.repo_formatting(r,source_urlroot)
 			except RepoSyntaxError:
@@ -85,7 +86,7 @@ class RepoCrawler(object):
 				repo_id = self.db.get_repo_id(name=repo,owner=owner,source=source)
 				if cloned:
 					self.set_init_dl(repo=repo,owner=owner,source=source,repo_id=repo_id)
-				self.db.update_url(source=source,repo_url=r,repo_id=repo_id)
+				# self.db.update_url(source=source,repo_url=r,repo_id=repo_id) # calls deprecated function, need to adapt to register_urls
 
 		# 	if r_f not in self.repo_list:
 		# 		self.repo_list.append(r_f)
@@ -103,12 +104,15 @@ class RepoCrawler(object):
 
 
 
-	def repo_formatting(self,repo,source_urlroot):
+	def repo_formatting(self,repo,source_urlroot,output_cleaned_url=False,raise_error=False):
 		'''
 		Formatting repositories so that they match the expected syntax 'user/project'
 		'''
 		r = copy.copy(repo)
+		if source_urlroot not in r:
+			raise RepoSyntaxError('Repo {} has not expected source {}.'.format(repo,source_urlroot))
 		for start_str in [
+					'{}/'.format(source_urlroot),
 					'https://{}/'.format(source_urlroot),
 					'http://{}/'.format(source_urlroot),
 					'https://www.{}/'.format(source_urlroot),
@@ -116,14 +120,45 @@ class RepoCrawler(object):
 					]:
 			if r.startswith(start_str):
 				r = '/'.join(r.split('/')[3:])
+				break
+
+		if source_urlroot in r:
+			raise RepoSyntaxError('Repo {} has not expected syntax for source {}.'.format(repo,source_urlroot))
+
+		r = r.replace('//','/')
 		if r.endswith('/'):
 			r = r[:-1]
+		if r.startswith('/'):
+			r = r[1:]
 		if r.endswith('.git'):
 			r = r[:-4]
-		if len(r.split('/')) != 2:
+		if (raise_error and len(r.split('/')) != 2):
 			raise RepoSyntaxError('Repo has not expected syntax "user/project" or prefixed with {}:{}. Please fix input or update the repo_formatting method.'.format(source_urlroot,repo))
 		r = '/'.join(r.split('/')[:2])
-		return r
+		if '' in r.split('/'):
+			raise ValueError('Critical syntax error for repository url: {}, parsed {}'.format(repo,r))
+		if output_cleaned_url:
+			return 'https://{}/{}'.format(source_urlroot,r)
+		else:
+			return r
+
+	def clean_url(self,url):
+		'''
+		getting a clean url based on what is available as sources, using source_urlroot values
+		returns clean_url,source_id
+		'''
+		if url is None:
+			return None
+
+		if not hasattr(self,'url_roots'):
+			self.db.cursor.execute('SELECT id,url_root FROM sources WHERE url_root IS NOT NULL;')
+			self.url_roots = list(self.db.cursor.fetchall())
+		for ur_id,ur in self.url_roots:
+			try:
+				return self.repo_formatting(repo=url,source_urlroot=ur,output_cleaned_url=True),ur_id
+			except RepoSyntaxError:
+				continue
+		return None,None
 
 	def list_missing_repos(self):
 		'''
@@ -184,6 +219,45 @@ class RepoCrawler(object):
 				repos += ['/'.join([os.path.basename(os.path.dirname(p)),os.path.basename(p)]) for p in glob.glob(os.path.join(user_folder,'*'))]
 			self.add_list(repo_list=repos,source=source,cloned=True)
 			self.logger.info('Found {} repositories for source {}'.format(len(repos),source))
+
+
+	def fill_packages(self,package_list,source,force=False,clean_urls=True):
+		'''
+		adds repositories from a package repository database (eg crates)
+		syntax of package list:
+		package id (in source), package name, created_at (datetime.datetime),repo_url
+
+		see .misc for wrappers
+		'''
+
+		if not force:
+			if self.db.db_type == 'postgres':
+				self.db.cursor.execute('SELECT * FROM packages WHERE source_id=(SELECT id FROM sources WHERE name=%s) LIMIT 1;',(source,))
+			else:
+				self.db.cursor.execute('SELECT * FROM packages WHERE source_id=(SELECT id FROM sources WHERE name=?) LIMIT 1;',(source,))
+			sample_package = self.db.cursor.fetchone()
+			if sample_package is not None:
+				self.logger.info('Skipping packages from {}'.format(source))
+			else:
+				self.fill_packages(package_list=package_list,source=source,force=True,clean_urls=clean_urls)
+		else:
+			self.logger.info('Filling packages from {}'.format(source))
+			self.db.register_source(source)
+			if clean_urls:
+				self.db.register_urls(source=source,url_list=[(p[3],*self.clean_url(p[3])) for p in package_list if p[3] is not None])
+			else:
+				self.db.register_urls(source=source,url_list=[p[3] for p in package_list if p[3] is not None])
+
+			self.logger.info('Filled URLs')
+
+
+			self.db.register_repositories(repo_info_list=[(self.clean_url(p[3])[1],self.clean_url(p[3])[0].split('/')[-2],self.clean_url(p[3])[0].split('/')[-1],self.clean_url(p[3])[0]) for p in package_list if p[3] is not None and self.clean_url(p[3])[0] is not None])
+			self.logger.info('Filled repositories')
+
+			self.db.register_packages(source=source,package_list=package_list)
+			self.logger.info('Filled packages')
+
+
 
 	def build_url(self,name,owner,source_urlroot):
 		'''
@@ -308,41 +382,43 @@ class RepoCrawler(object):
 			repo_id = self.db.get_repo_id(source=source,name=name,owner=owner)
 		# repo_obj.walk(repo.head.target, pygit2.GIT_SORT_TOPOLOGICAL | pygit2.GIT_SORT_REVERSE)
 		# for commit in repo_obj.walk(repo_obj.head.target, pygit2.GIT_SORT_TIME | pygit2.GIT_SORT_REVERSE):
-		for commit in repo_obj.walk(repo_obj.head.target, pygit2.GIT_SORT_TIME):
-			if after_time is not None and commit.commit_time<after_time:
-				break
-			if basic_info_only:
-				yield {
-						'author_email':commit.author.email,
-						'author_name':commit.author.name,
-						'time':commit.commit_time,
-						'time_offset':commit.commit_time_offset,
-						'sha':commit.hex,
-						'parents':[pid.hex for pid in commit.parent_ids],
-						'repo_id':repo_id,
-						}
-			else:
-				if commit.parents:
-					diff_obj = repo_obj.diff(commit.parents[0],commit)# Inverted order wrt the expected one, to have expected values for insertions and deletions
-					insertions = diff_obj.stats.insertions
-					deletions = diff_obj.stats.deletions
+
+		if not repo_obj.is_empty:
+			for commit in repo_obj.walk(repo_obj.head.target, pygit2.GIT_SORT_TIME):
+				if after_time is not None and commit.commit_time<after_time:
+					break
+				if basic_info_only:
+					yield {
+							'author_email':commit.author.email,
+							'author_name':commit.author.name,
+							'time':commit.commit_time,
+							'time_offset':commit.commit_time_offset,
+							'sha':commit.hex,
+							'parents':[pid.hex for pid in commit.parent_ids],
+							'repo_id':repo_id,
+							}
 				else:
-					diff_obj = commit.tree.diff_to_tree()
-					# re-inverting insertions and deletions, to get expected values
-					deletions = diff_obj.stats.insertions
-					insertions = diff_obj.stats.deletions
-				yield {
-						'author_email':commit.author.email,
-						'author_name':commit.author.name,
-						'time':commit.commit_time,
-						'time_offset':commit.commit_time_offset,
-						'sha':commit.hex,
-						'parents':[pid.hex for pid in commit.parent_ids],
-						'insertions':insertions,
-						'deletions':deletions,
-						'total':insertions+deletions,
-						'repo_id':repo_id,
-						}
+					if commit.parents:
+						diff_obj = repo_obj.diff(commit.parents[0],commit)# Inverted order wrt the expected one, to have expected values for insertions and deletions
+						insertions = diff_obj.stats.insertions
+						deletions = diff_obj.stats.deletions
+					else:
+						diff_obj = commit.tree.diff_to_tree()
+						# re-inverting insertions and deletions, to get expected values
+						deletions = diff_obj.stats.insertions
+						insertions = diff_obj.stats.deletions
+					yield {
+							'author_email':commit.author.email,
+							'author_name':commit.author.name,
+							'time':commit.commit_time,
+							'time_offset':commit.commit_time_offset,
+							'sha':commit.hex,
+							'parents':[pid.hex for pid in commit.parent_ids],
+							'insertions':insertions,
+							'deletions':deletions,
+							'total':insertions+deletions,
+							'repo_id':repo_id,
+							}
 
 
 	def fill_commit_info(self,force=False,all_commits=False):
@@ -357,9 +433,9 @@ class RepoCrawler(object):
 		last_dl = self.db.cursor.fetchone()[0]
 
 		if all_commits:
-			option = 'basicinfo_dict'
+			option = 'basicinfo_dict_cloned'
 		else:
-			option = 'basicinfo_dict_time'
+			option = 'basicinfo_dict_time_cloned'
 
 		if force or (last_fu is None) or (last_dl is not None and last_fu<last_dl):
 
