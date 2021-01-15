@@ -104,12 +104,15 @@ class RepoCrawler(object):
 
 
 
-	def repo_formatting(self,repo,source_urlroot,output_cleaned_url=False):
+	def repo_formatting(self,repo,source_urlroot,output_cleaned_url=False,raise_error=False):
 		'''
 		Formatting repositories so that they match the expected syntax 'user/project'
 		'''
 		r = copy.copy(repo)
+		if source_urlroot not in r:
+			raise RepoSyntaxError('Repo {} has not expected source {}.'.format(repo,source_urlroot))
 		for start_str in [
+					'{}/'.format(source_urlroot),
 					'https://{}/'.format(source_urlroot),
 					'http://{}/'.format(source_urlroot),
 					'https://www.{}/'.format(source_urlroot),
@@ -117,13 +120,23 @@ class RepoCrawler(object):
 					]:
 			if r.startswith(start_str):
 				r = '/'.join(r.split('/')[3:])
+				break
+
+		if source_urlroot in r:
+			raise RepoSyntaxError('Repo {} has not expected syntax for source {}.'.format(repo,source_urlroot))
+
+		r = r.replace('//','/')
 		if r.endswith('/'):
 			r = r[:-1]
+		if r.startswith('/'):
+			r = r[1:]
 		if r.endswith('.git'):
 			r = r[:-4]
-		if len(r.split('/')) != 2:
+		if (raise_error and len(r.split('/')) != 2):
 			raise RepoSyntaxError('Repo has not expected syntax "user/project" or prefixed with {}:{}. Please fix input or update the repo_formatting method.'.format(source_urlroot,repo))
 		r = '/'.join(r.split('/')[:2])
+		if '' in r.split('/'):
+			raise ValueError('Critical syntax error for repository url: {}, parsed {}'.format(repo,r))
 		if output_cleaned_url:
 			return 'https://{}/{}'.format(source_urlroot,r)
 		else:

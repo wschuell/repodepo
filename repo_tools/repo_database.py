@@ -35,7 +35,7 @@ class Database(object):
 	By default SQLite is used, but PostgreSQL is also an option
 	'''
 
-	def __init__(self,db_type='sqlite',db_name='repo_tools',db_folder='.',db_user='postgres',port='5432',host='localhost',password=None,clean_first=False,do_init=True,timeout=5):
+	def __init__(self,db_type='sqlite',db_name='repo_tools',db_folder='.',db_user='postgres',port='5432',host='localhost',password=None,clean_first=False,do_init=False,timeout=5):
 		self.db_type = db_type
 		if db_type == 'sqlite':
 			if db_name.startswith(':memory:'):
@@ -52,7 +52,17 @@ class Database(object):
 		elif db_type == 'postgres':
 			if password is not None:
 				logger.warning('You are providing your password directly, this could be a security concern, consider using solutions like .pgpass file.')
-			self.connection = psycopg2.connect(user=db_user,port=port,host=host,database=db_name,password=password)
+			try:
+				self.connection = psycopg2.connect(user=db_user,port=port,host=host,database=db_name,password=password)
+			except psycopg2.OperationalError:
+				pgpass_env = 'PGPASSFILE'
+				default_pgpass = os.path.join(os.environ['HOME'],'.pgpass')
+				if pgpass_env not in os.environ.keys():
+					os.environ[pgpass_env] = default_pgpass
+					self.logger.info('Password authentication failed,trying to set .pgpass env variable')
+					self.connection = psycopg2.connect(user=db_user,port=port,host=host,database=db_name,password=password)
+				else:
+					raise
 			self.cursor = self.connection.cursor()
 		else:
 			raise ValueError('Unknown DB type: {}'.format(db_type))
@@ -191,7 +201,8 @@ class Database(object):
 				url_id INTEGER REFERENCES urls(id) ON DELETE CASCADE,
 				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
 				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-				created_at TIMESTAMP DEFAULT NULL
+				created_at TIMESTAMP DEFAULT NULL,
+				UNIQUE(source_id,insource_id)
 				);
 
 				CREATE INDEX IF NOT EXISTS packages_idx ON packages(source_id,name);
@@ -307,7 +318,8 @@ class Database(object):
 				url_id BIGINT REFERENCES urls(id) ON DELETE CASCADE,
 				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
 				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-				created_at TIMESTAMP DEFAULT NULL
+				created_at TIMESTAMP DEFAULT NULL,
+				UNIQUE(source_id,insource_id)
 				);
 
 				CREATE INDEX IF NOT EXISTS packages_idx ON packages(source_id,name);
@@ -390,6 +402,8 @@ class Database(object):
 				 				%s,
 								%s) ON CONFLICT(url) DO NOTHING;''',((source,source_root_id,url_cleaned) for url,url_cleaned,source_root_id  in url_list if url_cleaned is not None))
 			extras.execute_batch(self.cursor,''' UPDATE urls SET cleaned_url=id WHERE url=%s ;''',((url_cleaned,) for url,url_cleaned,source_root_id  in url_list if url_cleaned is not None))
+			extras.execute_batch(self.cursor,''' UPDATE urls SET source=(SELECT id FROM sources WHERE name=%s),source_root=%s WHERE url=%s ;''',((source,source_root_id,url,) for url,url_cleaned,source_root_id  in url_list if url_cleaned is not None))
+			extras.execute_batch(self.cursor,''' UPDATE urls SET source=(SELECT id FROM sources WHERE name=%s),source_root=%s WHERE url=%s ;''',((source,source_root_id,url_cleaned,) for url,url_cleaned,source_root_id  in url_list if url_cleaned is not None))
 			extras.execute_batch(self.cursor,''' INSERT INTO urls(source,source_root,url,cleaned_url)
 				 VALUES((SELECT id FROM sources WHERE name=%s),
 				 				%s,
@@ -401,6 +415,8 @@ class Database(object):
 				 				?,
 								?);''',((source,source_root_id,url_cleaned) for url,url_cleaned,source_root_id in url_list if url_cleaned is not None))
 			self.cursor.executemany(''' UPDATE urls SET cleaned_url=id WHERE url=?;''',((url_cleaned,) for url,url_cleaned,source_root_id in url_list if url_cleaned is not None))
+			self.cursor.executemany(''' UPDATE urls SET source=(SELECT id FROM sources WHERE name=?),source_root=? WHERE url=?;''',((source,source_root_id,url,) for url,url_cleaned,source_root_id in url_list if url_cleaned is not None))
+			self.cursor.executemany(''' UPDATE urls SET source=(SELECT id FROM sources WHERE name=?),source_root=? WHERE url=?;''',((source,source_root_id,url_cleaned,) for url,url_cleaned,source_root_id in url_list if url_cleaned is not None))
 			self.cursor.executemany(''' INSERT INTO urls(source,source_root,url,cleaned_url)
 				 VALUES((SELECT id FROM sources WHERE name=?),
 				 				?,
