@@ -157,6 +157,14 @@ class Database(object):
 				UNIQUE(sha)
 				);
 
+				CREATE TABLE IF NOT EXISTS commit_repos(
+				commit_id INTEGER REFERENCES commits(id) ON DELETE CASCADE,
+				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
+				PRIMARY KEY(commit_id,repo_id)
+				);
+
+				CREATE INDEX IF NOT EXISTS commit_repo_idx_rc ON commit_repos(repo_id,commit_id);
+
 				CREATE TABLE IF NOT EXISTS commit_parents(
 				child_id INTEGER REFERENCES commits(id) ON DELETE CASCADE,
 				parent_id INTEGER REFERENCES commits(id) ON DELETE CASCADE,
@@ -164,6 +172,15 @@ class Database(object):
 				PRIMARY KEY(child_id,parent_id),
 				UNIQUE(parent_id,child_id,rank)
 				);
+
+				CREATE TABLE IF NOT EXISTS forks(
+				forking_repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
+				forked_repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
+				forked_at TIMESTAMP DEFAULT NULL,
+				fork_rank INTEGER DEFAULT 1,
+				PRIMARY KEY(forking_repo_id,forked_repo_id)
+				);
+				CREATE INDEX IF NOT EXISTS forks_reverse_idx ON forks(forked_repo_id,forking_repo_id);
 
 				CREATE TABLE IF NOT EXISTS table_updates(
 				id INTEGER PRIMARY KEY,
@@ -273,6 +290,15 @@ class Database(object):
 				UNIQUE(sha)
 				);
 
+				CREATE TABLE IF NOT EXISTS commit_repos(
+				commit_id BIGINT REFERENCES commits(id) ON DELETE CASCADE,
+				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
+				PRIMARY KEY(commit_id,repo_id)
+				);
+
+				CREATE INDEX IF NOT EXISTS commit_repo_idx_rc ON commit_repos(repo_id,commit_id);
+
+
 				CREATE TABLE IF NOT EXISTS commit_parents(
 				child_id BIGINT REFERENCES commits(id) ON DELETE CASCADE,
 				parent_id BIGINT REFERENCES commits(id) ON DELETE CASCADE,
@@ -280,6 +306,15 @@ class Database(object):
 				PRIMARY KEY(child_id,parent_id),
 				UNIQUE(parent_id,child_id,rank)
 				);
+
+				CREATE TABLE IF NOT EXISTS forks(
+				forking_repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
+				forked_repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
+				forked_at TIMESTAMP DEFAULT NULL,
+				fork_rank INTEGER DEFAULT 1,
+				PRIMARY KEY(forking_repo_id,forked_repo_id)
+				);
+				CREATE INDEX IF NOT EXISTS forks_reverse_idx ON forks(forked_repo_id,forking_repo_id);
 
 				CREATE TABLE IF NOT EXISTS table_updates(
 				id BIGSERIAL PRIMARY KEY,

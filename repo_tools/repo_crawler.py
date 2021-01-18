@@ -79,7 +79,7 @@ class RepoCrawler(object):
 			try:
 				r_f = self.repo_formatting(r,source_urlroot)
 			except RepoSyntaxError:
-				pass
+				self.logger.info('Repo syntax error for {} {}, skipping'.format(r,source_urlroot))
 			else:
 				owner,repo = r_f.split('/')
 				self.db.register_repo(repo=repo,owner=owner,source=source,cloned=cloned)
@@ -119,7 +119,10 @@ class RepoCrawler(object):
 					'http://www.{}/'.format(source_urlroot),
 					]:
 			if r.startswith(start_str):
-				r = '/'.join(r.split('/')[3:])
+				if r.startswith('http'):
+					r = '/'.join(r.split('/')[3:])
+				else:
+					r = '/'.join(r.split('/')[1:])
 				break
 
 		if source_urlroot in r:
@@ -215,8 +218,9 @@ class RepoCrawler(object):
 			self.logger.info('Scanning repositories for source {}, folder {}'.format(source,os.path.join(self.folder,'cloned_repos',source)))
 			user_folders = glob.glob(os.path.join(self.folder,'cloned_repos',source,'*'))
 			repos = []
+			source_id,source_urlroot = self.db.get_source_info(source=source)
 			for user_folder in user_folders:
-				repos += ['/'.join([os.path.basename(os.path.dirname(p)),os.path.basename(p)]) for p in glob.glob(os.path.join(user_folder,'*'))]
+				repos += ['/'.join([source_urlroot,os.path.basename(os.path.dirname(p)),os.path.basename(p)]) for p in glob.glob(os.path.join(user_folder,'*'))]
 			self.add_list(repo_list=repos,source=source,cloned=True)
 			self.logger.info('Found {} repositories for source {}'.format(len(repos),source))
 
