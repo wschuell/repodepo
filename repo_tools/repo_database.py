@@ -30,12 +30,16 @@ sqlite3.register_adapter(np.int64, int)
 
 class Database(object):
 	'''
-	A simple database to store the data and query it efficiently.
 
+	This class creates a database object with the main structure, with a few methods  to manipulate it.
 	By default SQLite is used, but PostgreSQL is also an option
+
+	To fill it, fillers are used (see Filler class).
+	The object uses a specific data folder and a list of files used for the fillers, with name, keyword, and potential download link. (move to filler class?)
+
 	'''
 
-	def __init__(self,db_type='sqlite',db_name='repo_tools',db_folder='.',db_user='postgres',port='5432',host='localhost',password=None,clean_first=False,do_init=False,timeout=5):
+	def __init__(self,db_type='sqlite',db_name='repo_tools',db_folder='.',db_user='postgres',port='5432',host='localhost',data_folder='./datafolder',password=None,clean_first=False,do_init=False,timeout=5):
 		self.db_type = db_type
 		if db_type == 'sqlite':
 			if db_name.startswith(':memory:'):
@@ -72,6 +76,10 @@ class Database(object):
 		if do_init:
 			self.init_db()
 		self.logger = logger
+		self.fillers = []
+		self.data_folder = data_folder
+		if not os.path.exists(self.data_folder):
+			os.makedirs(self.data_folder)
 
 		#storing info to be able to copy the db and have independent cursor/connection
 		self.db_conninfo = {
@@ -355,6 +363,22 @@ class Database(object):
 			self.cursor.execute('DROP TABLE IF EXISTS urls;')
 			self.cursor.execute('DROP TABLE IF EXISTS sources;')
 			self.connection.commit()
+
+
+	def fill_db(self):
+		for f in self.fillers:
+			f.prepare()
+			f.apply()
+			self.logger.info('Filled with filler {}'.format(f.name))
+
+	def add_filler(self,f):
+		if f.name in [ff.name for ff in self.fillers]:
+			self.logger.warning('Filler {} already present'.format(f.name))
+		else:
+			f.db = self
+			self.fillers.append(f)
+			f.logger = self.logger
+			self.logger.info('Added filler {}'.format(f.name))
 
 	def register_repo(self,source,owner,repo,cloned=False):
 		'''
