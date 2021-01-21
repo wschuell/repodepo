@@ -3,6 +3,7 @@ import datetime
 
 def get_packages_from_crates(conn,limit=None):
 	'''
+	DEPRECATED! Integrated in fillers
 	From a connection to a crates.io database, output the list of packages as expected by RepoCrawler.add_packages()
 	package id, package name, created_at (datetime.datetime),repo_url
 	'''
