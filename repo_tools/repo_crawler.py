@@ -38,6 +38,7 @@ class RepoSyntaxError(ValueError):
 class RepoCrawler(object):
 	'''
 	This class implements a crawler of repositories from github.
+	It will be deprecated in favor of the 'fillers' structure
 
 	Mode SSH vs HTTPS
 	Even non existing repositories trigger an authentication request, which waits for input
@@ -144,6 +145,7 @@ class RepoCrawler(object):
 
 	def clean_url(self,url):
 		'''
+		INTEGRATED TO FILLERS
 		getting a clean url based on what is available as sources, using source_urlroot values
 		returns clean_url,source_id
 		'''
@@ -223,6 +225,7 @@ class RepoCrawler(object):
 
 	def fill_packages(self,package_list,source,force=False,clean_urls=True):
 		'''
+		DEPRECATED; integrated to fillers
 		adds repositories from a package repository database (eg crates)
 		syntax of package list:
 		package id (in source), package name, created_at (datetime.datetime),repo_url
