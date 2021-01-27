@@ -168,6 +168,7 @@ class Database(object):
 				CREATE TABLE IF NOT EXISTS commit_repos(
 				commit_id INTEGER REFERENCES commits(id) ON DELETE CASCADE,
 				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
+				is_orig_repo BOOLEAN,
 				PRIMARY KEY(commit_id,repo_id)
 				);
 
@@ -183,12 +184,14 @@ class Database(object):
 
 				CREATE TABLE IF NOT EXISTS forks(
 				forking_repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
-				forked_repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
+				forking_repo_url TEXT,
+				forked_repo_id INTEGER NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
 				forked_at TIMESTAMP DEFAULT NULL,
 				fork_rank INTEGER DEFAULT 1,
-				PRIMARY KEY(forking_repo_id,forked_repo_id)
+				PRIMARY KEY(forking_repo_url,forked_repo_id)
 				);
 				CREATE INDEX IF NOT EXISTS forks_reverse_idx ON forks(forked_repo_id,forking_repo_id);
+				CREATE INDEX IF NOT EXISTS forks_idx ON forks(forking_repo_id,forked_repo_id);
 
 				CREATE TABLE IF NOT EXISTS table_updates(
 				id INTEGER PRIMARY KEY,
@@ -301,6 +304,7 @@ class Database(object):
 				CREATE TABLE IF NOT EXISTS commit_repos(
 				commit_id BIGINT REFERENCES commits(id) ON DELETE CASCADE,
 				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
+				is_orig_repo BOOLEAN,
 				PRIMARY KEY(commit_id,repo_id)
 				);
 
@@ -317,12 +321,14 @@ class Database(object):
 
 				CREATE TABLE IF NOT EXISTS forks(
 				forking_repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
-				forked_repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
+				forking_repo_url TEXT,
+				forked_repo_id BIGINT NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
 				forked_at TIMESTAMP DEFAULT NULL,
 				fork_rank INTEGER DEFAULT 1,
-				PRIMARY KEY(forking_repo_id,forked_repo_id)
+				PRIMARY KEY(forking_repo_url,forked_repo_id)
 				);
 				CREATE INDEX IF NOT EXISTS forks_reverse_idx ON forks(forked_repo_id,forking_repo_id);
+				CREATE INDEX IF NOT EXISTS forks_idx ON forks(forking_repo_id,forked_repo_id);
 
 				CREATE TABLE IF NOT EXISTS table_updates(
 				id BIGSERIAL PRIMARY KEY,
@@ -387,6 +393,8 @@ class Database(object):
 		else:
 			self.cursor.execute('DROP TABLE IF EXISTS packages;')
 			self.cursor.execute('DROP TABLE IF EXISTS followers;')
+			self.cursor.execute('DROP TABLE IF EXISTS forks;')
+			self.cursor.execute('DROP TABLE IF EXISTS commit_repos;')
 			self.cursor.execute('DROP TABLE IF EXISTS commit_parents;')
 			self.cursor.execute('DROP TABLE IF EXISTS commits;')
 			self.cursor.execute('DROP TABLE IF EXISTS table_updates;')
@@ -750,6 +758,18 @@ class Database(object):
 				ON s.id=r.source
 				LEFT OUTER JOIN table_updates tu
 				ON tu.repo_id=r.id AND tu.table_name='stars'
+				ORDER BY s.name,r.owner,r.name
+				;''')
+			return list(self.cursor.fetchall())
+
+		elif option == 'forkinfo':
+			self.cursor.execute('''
+				SELECT s.name,r.owner,r.name,r.id,tu.updated_at,tu.success
+				FROM repositories r
+				INNER JOIN sources s
+				ON s.id=r.source
+				LEFT OUTER JOIN table_updates tu
+				ON tu.repo_id=r.id AND tu.table_name='forks'
 				ORDER BY s.name,r.owner,r.name
 				;''')
 			return list(self.cursor.fetchall())
@@ -1230,6 +1250,21 @@ class Database(object):
 		else:
 			return ans
 
+	def count_forks(self,source,repo,owner):
+		'''
+		Counts registered forks of a repo
+		'''
+		repo_id = self.get_repo_id(name=repo,owner=owner,source=source)
+		if self.db_type == 'postgres':
+			self.cursor.execute('''SELECT COUNT(*) FROM forks WHERE forked_repo_id=%s;''',(repo_id,))
+		else:
+			self.cursor.execute('''SELECT COUNT(*) FROM forks WHERE forked_repo_id=?;''',(repo_id,))
+		ans = self.cursor.fetchone()[0] # When no count, result is (None,)
+		if ans is None:
+			return 0
+		else:
+			return ans
+
 	def insert_stars(self,stars_list,commit=True):
 		'''
 		Inserts starring events.
@@ -1249,6 +1284,7 @@ class Database(object):
 
 		if commit:
 			self.connection.commit()
+
 
 	def insert_update(self,table,repo_id=None,user_id=None,success=True):
 		'''

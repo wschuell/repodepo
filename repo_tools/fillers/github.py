@@ -1,6 +1,7 @@
 import datetime
 import os
 import psycopg2
+from psycopg2 import extras
 import subprocess
 import shutil
 import copy
@@ -267,6 +268,154 @@ class GHLoginsFiller(GithubFiller):
 				for future in futures:
 					future.result()
 
+class ForksFiller(GithubFiller):
+	"""
+	Fills in forks info for github repositories
+	"""
+	def __init__(self,force=False,repo_list=None,**kwargs):
+		self.force = force
+		self.repo_list = repo_list
+		GithubFiller.__init__(self,**kwargs)
+
+
+
+	def apply(self):
+		self.fill_forks(repo_list=self.repo_list,force=self.force)
+		self.fill_fork_ranks()
+		self.db.connection.commit()
+
+
+	def fill_forks(self,repo_list=None,force=False,workers=1,in_thread=False):
+		'''
+		Retrieving fork information from github.
+		force: retry repos that were previously not retrievable
+		Otherwise trying all emails which have no login yet and never failed before
+		'''
+
+		if repo_list is None:
+			#build repo list
+			repo_list = []
+			for r in self.db.get_repo_list(option='forkinfo'):
+				# created_at = self.db.get_last_star(source=r['source'],repo=r['name'],owner=r['owner'])['created_at']
+				# created_at = self.db.get_last_star(source=r[0],repo=r[2],owner=r[1])['created_at']
+				# created_at = self.db.get_last_star(source=r[0],repo=r[2],owner=r[1])['created_at']
+				source,owner,repo_name,repo_id,created_at,success = r[:6]
+
+				if isinstance(created_at,str):
+					created_at = datetime.datetime.strptime(created_at,'%Y-%m-%d %H:%M:%S')
+
+
+				if (force==True) or (created_at is None) or ((not isinstance(force,bool)) and time.time()-created_at.timestamp()>force) or (retry and not success):
+					# repo_list.append('{}/{}'.format(r['name'],r['owner']))
+					# repo_list.append('{}/{}'.format(r[2],r[3]))
+					repo_list.append(r)
+
+
+		if workers == 1:
+			requester_gen = self.get_github_requester()
+			if in_thread:
+				db = self.db.copy()
+			else:
+				db = self.db
+			new_repo = True
+			while len(repo_list):
+				current_repo = repo_list[0]
+				# owner,repo_name = current_repo.split('/')
+				# source = 'GitHub'
+				# repo_id = db.get_repo_id(owner=owner,source=source,name=repo_name)
+				source,owner,repo_name,repo_id = current_repo[:4]
+				if new_repo:
+					new_repo = False
+					self.logger.info('Filling forks for repo {}/{}'.format(owner,repo_name))
+				requester = next(requester_gen)
+				try:
+					repo_apiobj = requester.get_repo('{}/{}'.format(owner,repo_name))
+				except github.GithubException:
+					self.logger.info('No such repository: {}/{}'.format(owner,repo_name))
+					db.insert_update(repo_id=repo_id,table='forks',success=False)
+					repo_list.pop(0)
+					new_repo = True
+				else:
+					while requester.get_rate_limit().core.remaining > self.querymin_threshold:
+						nb_forks = db.count_forks(source=source,repo=repo_name,owner=owner)
+						# sg_list = list(repo_apiobj.get_stargazers_with_dates()[nb_stars:nb_stars+per_page])
+						sg_list = list(repo_apiobj.get_forks().get_page(int(nb_forks/self.per_page)))
+						forks_list=[{'repo_id':repo_id,'source':source,'repo':repo_name,'owner':owner,'repo_fullname':sg.full_name,'created_at':sg.created_at} for sg in sg_list]
+
+						if nb_forks < self.per_page*(int(nb_forks/self.per_page))+len(sg_list):
+							# if in_thread:
+							if db.db_type == 'sqlite' and in_thread:
+								time.sleep(1+random.random()) # to avoid database locked issues, and smooth a bit concurrency
+							if self.db.db_type == 'postgres':
+								extras.execute_batch(self.db.cursor,'''
+									INSERT INTO forks(forking_repo_id,forked_repo_id,forking_repo_url,forked_at)
+									VALUES((SELECT r.id FROM repositories r
+												INNER JOIN sources s
+												ON s.name=%s AND s.id=r.source AND CONCAT(r.owner,'/',r.name)=%s),
+											%s,
+											%s,
+											%s)
+									ON CONFLICT DO NOTHING
+									;''',((s['source'],s['repo_fullname'],s['repo_id'],'github.com/'+s['repo_fullname'],s['created_at']) for s in forks_list))
+							else:
+								self.db.cursor.executemany('''
+									INSERT OR IGNORE INTO forks(forking_repo_id,forked_repo_id,forking_repo_url,forked_at)
+									VALUES((SELECT r.id FROM repositories r
+												INNER JOIN sources s
+												ON s.name=? AND s.id=r.source AND r.owner || '/' || r.name =?),
+											?,
+											?,
+											?)
+									;''',((s['source'],s['repo_fullname'],s['repo_id'],'github.com/'+s['repo_fullname'],s['created_at']) for s in forks_list))
+
+							#db.insert_forks(,commit=False)
+						else:
+							self.logger.info('Filled forks for repo {}/{}: {}'.format(owner,repo_name,nb_forks))
+							db.insert_update(repo_id=repo_id,table='forks',success=True)
+							db.connection.commit()
+							repo_list.pop(0)
+							new_repo = True
+							break
+
+			if in_thread:
+				db.connection.close()
+		else:
+			with ThreadPoolExecutor(max_workers=workers) as executor:
+				futures = []
+				for infos in info_list:
+					futures.append(executor.submit(self.fill_gh_logins,info_list=[infos],workers=1,in_thread=True))
+				# for future in concurrent.futures.as_completed(futures):
+				# 	pass
+				for future in futures:
+					future.result()
+
+	def fill_fork_ranks(self,step=1):
+		self.logger.info('Filling fork ranks, step {}'.format(step))
+		if self.db.db_type == 'postgres':
+			self.db.cursor.execute('''
+				INSERT INTO forks(forking_repo_id,forking_repo_url,forked_repo_id,forked_at,fork_rank)
+				SELECT f2.forking_repo_id,f2.forking_repo_url,f1.forked_repo_id,f2.forked_at,f2.fork_rank+1
+						FROM forks f1
+						INNER JOIN forks f2
+						ON f1.forked_repo_id=f2.forking_repo_id
+				ON CONFLICT DO NOTHING
+				;
+				''')
+			rowcount = self.db.cursor.rowcount
+		else:
+			self.db.cursor.execute('''
+				INSERT OR IGNORE INTO forks(forking_repo_id,forking_repo_url,forked_repo_id,forked_at,fork_rank)
+					SELECT f2.forking_repo_id,f2.forking_repo_url,f1.forked_repo_id,f2.forked_at,f2.fork_rank+1
+						FROM forks f1
+						INNER JOIN forks f2
+						ON f2.forked_repo_id=f1.forking_repo_id
+
+				;
+				''')
+			rowcount = self.db.cursor.rowcount
+		if rowcount > 0:
+			self.logger.info('Filled {} missing indirect fork relations'.format(rowcount))
+			self.fill_fork_ranks(step=step+1)
 
 class FollowersFiller(GithubFiller):
 	"""

@@ -77,6 +77,7 @@ def test_github(testdb):
 	testdb.add_filler(generic.PackageFiller(package_list_file='packages.csv'))
 	testdb.add_filler(generic.RepositoriesFiller())
 	testdb.add_filler(generic.ClonesFiller(data_folder='dummy_clones'))
+	testdb.add_filler(github.ForksFiller(fail_on_wait=True,workers=2))
 	testdb.add_filler(commit_info.CommitsFiller(data_folder='dummy_clones'))
 	testdb.add_filler(github.StarsFiller(fail_on_wait=True,workers=2))
 	testdb.add_filler(github.GHLoginsFiller(fail_on_wait=True))
