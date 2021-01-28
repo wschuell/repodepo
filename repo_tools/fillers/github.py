@@ -12,6 +12,7 @@ import glob
 import github
 import calendar
 import time
+import sqlite3
 import random
 
 import concurrent.futures
@@ -39,6 +40,12 @@ class GithubFiller(fillers.Filler):
 			self.data_folder = self.db.data_folder
 
 		self.set_github_requesters()
+
+		if self.db.db_type == 'postgres':
+			self.db.cursor.execute(''' INSERT INTO identity_types(name) VALUES('github_login') ON CONFLICT DO NOTHING;''')
+		else:
+			self.db.cursor.execute(''' INSERT OR IGNORE INTO identity_types(name) VALUES('github_login');''')
+		self.db.connection.commit()
 
 	def set_github_requesters(self):
 		'''
@@ -167,7 +174,8 @@ class StarsFiller(GithubFiller):
 							# if in_thread:
 							if db.db_type == 'sqlite' and in_thread:
 								time.sleep(1+random.random()) # to avoid database locked issues, and smooth a bit concurrency
-							db.insert_stars(stars_list=[{'repo_id':repo_id,'source':source,'repo':repo_name,'owner':owner,'starred_at':sg.starred_at,'login':sg.user.login} for sg in sg_list],commit=False)
+							# db.insert_stars(stars_list=[{'repo_id':repo_id,'source':source,'repo':repo_name,'owner':owner,'starred_at':sg.starred_at,'login':sg.user.login} for sg in sg_list],commit=False)
+							self.insert_stars(db=db,stars_list=[{'repo_id':repo_id,'source':source,'repo':repo_name,'owner':owner,'starred_at':sg.starred_at,'login':sg.user.login} for sg in sg_list],commit=False)
 						else:
 							self.logger.info('Filled stars for repo {}/{}: {}'.format(owner,repo_name,nb_stars))
 							db.insert_update(repo_id=repo_id,table='stars',success=True)
@@ -176,6 +184,7 @@ class StarsFiller(GithubFiller):
 							new_repo = True
 							break
 			if in_thread:
+				db.cursor.close()
 				db.connection.close()
 
 		else:
@@ -188,6 +197,37 @@ class StarsFiller(GithubFiller):
 				for future in futures:
 					future.result()
 
+
+	def insert_stars(self,stars_list,commit=True,db=None):
+		'''
+		Inserts starring events.
+		commit defines the behavior at the end, commit of the transaction or not. Committing externally allows to do it only when all stars for a repo have been added
+		'''
+		if db is None:
+			db = self.db
+		if db.db_type == 'postgres':
+			extras.execute_batch(db.cursor,'''
+				INSERT INTO stars(starred_at,login,repo_id,identity_type_id,identity_id)
+				VALUES(%s,
+						%s,
+						%s,
+						(SELECT id FROM identity_types WHERE name='github_login'),
+						(SELECT id FROM identities WHERE identity=%s AND identity_type_id=(SELECT id FROM identity_types WHERE name='github_login'))
+					)
+				ON CONFLICT DO NOTHING
+				;''',((s['starred_at'],s['login'],s['repo_id'],s['login']) for s in stars_list))
+		else:
+			db.cursor.executemany('''
+					INSERT OR IGNORE INTO stars(starred_at,login,repo_id,identity_type_id,identity_id)
+					VALUES(?,
+							?,
+							?,
+							(SELECT id FROM identity_types WHERE name='github_login'),
+							(SELECT id FROM identities WHERE identity=? AND identity_type_id=(SELECT id FROM identity_types WHERE name='github_login'))
+						);''',((s['starred_at'],s['login'],s['repo_id'],s['login']) for s in stars_list))
+
+		if commit:
+			db.connection.commit()
 
 
 class GHLoginsFiller(GithubFiller):
@@ -322,8 +362,9 @@ class GHLoginsFiller(GithubFiller):
 							except github.GithubException:
 								self.logger.info('No login available for user id {}, uncompletable object error'.format(identity_id))
 								login = None
-						self.set_gh_login(identity_id=identity_id,login=login)
+						self.set_gh_login(db=db,identity_id=identity_id,login=login)
 			if in_thread:
+				db.cursor.close()
 				db.connection.close()
 		else:
 			with ThreadPoolExecutor(max_workers=workers) as executor:
@@ -335,19 +376,20 @@ class GHLoginsFiller(GithubFiller):
 				for future in futures:
 					future.result()
 
-	def set_gh_login(self,identity_id,login,autocommit=True):
+	def set_gh_login(self,identity_id,login,autocommit=True,db=None):
 		'''
 		Sets a login for a given user (id refers to a unique email, which can refer to several logins)
 		'''
-		if self.db.db_type == 'postgres':
+		if db is None:
+			db = self.db
+		if db.db_type == 'postgres':
 			if login is not None:
-				self.db.cursor.execute(''' INSERT INTO identity_types(name) VALUES('github_login') ON CONFLICT DO NOTHING;''')
-				self.db.cursor.execute(''' INSERT INTO users(creation_identity_type_id,creation_identity) VALUES(
+				db.cursor.execute(''' INSERT INTO users(creation_identity_type_id,creation_identity) VALUES(
 											(SELECT id FROM identity_types WHERE name='github_login'),
 											%s
 											) ON CONFLICT DO NOTHING;''',(login,))
 
-				self.db.cursor.execute(''' INSERT INTO identities(identity_type_id,user_id,identity)
+				db.cursor.execute(''' INSERT INTO identities(identity_type_id,user_id,identity)
 												VALUES((SELECT id FROM identity_types WHERE name='github_login'),
 														(SELECT id FROM users
 														WHERE creation_identity_type_id=(SELECT id FROM identity_types WHERE name='github_login')
@@ -355,39 +397,39 @@ class GHLoginsFiller(GithubFiller):
 														%s)
 												ON CONFLICT DO NOTHING;''',(login,login,))
 
-				self.db.cursor.execute('''SELECT id FROM identities
+				db.cursor.execute('''SELECT id FROM identities
 											WHERE identity_type_id=(SELECT id FROM identity_types WHERE name='github_login')
 											AND identity=%s;''',(login,))
-				identity2 = self.db.cursor.fetchone()[0]
-				self.db.merge_identities(identity1=identity_id,identity2=identity2,autocommit=False)
-			self.db.cursor.execute('''INSERT INTO table_updates(identity_id,table_name,success) VALUES(%s,'login',%s);''',(identity_id,(login is not None)))
+				identity2 = db.cursor.fetchone()[0]
+				db.merge_identities(identity1=identity_id,identity2=identity2,autocommit=False)
+			db.cursor.execute('''INSERT INTO table_updates(identity_id,table_name,success) VALUES(%s,'login',%s);''',(identity_id,(login is not None)))
 		else:
 			if login is not None:
-				self.db.cursor.execute(''' INSERT OR IGNORE INTO identity_types(name) VALUES('github_login');''')
 
-				self.db.cursor.execute(''' INSERT OR IGNORE INTO users(creation_identity_type_id,creation_identity) VALUES(
+
+				db.cursor.execute(''' INSERT OR IGNORE INTO users(creation_identity_type_id,creation_identity) VALUES(
 											(SELECT id FROM identity_types WHERE name='github_login'),
 											?
 											);''',(login,))
 
-				self.db.cursor.execute(''' INSERT OR IGNORE INTO identities(identity_type_id,user_id,identity)
+				db.cursor.execute(''' INSERT OR IGNORE INTO identities(identity_type_id,user_id,identity)
 												VALUES((SELECT id FROM identity_types WHERE name='github_login'),
 														(SELECT id FROM users
 														WHERE creation_identity_type_id=(SELECT id FROM identity_types WHERE name='github_login')
 															AND creation_identity=?),
 														?);''',(login,login,))
 
-				self.db.cursor.execute('''SELECT id FROM identities
+				db.cursor.execute('''SELECT id FROM identities
 											WHERE identity_type_id=(SELECT id FROM identity_types WHERE name='github_login')
 											AND identity=?;''',(login,))
-				identity2 = self.db.cursor.fetchone()[0]
+				identity2 = db.cursor.fetchone()[0]
 
 
-				self.db.merge_identities(identity1=identity_id,identity2=identity2,autocommit=False)
+				db.merge_identities(identity1=identity_id,identity2=identity2,autocommit=False)
 
-			self.db.cursor.execute('''INSERT INTO table_updates(identity_id,table_name,success) VALUES(?,'login',?);''',(identity_id,(login is not None)))
+			db.cursor.execute('''INSERT INTO table_updates(identity_id,table_name,success) VALUES(?,'login',?);''',(identity_id,(login is not None)))
 		if autocommit:
-			self.db.connection.commit()
+			db.connection.commit()
 
 
 class ForksFiller(GithubFiller):
@@ -469,7 +511,7 @@ class ForksFiller(GithubFiller):
 							if db.db_type == 'sqlite' and in_thread:
 								time.sleep(1+random.random()) # to avoid database locked issues, and smooth a bit concurrency
 							if self.db.db_type == 'postgres':
-								extras.execute_batch(self.db.cursor,'''
+								extras.execute_batch(db.cursor,'''
 									INSERT INTO forks(forking_repo_id,forked_repo_id,forking_repo_url,forked_at)
 									VALUES((SELECT r.id FROM repositories r
 												INNER JOIN sources s
@@ -480,7 +522,7 @@ class ForksFiller(GithubFiller):
 									ON CONFLICT DO NOTHING
 									;''',((s['source'],s['repo_fullname'],s['repo_id'],'github.com/'+s['repo_fullname'],s['created_at']) for s in forks_list))
 							else:
-								self.db.cursor.executemany('''
+								db.cursor.executemany('''
 									INSERT OR IGNORE INTO forks(forking_repo_id,forked_repo_id,forking_repo_url,forked_at)
 									VALUES((SELECT r.id FROM repositories r
 												INNER JOIN sources s
@@ -500,6 +542,7 @@ class ForksFiller(GithubFiller):
 							break
 
 			if in_thread:
+				db.cursor.close()
 				db.connection.close()
 		else:
 			with ThreadPoolExecutor(max_workers=workers) as executor:
@@ -543,26 +586,97 @@ class FollowersFiller(GithubFiller):
 	"""
 	Fills in follower information
 	"""
-	def __init__(self,time_delay=24*3600,login_list=None,**kwargs):
+
+	def __init__(self,force=False,retry=False,login_list=None,**kwargs):
+		self.force = force
+		self.retry = retry
 		self.login_list = login_list
-		self.time_delay = time_delay
 		GithubFiller.__init__(self,**kwargs)
 
 
-
 	def apply(self):
-		self.fill_followers(login_list=self.login_list,time_delay=self.time_delay)
+		self.fill_followers(retry=self.retry,login_list=self.login_list,workers=self.workers)
 		self.db.connection.commit()
 
-	def fill_followers(self,login_list=None,workers=1,in_thread=False,time_delay=24*3600):
-		'''
-		Getting followers for github logins. Avoiding by default logins which already have a value from less than time_delay seconds ago.
-		'''
 
-		option = 'logins'
+	# def fill_followers(self,login_list=None,workers=1,in_thread=False,time_delay=24*3600):
+	# 	'''
+	# 	Getting followers for github logins. Avoiding by default logins which already have a value from less than time_delay seconds ago.
+	# 	'''
 
-		if login_list is None:
-			login_list = self.db.get_user_list(option=option,time_delay=time_delay)
+	# 	option = 'logins'
+
+	# 	if login_list is None:
+	# 		login_list = self.db.get_user_list(option=option,time_delay=time_delay)
+
+	# 	if workers == 1:
+	# 		requester_gen = self.get_github_requester()
+	# 		if in_thread:
+	# 			db = self.db.copy()
+	# 		else:
+	# 			db = self.db
+	# 		for login in login_list:
+	# 			self.logger.info('Filling followers for login {}'.format(login))
+	# 			requester = next(requester_gen)
+	# 			try:
+	# 				user_apiobj = requester.get_user('{}'.format(login))
+	# 			except github.GithubException:
+	# 				self.logger.info('No such user: {}'.format(login))
+	# 			else:
+	# 				try:
+	# 					followers = user_apiobj.followers
+	# 					self.logger.info('Login {} has {} followers'.format(login,followers))
+	# 				except github.GithubException:
+	# 					self.logger.info('No followers info available for login {}, uncompletable object error'.format(login))
+	# 					followers = None
+
+	# 				db.fill_followers(followers_info_list=[(login,followers)])
+
+	# 		if in_thread:
+	# 			db.connection.close()
+	# 			del db
+	# 	else:
+	# 		with ThreadPoolExecutor(max_workers=workers) as executor:
+	# 			futures = []
+	# 			for login in login_list:
+	# 				futures.append(executor.submit(self.fill_followers,login_list=[login],workers=1,in_thread=True))
+	# 			# for future in concurrent.futures.as_completed(futures):
+	# 			# 	pass
+	# 			for future in futures:
+	# 				future.result()
+
+
+	def prepare(self):
+		GithubFiller.prepare(self)
+		if self.login_list is None:
+			#build login list
+			if self.force:
+				self.db.cursor.execute('''
+					SELECT i.id,i.identity,i.identity_type_id FROM identities i
+					INNER JOIN identity_types it
+					ON it.id=i.identity_type_id AND it.name='github_login';
+					''')
+			else:
+				self.db.cursor.execute('''
+					SELECT i.id,i.identity,i.identity_type_id FROM identities i
+					INNER JOIN identity_types it
+					ON it.id=i.identity_type_id AND it.name='github_login'
+					EXCEPT
+					SELECT i.id,i.identity,i.identity_type_id FROM identities i
+					INNER JOIN identity_types it
+					ON it.id=i.identity_type_id AND it.name='github_login'
+					INNER JOIN table_updates tu
+					ON tu.success AND tu.identity_id=i.id AND tu.table_name='followers';
+					''')
+			self.login_list = list(self.db.cursor.fetchall())
+
+	def fill_followers(self,retry=False,login_list=None,workers=1,in_thread=False):
+		'''
+		Filling followers
+		Checking if an entry exists in table_updates with login_id and table_name followers
+
+		login syntax: (source,owner,name,repo_id,follower_update)
+		'''
 
 		if workers == 1:
 			requester_gen = self.get_github_requester()
@@ -570,26 +684,41 @@ class FollowersFiller(GithubFiller):
 				db = self.db.copy()
 			else:
 				db = self.db
-			for login in login_list:
-				self.logger.info('Filling followers for login {}'.format(login))
+			new_login = True
+			while len(login_list):
+				login_id,login,identity_type_id = login_list[0]
+
+				if new_login:
+					new_login = False
+					self.logger.info('Filling followers for login {}'.format(login))
 				requester = next(requester_gen)
 				try:
-					user_apiobj = requester.get_user('{}'.format(login))
+					login_apiobj = requester.get_user('{}'.format(login))
 				except github.GithubException:
-					self.logger.info('No such user: {}'.format(login))
+					self.logger.info('No such login: {}'.format(login))
+					db.insert_update(identity_id=login_id,table='followers',success=False)
+					login_list.pop(0)
+					new_login = True
 				else:
-					try:
-						followers = user_apiobj.followers
-						self.logger.info('Login {} has {} followers'.format(login,followers))
-					except github.GithubException:
-						self.logger.info('No followers info available for login {}, uncompletable object error'.format(login))
-						followers = None
+					while requester.get_rate_limit().core.remaining > self.querymin_threshold:
+						nb_followers = db.count_followers(login_id=login_id)
+						sg_list = list(login_apiobj.get_followers().get_page(int(nb_followers/self.per_page)))
 
-					db.fill_followers(followers_info_list=[(login,followers)])
-
+						if nb_followers < self.per_page*(int(nb_followers/self.per_page))+len(sg_list):
+							if db.db_type == 'sqlite' and in_thread:
+								time.sleep(1+random.random()) # to avoid database locked issues, and smooth a bit concurrency
+							self.insert_followers(db=db,followers_list=[{'login_id':login_id,'identity_type_id':identity_type_id,'login':login,'follower_login':sg.login} for sg in sg_list],commit=False)
+						else:
+							self.logger.info('Filled followers for login {}: {}'.format(login,nb_followers))
+							db.insert_update(identity_id=login_id,table='followers',success=True)
+							db.connection.commit()
+							login_list.pop(0)
+							new_login = True
+							break
 			if in_thread:
+				db.cursor.close()
 				db.connection.close()
-				del db
+
 		else:
 			with ThreadPoolExecutor(max_workers=workers) as executor:
 				futures = []
@@ -599,3 +728,34 @@ class FollowersFiller(GithubFiller):
 				# 	pass
 				for future in futures:
 					future.result()
+
+
+	def insert_followers(self,followers_list,commit=True,db=None):
+		'''
+		Inserts followers. Syntax [{'identity_type_id':<>,'follower_id':<>,'follower_login':<>,'login_id':<>,'login':<>}]
+		commit defines the behavior at the end, commit of the transaction or not. Committing externally allows to do it only when all followers for a login have been added
+		'''
+		if db is None:
+			db = self.db
+		if db.db_type == 'postgres':
+			extras.execute_batch(db.cursor,'''
+				INSERT INTO followers(follower_identity_type_id,follower_login,follower_id,followee_id)
+				VALUES(%s,
+						%s,
+						(SELECT id FROM identities WHERE identity=%s AND identity_type_id=%s),
+						%s
+					)
+				ON CONFLICT DO NOTHING
+				;''',((f['identity_type_id'],f['follower_login'],f['follower_login'],f['identity_type_id'],f['login_id'],) for f in followers_list))
+		else:
+			db.cursor.executemany('''
+				INSERT OR IGNORE INTO followers(follower_identity_type_id,follower_login,follower_id,followee_id)
+				VALUES(?,
+						?,
+						(SELECT id FROM identities WHERE identity=? AND identity_type_id=?),
+						?
+					)
+				;''',((f['identity_type_id'],f['follower_login'],f['follower_login'],f['identity_type_id'],f['login_id'],) for f in followers_list))
+		if commit:
+			db.connection.commit()
+

@@ -133,17 +133,6 @@ class Database(object):
 				UNIQUE(source,owner,name)
 				);
 
-				CREATE TABLE IF NOT EXISTS stars(
-				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
-				login TEXT NOT NULL,
-				starred_at TIMESTAMP NOT NULL,
-				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-				PRIMARY KEY(repo_id,login)
-				);
-
-				CREATE INDEX IF NOT EXISTS stars_idx ON stars(repo_id,starred_at);
-				CREATE INDEX IF NOT EXISTS stars_idx2 ON stars(repo_id,created_at);
-
 				CREATE TABLE IF NOT EXISTS identity_types(
 				id INTEGER PRIMARY KEY,
 				name TEXT UNIQUE
@@ -226,14 +215,30 @@ class Database(object):
 				);
 
 				CREATE TABLE IF NOT EXISTS followers(
-				id INTEGER PRIMARY KEY,
-				github_login TEXT NOT NULL,
-				followers INTEGER,
-				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+				follower_identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
+				follower_login TEXT,
+				follower_id INTEGER REFERENCES identities(id) ON DELETE CASCADE,
+				followee_id INTEGER REFERENCES identities(id) ON DELETE CASCADE,
+				created_at TIMESTAMP DEFAULT NULL,
+				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				PRIMARY KEY(followee_id,follower_identity_type_id,follower_login)
 				);
 
-				CREATE INDEX IF NOT EXISTS followers_idx ON followers(github_login,created_at);
-				CREATE INDEX IF NOT EXISTS followers_idx2 ON followers(created_at);
+				CREATE INDEX IF NOT EXISTS followers_idx ON followers(follower_id,followee_id);
+
+				CREATE TABLE IF NOT EXISTS stars(
+				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
+				identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
+				login TEXT NOT NULL,
+				identity_id INTEGER REFERENCES identities(id) ON DELETE CASCADE,
+				starred_at TIMESTAMP NOT NULL,
+				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				PRIMARY KEY(repo_id,login,identity_type_id)
+				);
+
+				CREATE INDEX IF NOT EXISTS stars_idx ON stars(repo_id,starred_at);
+				CREATE INDEX IF NOT EXISTS stars_idx2 ON stars(repo_id,created_at);
+				CREATE INDEX IF NOT EXISTS stars_idx3 ON stars(identity_id,starred_at);
 
 				CREATE TABLE IF NOT EXISTS packages(
 				id INTEGER PRIMARY KEY,
@@ -284,17 +289,6 @@ class Database(object):
 				cloned BOOLEAN DEFAULT false,
 				UNIQUE(source,owner,name)
 				);
-
-				CREATE TABLE IF NOT EXISTS stars(
-				repo_id BIGINT REFERENCES repositories(id),
-				login TEXT NOT NULL,
-				starred_at TIMESTAMP NOT NULL,
-				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-				PRIMARY KEY(repo_id,login)
-				);
-
-				CREATE INDEX IF NOT EXISTS stars_idx ON stars(repo_id,starred_at);
-				CREATE INDEX IF NOT EXISTS stars_idx2 ON stars(repo_id,created_at);
 
 				CREATE TABLE IF NOT EXISTS identity_types(
 				id BIGSERIAL PRIMARY KEY,
@@ -379,15 +373,32 @@ class Database(object):
 				);
 
 
-				CREATE TABLE IF NOT EXISTS followers(
-				id BIGSERIAL PRIMARY KEY,
-				github_login TEXT NOT NULL,
-				followers BIGINT,
-				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+				CREATE TABLE IF NOT EXISTS stars(
+				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
+				identity_type_id BIGINT REFERENCES identity_types(id) ON DELETE CASCADE,
+				login TEXT NOT NULL,
+				identity_id BIGINT REFERENCES identities(id) ON DELETE CASCADE,
+				starred_at TIMESTAMP NOT NULL,
+				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				PRIMARY KEY(repo_id,login,identity_type_id)
 				);
 
-				CREATE INDEX IF NOT EXISTS followers_idx ON followers(github_login,created_at);
-				CREATE INDEX IF NOT EXISTS followers_idx2 ON followers(created_at);
+				CREATE INDEX IF NOT EXISTS stars_idx ON stars(repo_id,starred_at);
+				CREATE INDEX IF NOT EXISTS stars_idx2 ON stars(repo_id,created_at);
+				CREATE INDEX IF NOT EXISTS stars_idx3 ON stars(identity_id,starred_at);
+
+				CREATE TABLE IF NOT EXISTS followers(
+				follower_identity_type_id BIGINT REFERENCES identity_types(id) ON DELETE CASCADE,
+				follower_login TEXT,
+				follower_id BIGINT REFERENCES identities(id) ON DELETE CASCADE,
+				followee_id BIGINT REFERENCES identities(id) ON DELETE CASCADE,
+				created_at TIMESTAMP DEFAULT NULL,
+				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				PRIMARY KEY(followee_id,follower_identity_type_id,follower_login)
+				);
+
+				CREATE INDEX IF NOT EXISTS followers_idx ON followers(follower_id,followee_id);
+
 
 				CREATE TABLE IF NOT EXISTS packages(
 				id BIGSERIAL PRIMARY KEY,
@@ -423,6 +434,7 @@ class Database(object):
 		else:
 			self.cursor.execute('DROP TABLE IF EXISTS packages;')
 			self.cursor.execute('DROP TABLE IF EXISTS followers;')
+			self.cursor.execute('DROP TABLE IF EXISTS stars;')
 			self.cursor.execute('DROP TABLE IF EXISTS forks;')
 			self.cursor.execute('DROP TABLE IF EXISTS commit_repos;')
 			self.cursor.execute('DROP TABLE IF EXISTS commit_parents;')
@@ -431,7 +443,6 @@ class Database(object):
 			self.cursor.execute('DROP TABLE IF EXISTS identities;')
 			self.cursor.execute('DROP TABLE IF EXISTS users;')
 			self.cursor.execute('DROP TABLE IF EXISTS identity_types;')
-			self.cursor.execute('DROP TABLE IF EXISTS stars;')
 			self.cursor.execute('DROP TABLE IF EXISTS full_updates;')
 			self.cursor.execute('DROP TABLE IF EXISTS download_attempts;')
 			self.cursor.execute('DROP TABLE IF EXISTS repositories;')
@@ -1291,6 +1302,26 @@ class Database(object):
 			self.cursor.execute('''SELECT COUNT(*) FROM forks WHERE forked_repo_id=%s;''',(repo_id,))
 		else:
 			self.cursor.execute('''SELECT COUNT(*) FROM forks WHERE forked_repo_id=?;''',(repo_id,))
+		ans = self.cursor.fetchone()[0] # When no count, result is (None,)
+		if ans is None:
+			return 0
+		else:
+			return ans
+
+	def count_followers(self,login_id):
+		if self.db_type == 'postgres':
+			self.cursor.execute('''
+				SELECT COUNT(*) FROM followers
+				WHERE followee_id=%s
+				;
+
+				''',(login_id,))
+		else:
+			self.cursor.execute('''
+				SELECT COUNT(*) FROM followers
+				WHERE followee_id=?
+				;
+				''',(login_id,))
 		ans = self.cursor.fetchone()[0] # When no count, result is (None,)
 		if ans is None:
 			return 0
