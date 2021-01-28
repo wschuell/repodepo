@@ -3,6 +3,7 @@ import os
 import psycopg2
 from psycopg2 import extras
 import pygit2
+import json
 
 from repo_tools import fillers
 from repo_tools.fillers import generic
@@ -179,32 +180,77 @@ class CommitsFiller(fillers.Filler):
 				tracked_data['latest_commit_time'] = max(tracked_data['latest_commit_time'],c['time'])
 				yield c
 
+		# tr_gen = tracked_gen(commit_info_list)
+		tr_gen = list(tracked_gen(commit_info_list)) # temporary solution, because the list is used twice: one to prefill users table, once for identities. For large number of commits this can trigger enormous memory consumption. Solution would be to call list_commits() twice.
+
+
 		if self.db.db_type == 'postgres':
+
+			self.db.cursor.execute('''
+				INSERT INTO identity_types(name) VALUES('email')
+				ON CONFLICT DO NOTHING
+				;''')
+
 			extras.execute_batch(self.db.cursor,'''
-				INSERT INTO users(name,email) VALUES(%s,%s)
+				INSERT INTO users(
+						creation_identity,
+						creation_identity_type_id) VALUES(%s,(SELECT id FROM identity_types WHERE name='email'))
 				ON CONFLICT DO NOTHING;
-				''',((c['author_name'],c['author_email']) for c in tracked_gen(commit_info_list)))
+				''',((c['author_email'],) for c in tr_gen))
+
+			extras.execute_batch(self.db.cursor,'''
+				INSERT INTO identities(
+						attributes,
+						identity,
+						user_id,
+						identity_type_id) VALUES(%s,%s,
+						(SELECT id FROM users WHERE creation_identity=%s AND creation_identity_type_id=(SELECT id FROM identity_types WHERE name='email')),
+						(SELECT id FROM identity_types WHERE name='email'))
+				ON CONFLICT DO NOTHING;
+				''',((json.dumps({'name':c['author_name']}),c['author_email'],c['author_email']) for c in tr_gen))
 
 
 
 		else:
-			self.db.cursor.executemany('''
-				INSERT OR IGNORE INTO users(name,email) VALUES(?,?)
-				;
-				''',((c['author_name'],c['author_email']) for c in tracked_gen(commit_info_list)))
+			self.db.cursor.execute('''
+				INSERT OR IGNORE INTO identity_types(name) VALUES('email')
+				;''')
 
+			self.db.cursor.executemany('''
+				INSERT OR IGNORE INTO users(
+						creation_identity,
+						creation_identity_type_id) VALUES(?,(SELECT id FROM identity_types WHERE name='email'))
+				;
+				''',((c['author_email'],) for c in tr_gen))
+
+			self.db.cursor.executemany('''
+				INSERT OR IGNORE INTO identities(
+						attributes,
+						identity,
+						user_id,
+						identity_type_id) VALUES(?,?,
+						(SELECT id FROM users WHERE creation_identity=? AND creation_identity_type_id=(SELECT id FROM identity_types WHERE name='email')),
+						(SELECT id FROM identity_types WHERE name='email'))
+				;
+				''',((json.dumps({'name':c['author_name']}),c['author_email'],c['author_email']) for c in tr_gen))
+
+		# self.complete_id_users()
 
 		if not tracked_data['empty']:
 			repo_id = tracked_data['last_commit']['repo_id']
 			latest_commit_time = datetime.datetime.fromtimestamp(tracked_data['latest_commit_time'])
 			if self.db.db_type == 'postgres':
-				self.db.cursor.execute('''INSERT INTO table_updates(repo_id,table_name,latest_commit_time) VALUES(%s,'users',%s) ;''',(repo_id,latest_commit_time))
+				self.db.cursor.execute('''INSERT INTO table_updates(repo_id,table_name,latest_commit_time) VALUES(%s,'identities',%s) ;''',(repo_id,latest_commit_time))
 			else:
-				self.db.cursor.execute('''INSERT INTO table_updates(repo_id,table_name,latest_commit_time) VALUES(?,'users',?) ;''',(repo_id,latest_commit_time))
+				self.db.cursor.execute('''INSERT INTO table_updates(repo_id,table_name,latest_commit_time) VALUES(?,'identities',?) ;''',(repo_id,latest_commit_time))
 
 
 		if autocommit:
 			self.db.connection.commit()
+
+
+
+
 
 	def fill_commits(self,commit_info_list,autocommit=True):
 		'''
@@ -223,7 +269,9 @@ class CommitsFiller(fillers.Filler):
 			extras.execute_batch(self.db.cursor,'''
 				INSERT INTO commits(sha,author_id,created_at,insertions,deletions)
 					VALUES(%s,
-							(SELECT id FROM users WHERE email=%s),
+							(SELECT i.id FROM identities i
+								INNER JOIN identity_types it
+							 ON i.identity=%s AND it.name='email' AND it.id=i.identity_type_id),
 							%s,
 							%s,
 							%s
@@ -235,7 +283,9 @@ class CommitsFiller(fillers.Filler):
 			self.db.cursor.executemany('''
 				INSERT OR IGNORE INTO commits(sha,author_id,created_at,insertions,deletions)
 					VALUES(?,
-							(SELECT id FROM users WHERE email=?),
+							(SELECT i.id FROM identities i
+								INNER JOIN identity_types it
+							 ON i.identity=? AND it.name='email' AND it.id=i.identity_type_id),
 							?,
 							?,
 							?

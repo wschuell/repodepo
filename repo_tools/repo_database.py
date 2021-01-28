@@ -144,20 +144,34 @@ class Database(object):
 				CREATE INDEX IF NOT EXISTS stars_idx ON stars(repo_id,starred_at);
 				CREATE INDEX IF NOT EXISTS stars_idx2 ON stars(repo_id,created_at);
 
-				CREATE TABLE IF NOT EXISTS users(
+				CREATE TABLE IF NOT EXISTS identity_types(
 				id INTEGER PRIMARY KEY,
-				name TEXT,
-				email TEXT UNIQUE,
-				github_login TEXT,
-				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+				name TEXT UNIQUE
 				);
 
-				CREATE INDEX IF NOT EXISTS users_gh_idx ON users(github_login);
+				CREATE TABLE IF NOT EXISTS users(
+				id INTEGER PRIMARY KEY,
+				creation_identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
+				creation_identity TEXT,
+				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				UNIQUE(creation_identity_type_id,creation_identity)
+				);
+
+				CREATE TABLE IF NOT EXISTS identities(
+				id INTEGER PRIMARY KEY,
+				identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
+				user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+				identity TEXT
+				created_at TIMESTAMP,
+				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				attributes TEXT,
+				UNIQUE(identity_type_id,identity)
+				);
 
 				CREATE TABLE IF NOT EXISTS commits(
 				id INTEGER PRIMARY KEY,
 				sha TEXT,
-				author_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+				author_id INTEGER REFERENCES identities(id) ON DELETE CASCADE,
 				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
 				created_at TIMESTAMP,
 				insertions INTEGER,
@@ -196,7 +210,7 @@ class Database(object):
 				CREATE TABLE IF NOT EXISTS table_updates(
 				id INTEGER PRIMARY KEY,
 				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
-				user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+				identity_id INTEGER REFERENCES identities(id) ON DELETE CASCADE,
 				table_name TEXT,
 				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 				success BOOLEAN DEFAULT 1,
@@ -204,7 +218,7 @@ class Database(object):
 				);
 
 				CREATE INDEX IF NOT EXISTS table_updates_idx ON table_updates(repo_id,table_name,updated_at);
-				CREATE INDEX IF NOT EXISTS table_updates_user_idx ON table_updates(user_id,table_name,updated_at);
+				CREATE INDEX IF NOT EXISTS table_updates_identity_idx ON table_updates(identity_id,table_name,updated_at);
 
 				CREATE TABLE IF NOT EXISTS full_updates(
 				update_type TEXT,
@@ -282,18 +296,34 @@ class Database(object):
 				CREATE INDEX IF NOT EXISTS stars_idx ON stars(repo_id,starred_at);
 				CREATE INDEX IF NOT EXISTS stars_idx2 ON stars(repo_id,created_at);
 
-			CREATE TABLE IF NOT EXISTS users(
+				CREATE TABLE IF NOT EXISTS identity_types(
 				id BIGSERIAL PRIMARY KEY,
-				name TEXT,
-				email TEXT UNIQUE,
-				github_login TEXT,
-				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+				name TEXT UNIQUE
+				);
+
+				CREATE TABLE IF NOT EXISTS users(
+				id BIGSERIAL PRIMARY KEY,
+				creation_identity_type_id BIGINT REFERENCES identity_types(id) ON DELETE CASCADE,
+				creation_identity TEXT,
+				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				UNIQUE(creation_identity_type_id,creation_identity)
+				);
+
+				CREATE TABLE IF NOT EXISTS identities(
+				id BIGSERIAL PRIMARY KEY,
+				identity_type_id BIGINT REFERENCES identity_types(id) ON DELETE CASCADE,
+				user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+				identity TEXT,
+				created_at TIMESTAMP,
+				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				attributes JSONB,
+				UNIQUE(identity_type_id,identity)
 				);
 
 				CREATE TABLE IF NOT EXISTS commits(
 				id BIGSERIAL PRIMARY KEY,
 				sha TEXT,
-				author_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+				author_id BIGINT REFERENCES identities(id) ON DELETE CASCADE,
 				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
 				created_at TIMESTAMP,
 				insertions INT,
@@ -333,7 +363,7 @@ class Database(object):
 				CREATE TABLE IF NOT EXISTS table_updates(
 				id BIGSERIAL PRIMARY KEY,
 				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
-				user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+				identity_id BIGINT REFERENCES identities(id) ON DELETE CASCADE,
 				table_name TEXT,
 				success BOOLEAN DEFAULT true,
 				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -341,7 +371,7 @@ class Database(object):
 				);
 
 				CREATE INDEX IF NOT EXISTS table_updates_idx ON table_updates(repo_id,table_name,updated_at);
-				CREATE INDEX IF NOT EXISTS table_updates_user_idx ON table_updates(user_id,table_name,updated_at);
+				CREATE INDEX IF NOT EXISTS table_updates_identity_idx ON table_updates(identity_id,table_name,updated_at);
 
 				CREATE TABLE IF NOT EXISTS full_updates(
 				update_type TEXT,
@@ -398,7 +428,9 @@ class Database(object):
 			self.cursor.execute('DROP TABLE IF EXISTS commit_parents;')
 			self.cursor.execute('DROP TABLE IF EXISTS commits;')
 			self.cursor.execute('DROP TABLE IF EXISTS table_updates;')
+			self.cursor.execute('DROP TABLE IF EXISTS identities;')
 			self.cursor.execute('DROP TABLE IF EXISTS users;')
+			self.cursor.execute('DROP TABLE IF EXISTS identity_types;')
 			self.cursor.execute('DROP TABLE IF EXISTS stars;')
 			self.cursor.execute('DROP TABLE IF EXISTS full_updates;')
 			self.cursor.execute('DROP TABLE IF EXISTS download_attempts;')
@@ -1286,18 +1318,18 @@ class Database(object):
 			self.connection.commit()
 
 
-	def insert_update(self,table,repo_id=None,user_id=None,success=True):
+	def insert_update(self,table,repo_id=None,identity_id=None,success=True):
 		'''
 		Inserting an update in table_updates
 		'''
 		if self.db_type == 'postgres':
-			self.cursor.execute('''INSERT INTO table_updates(repo_id,user_id,table_name,success)
+			self.cursor.execute('''INSERT INTO table_updates(repo_id,identity_id,table_name,success)
 				VALUES(%s,%s,%s,%s)
-				;''', (repo_id,user_id,table,success))
+				;''', (repo_id,identity_id,table,success))
 		else:
-			self.cursor.execute('''INSERT INTO table_updates(repo_id,user_id,table_name,success)
+			self.cursor.execute('''INSERT INTO table_updates(repo_id,identity_id,table_name,success)
 				VALUES(?,?,?,?)
-				;''', (repo_id,user_id,table,success))
+				;''', (repo_id,identity_id,table,success))
 		self.connection.commit()
 
 	def set_cloned(self,repo_id,autocommit=True):
@@ -1311,16 +1343,63 @@ class Database(object):
 		if autocommit:
 			self.connection.commit()
 
-	def set_gh_login(self,user_id,login,autocommit=True):
+	# def set_gh_login(self,user_id,login,autocommit=True):
+	# 	'''
+	# 	Sets a login for a given user (id refers to a unique email, which can refer to several logins)
+	# 	'''
+	# 	if self.db_type == 'postgres':
+	# 		self.cursor.execute('''UPDATE users SET github_login=%s WHERE id=%s;''',(login,user_id))
+	# 		self.cursor.execute('''INSERT INTO table_updates(user_id,table_name,success) VALUES(%s,'login',%s);''',(user_id,(login is not None)))
+	# 	else:
+	# 		self.cursor.execute('''UPDATE users SET github_login=? WHERE id=?;''',(login,user_id))
+	# 		self.cursor.execute('''INSERT INTO table_updates(user_id,table_name,success) VALUES(?,'login',?);''',(user_id,(login is not None)))
+
+	# 	if autocommit:
+	# 		self.connection.commit()
+
+	def merge_identities(self,identity1,identity2,autocommit=True):
 		'''
-		Sets a login for a given user (id refers to a unique email, which can refer to several logins)
+		Merges the user corresponding to both identities.
+		user of identity1 gets precedence
 		'''
+
+		# Getting user_id that may disappear
 		if self.db_type == 'postgres':
-			self.cursor.execute('''UPDATE users SET github_login=%s WHERE id=%s;''',(login,user_id))
-			self.cursor.execute('''INSERT INTO table_updates(user_id,table_name,success) VALUES(%s,'login',%s);''',(user_id,(login is not None)))
+			self.cursor.execute('''
+				SELECT user_id FROM identities WHERE id=%s
+				;''',(identity2,))
 		else:
-			self.cursor.execute('''UPDATE users SET github_login=? WHERE id=?;''',(login,user_id))
-			self.cursor.execute('''INSERT INTO table_updates(user_id,table_name,success) VALUES(?,'login',?);''',(user_id,(login is not None)))
+			self.cursor.execute('''
+				SELECT user_id FROM identities WHERE id=?
+				;''',(identity2,))
+		old_user_id2 = self.cursor.fetchone()[0]
+
+		#Getting common user_id that will be used at the end
+		if self.db_type == 'postgres':
+			self.cursor.execute('''
+				SELECT user_id FROM identities WHERE id=%s
+				;''',(identity1,))
+		else:
+			self.cursor.execute('''
+				SELECT user_id FROM identities WHERE id=?
+				;''',(identity1,))
+		user_id = self.cursor.fetchone()[0]
+
+		#If same do nothing
+		if user_id != old_user_id2:
+			#Update user_id for identity2 and all that have old_user_id2
+			if self.db_type == 'postgres':
+				self.cursor.execute('''UPDATE identities SET user_id=%s WHERE user_id=%s;''',(user_id,old_user_id2))
+			else:
+				self.cursor.execute('''UPDATE identities SET user_id=? WHERE user_id=?;''',(user_id,old_user_id2))
+
+			#Delete old_user2
+			if self.db_type == 'postgres':
+				self.cursor.execute(''' DELETE FROM users WHERE id=%s;''',(old_user_id2,))
+			else:
+				self.cursor.execute(''' DELETE FROM users WHERE id=?;''',(old_user_id2,))
 
 		if autocommit:
 			self.connection.commit()
+
+

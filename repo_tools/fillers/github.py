@@ -202,24 +202,91 @@ class GHLoginsFiller(GithubFiller):
 
 
 	def apply(self):
-		self.fill_gh_logins(info_list=self.info_list,force=self.force)
+		self.fill_gh_logins(info_list=self.info_list)
 		self.db.connection.commit()
 
+	def prepare(self):
+		GithubFiller.prepare(self)
+		if self.info_list is None:
 
-	def fill_gh_logins(self,info_list=None,force=False,workers=1,in_thread=False):
+			if self.force:
+				if self.db.db_type == 'postgres':
+					self.db.cursor.execute('''
+						SELECT i.id,c.repo_id,r.owner,r.name,c.sha
+						FROM identities i
+						JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
+							WHERE cc.author_id=i.id ORDER BY cc.created_at DESC LIMIT 1) AS c
+						ON (SELECT i2.id FROM identities i2 WHERE i2.user_id=i.user_id AND i2.identity_type_id=(SELECT it.id FROM identity_types WHERE name='github_login')) IS NULL
+						INNER JOIN repositories r
+						ON r.id=c.repo_id
+						;''')
+				else:
+					self.db.cursor.execute('''
+						SELECT u.id,c.repo_id,r.owner,r.name,c.sha
+						FROM identities i
+						JOIN commits c
+							ON (SELECT i2.id FROM identities i2 WHERE i2.user_id=i.user_id AND i2.identity_type_id=(SELECT it.id FROM identity_types WHERE name='github_login')) IS NULL AND
+							c.id IN (SELECT cc.id FROM commits cc
+								WHERE cc.author_id=i.id ORDER BY cc.created_at DESC LIMIT 1)
+						INNER JOIN repositories r
+						ON r.id=c.repo_id
+						;''')
+
+
+			else:
+				if self.db.db_type == 'postgres':
+					self.db.cursor.execute('''
+						SELECT i.id,c.repo_id,r.owner,r.name,c.sha
+						FROM (
+							SELECT ii.id FROM
+						 		(SELECT iii.id FROM identities iii
+								WHERE (SELECT iiii.id FROM identities iiii
+									INNER JOIN identity_types iiiit
+									ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name='github_login') IS NULL) AS ii
+								LEFT JOIN table_updates tu
+								ON tu.identity_id=ii.id AND tu.table_name='login'
+								GROUP BY ii.id,tu.identity_id
+								HAVING tu.identity_id IS NULL
+							) AS i
+						JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
+							WHERE cc.author_id=i.id ORDER BY cc.created_at DESC LIMIT 1) AS c
+						ON true
+						INNER JOIN repositories r
+						ON r.id=c.repo_id
+						;''')
+				else:
+					self.db.cursor.execute('''
+						SELECT i.id,c.repo_id,r.owner,r.name,c.sha
+						FROM (
+							SELECT ii.id FROM
+						 		(SELECT iii.id FROM identities iii
+								WHERE (SELECT iiii.id FROM identities iiii
+									INNER JOIN identity_types iiiit
+									ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name='github_login') IS NULL) AS ii
+								LEFT JOIN table_updates tu
+								ON tu.identity_id=ii.id AND tu.table_name='login'
+								GROUP BY ii.id,tu.identity_id
+								HAVING tu.identity_id IS NULL
+							) AS i
+						JOIN commits c
+							ON
+							c.id IN (SELECT cc.id FROM commits cc
+								WHERE cc.author_id=i.id ORDER BY cc.created_at DESC LIMIT 1)
+						INNER JOIN repositories r
+						ON r.id=c.repo_id
+						;''')
+
+			self.info_list = list(self.db.cursor.fetchall())
+
+	def fill_gh_logins(self,info_list=None,workers=1,in_thread=False):
 		'''
 		Associating emails to github logins using GitHub API
 		force: retry emails that were previously not retrievable
 		Otherwise trying all emails which have no login yet and never failed before
 		'''
 
-		if force:
-			option = 'id_sha_repoinfo_all'
-		else:
-			option = 'id_sha_repoinfo'
-
 		if info_list is None:
-			info_list = self.db.get_user_list(option=option)
+			info_list = self.info_list
 
 		if workers == 1:
 			requester_gen = self.get_github_requester()
@@ -228,8 +295,8 @@ class GHLoginsFiller(GithubFiller):
 			else:
 				db = self.db
 			for infos in info_list:
-				user_id,repo_id,repo_owner,repo_name,commit_sha = infos
-				self.logger.info('Filling gh login for user id {}'.format(user_id))
+				identity_id,repo_id,repo_owner,repo_name,commit_sha = infos
+				self.logger.info('Filling gh login for user id {}'.format(identity_id))
 				requester = next(requester_gen)
 				try:
 					repo_apiobj = requester.get_repo('{}/{}'.format(repo_owner,repo_name))
@@ -240,22 +307,22 @@ class GHLoginsFiller(GithubFiller):
 						commit_apiobj = None
 				except github.GithubException:
 					self.logger.info('No such repository: {}/{}'.format(repo_owner,repo_name))
-					# db.insert_update(user_id=user_id,table='stars',success=False)
+					# db.insert_update(identity_id=identity_id,table='stars',success=False)
 				else:
 					if commit_apiobj is None:
 						pass
 					else:
 						if commit_apiobj.author is None:
 							login = None
-							self.logger.info('No login available for user id {}'.format(user_id))
+							self.logger.info('No login available for user id {}'.format(identity_id))
 						else:
 							try:
 								login = commit_apiobj.author.login
-								self.logger.info('Found login {} for user id {}'.format(login,user_id))
+								self.logger.info('Found login {} for user id {}'.format(login,identity_id))
 							except github.GithubException:
-								self.logger.info('No login available for user id {}, uncompletable object error'.format(user_id))
+								self.logger.info('No login available for user id {}, uncompletable object error'.format(identity_id))
 								login = None
-						db.set_gh_login(user_id=user_id,login=login)
+						self.set_gh_login(identity_id=identity_id,login=login)
 			if in_thread:
 				db.connection.close()
 		else:
@@ -267,6 +334,61 @@ class GHLoginsFiller(GithubFiller):
 				# 	pass
 				for future in futures:
 					future.result()
+
+	def set_gh_login(self,identity_id,login,autocommit=True):
+		'''
+		Sets a login for a given user (id refers to a unique email, which can refer to several logins)
+		'''
+		if self.db.db_type == 'postgres':
+			if login is not None:
+				self.db.cursor.execute(''' INSERT INTO identity_types(name) VALUES('github_login') ON CONFLICT DO NOTHING;''')
+				self.db.cursor.execute(''' INSERT INTO users(creation_identity_type_id,creation_identity) VALUES(
+											(SELECT id FROM identity_types WHERE name='github_login'),
+											%s
+											) ON CONFLICT DO NOTHING;''',(login,))
+
+				self.db.cursor.execute(''' INSERT INTO identities(identity_type_id,user_id,identity)
+												VALUES((SELECT id FROM identity_types WHERE name='github_login'),
+														(SELECT id FROM users
+														WHERE creation_identity_type_id=(SELECT id FROM identity_types WHERE name='github_login')
+															AND creation_identity=%s),
+														%s)
+												ON CONFLICT DO NOTHING;''',(login,login,))
+
+				self.db.cursor.execute('''SELECT id FROM identities
+											WHERE identity_type_id=(SELECT id FROM identity_types WHERE name='github_login')
+											AND identity=%s;''',(login,))
+				identity2 = self.db.cursor.fetchone()[0]
+				self.db.merge_identities(identity1=identity_id,identity2=identity2,autocommit=False)
+			self.db.cursor.execute('''INSERT INTO table_updates(identity_id,table_name,success) VALUES(%s,'login',%s);''',(identity_id,(login is not None)))
+		else:
+			if login is not None:
+				self.db.cursor.execute(''' INSERT OR IGNORE INTO identity_types(name) VALUES('github_login');''')
+
+				self.db.cursor.execute(''' INSERT OR IGNORE INTO users(creation_identity_type_id,creation_identity) VALUES(
+											(SELECT id FROM identity_types WHERE name='github_login'),
+											?
+											);''',(login,))
+
+				self.db.cursor.execute(''' INSERT OR IGNORE INTO identities(identity_type_id,user_id,identity)
+												VALUES((SELECT id FROM identity_types WHERE name='github_login'),
+														(SELECT id FROM users
+														WHERE creation_identity_type_id=(SELECT id FROM identity_types WHERE name='github_login')
+															AND creation_identity=?),
+														?);''',(login,login,))
+
+				self.db.cursor.execute('''SELECT id FROM identities
+											WHERE identity_type_id=(SELECT id FROM identity_types WHERE name='github_login')
+											AND identity=?;''',(login,))
+				identity2 = self.db.cursor.fetchone()[0]
+
+
+				self.db.merge_identities(identity1=identity_id,identity2=identity2,autocommit=False)
+
+			self.db.cursor.execute('''INSERT INTO table_updates(identity_id,table_name,success) VALUES(?,'login',?);''',(identity_id,(login is not None)))
+		if autocommit:
+			self.db.connection.commit()
+
 
 class ForksFiller(GithubFiller):
 	"""
