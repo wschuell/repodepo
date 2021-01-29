@@ -362,7 +362,7 @@ class GHLoginsFiller(GithubFiller):
 							except github.GithubException:
 								self.logger.info('No login available for user id {}, uncompletable object error'.format(identity_id))
 								login = None
-						self.set_gh_login(db=db,identity_id=identity_id,login=login)
+						self.set_gh_login(db=db,identity_id=identity_id,login=login,reason='Email/login match through github API for commit {}'.format(commit_sha))
 			if in_thread:
 				db.cursor.close()
 				db.connection.close()
@@ -376,7 +376,7 @@ class GHLoginsFiller(GithubFiller):
 				for future in futures:
 					future.result()
 
-	def set_gh_login(self,identity_id,login,autocommit=True,db=None):
+	def set_gh_login(self,identity_id,login,autocommit=True,db=None,reason=None):
 		'''
 		Sets a login for a given user (id refers to a unique email, which can refer to several logins)
 		'''
@@ -401,7 +401,7 @@ class GHLoginsFiller(GithubFiller):
 											WHERE identity_type_id=(SELECT id FROM identity_types WHERE name='github_login')
 											AND identity=%s;''',(login,))
 				identity2 = db.cursor.fetchone()[0]
-				db.merge_identities(identity1=identity_id,identity2=identity2,autocommit=False)
+				db.merge_identities(identity1=identity_id,identity2=identity2,autocommit=False,reason=reason)
 			db.cursor.execute('''INSERT INTO table_updates(identity_id,table_name,success) VALUES(%s,'login',%s);''',(identity_id,(login is not None)))
 		else:
 			if login is not None:
@@ -425,7 +425,7 @@ class GHLoginsFiller(GithubFiller):
 				identity2 = db.cursor.fetchone()[0]
 
 
-				db.merge_identities(identity1=identity_id,identity2=identity2,autocommit=False)
+				db.merge_identities(identity1=identity_id,identity2=identity2,autocommit=False,reason=reason)
 
 			db.cursor.execute('''INSERT INTO table_updates(identity_id,table_name,success) VALUES(?,'login',?);''',(identity_id,(login is not None)))
 		if autocommit:

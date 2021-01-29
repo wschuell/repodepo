@@ -157,6 +157,21 @@ class Database(object):
 				UNIQUE(identity_type_id,identity)
 				);
 
+				CREATE TABLE IF NOT EXISTS merged_identities(
+				main_identity_id INTEGER NOT NULL REFERENCES identities(id) ON DELETE CASCADE,
+				secondary_identity_id INTEGER NOT NULL REFERENCES identities(id) ON DELETE CASCADE,
+				main_user_id INTEGER NOT NULL,
+				secondary_user_id INTEGER NOT NULL,
+				affected_identities INTEGER,
+				reason TEXT,
+				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				PRIMARY KEY(main_identity_id,secondary_identity_id)
+				);
+
+				CREATE INDEX IF NOT EXISTS merged_id_idx1 ON merged_identities(secondary_identity_id);
+				CREATE INDEX IF NOT EXISTS merged_id_idx2 ON merged_identities(main_user_id);
+				CREATE INDEX IF NOT EXISTS merged_id_idx3 ON merged_identities(secondary_user_id);
+
 				CREATE TABLE IF NOT EXISTS commits(
 				id INTEGER PRIMARY KEY,
 				sha TEXT,
@@ -314,6 +329,21 @@ class Database(object):
 				UNIQUE(identity_type_id,identity)
 				);
 
+				CREATE TABLE IF NOT EXISTS merged_identities(
+				main_identity_id BIGINT NOT NULL REFERENCES identities(id) ON DELETE CASCADE,
+				secondary_identity_id BIGINT NOT NULL REFERENCES identities(id) ON DELETE CASCADE,
+				main_user_id BIGINT NOT NULL,
+				secondary_user_id BIGINT NOT NULL,
+				affected_identities BIGINT,
+				reason TEXT,
+				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				PRIMARY KEY(main_identity_id,secondary_identity_id)
+				);
+
+				CREATE INDEX IF NOT EXISTS merged_id_idx1 ON merged_identities(secondary_identity_id);
+				CREATE INDEX IF NOT EXISTS merged_id_idx2 ON merged_identities(main_user_id);
+				CREATE INDEX IF NOT EXISTS merged_id_idx3 ON merged_identities(secondary_user_id);
+
 				CREATE TABLE IF NOT EXISTS commits(
 				id BIGSERIAL PRIMARY KEY,
 				sha TEXT,
@@ -440,6 +470,7 @@ class Database(object):
 			self.cursor.execute('DROP TABLE IF EXISTS commit_parents;')
 			self.cursor.execute('DROP TABLE IF EXISTS commits;')
 			self.cursor.execute('DROP TABLE IF EXISTS table_updates;')
+			self.cursor.execute('DROP TABLE IF EXISTS merged_identities;')
 			self.cursor.execute('DROP TABLE IF EXISTS identities;')
 			self.cursor.execute('DROP TABLE IF EXISTS users;')
 			self.cursor.execute('DROP TABLE IF EXISTS identity_types;')
@@ -1388,7 +1419,7 @@ class Database(object):
 	# 	if autocommit:
 	# 		self.connection.commit()
 
-	def merge_identities(self,identity1,identity2,autocommit=True):
+	def merge_identities(self,identity1,identity2,autocommit=True,record=True,reason=None):
 		'''
 		Merges the user corresponding to both identities.
 		user of identity1 gets precedence
@@ -1424,11 +1455,20 @@ class Database(object):
 			else:
 				self.cursor.execute('''UPDATE identities SET user_id=? WHERE user_id=?;''',(user_id,old_user_id2))
 
+			if record and self.cursor.rowcount:
+				if self.db_type == 'postgres':
+					self.cursor.execute('''INSERT INTO merged_identities(main_identity_id,secondary_identity_id,main_user_id,secondary_user_id,affected_identities,reason)
+							VALUES(%s,%s,%s,%s,%s,%s);''',(identity1,identity2,user_id,old_user_id2,self.cursor.rowcount,reason))
+				else:
+					self.cursor.execute('''INSERT INTO merged_identities(main_identity_id,secondary_identity_id,main_user_id,secondary_user_id,affected_identities,reason)
+							VALUES(?,?,?,?,?,?);''',(identity1,identity2,user_id,old_user_id2,self.cursor.rowcount,reason))
+
 			#Delete old_user2
 			if self.db_type == 'postgres':
 				self.cursor.execute(''' DELETE FROM users WHERE id=%s;''',(old_user_id2,))
 			else:
 				self.cursor.execute(''' DELETE FROM users WHERE id=?;''',(old_user_id2,))
+
 
 		if autocommit:
 			self.connection.commit()
