@@ -104,7 +104,7 @@ class Database(object):
 		'''
 		logger.info('Creating database ({}) table and indexes'.format(self.db_type))
 		if self.db_type == 'sqlite':
-			DB_INIT = '''
+			self.DB_INIT = '''
 				CREATE TABLE IF NOT EXISTS sources(
 				id INTEGER PRIMARY KEY,
 				name TEXT NOT NULL UNIQUE,
@@ -272,11 +272,11 @@ class Database(object):
 				CREATE INDEX IF NOT EXISTS packages_repo_idx ON packages(repo_id);
 
 		'''
-			for q in DB_INIT.split(';')[:-1]:
+			for q in self.DB_INIT.split(';')[:-1]:
 				self.cursor.execute(q)
 			self.connection.commit()
 		elif self.db_type == 'postgres':
-			self.cursor.execute('''
+			self.DB_INIT = '''
 				CREATE TABLE IF NOT EXISTS sources(
 				id BIGSERIAL PRIMARY KEY,
 				name TEXT NOT NULL UNIQUE,
@@ -445,7 +445,9 @@ class Database(object):
 				CREATE INDEX IF NOT EXISTS packages_idx ON packages(source_id,name);
 				CREATE INDEX IF NOT EXISTS packages_date_idx ON packages(created_at);
 				CREATE INDEX IF NOT EXISTS packages_repo_idx ON packages(repo_id);
-				''')
+				'''
+
+			self.cursor.execute(self.DB_INIT)
 
 			self.connection.commit()
 
@@ -489,13 +491,13 @@ class Database(object):
 			self.logger.info('Filled with filler {}'.format(f.name))
 
 	def add_filler(self,f):
-		if f.name in [ff.name for ff in self.fillers]:
+		if f.name in [ff.name for ff in self.fillers if ff.unique]:
 			self.logger.warning('Filler {} already present'.format(f.name))
-		else:
-			f.db = self
-			self.fillers.append(f)
-			f.logger = self.logger
-			self.logger.info('Added filler {}'.format(f.name))
+			return
+		f.db = self
+		self.fillers.append(f)
+		f.logger = self.logger
+		self.logger.info('Added filler {}'.format(f.name))
 
 	def register_repo(self,source,owner,repo,cloned=False):
 		'''
@@ -653,22 +655,62 @@ class Database(object):
 	def get_repo_id(self,owner,name,source):
 		'''
 		Getting repo id, None if not in DB
+		Dealing with source is str or int.
+		If source is None, checking if only one match
 		'''
-		if self.db_type == 'postgres':
-			self.cursor.execute(''' SELECT id FROM repositories WHERE
-									source=(SELECT id FROM sources WHERE name=%s)
-									AND owner=%s
-									AND name=%s;''',(source,owner,name))
-		else:
-			self.cursor.execute(''' SELECT id FROM repositories WHERE
-									source=(SELECT id FROM sources WHERE name=?)
-									AND owner=?
-									AND name=?;''',(source,owner,name))
-		repo_id = self.cursor.fetchone()
-		if repo_id is None:
-			return None
-		else:
-			return repo_id[0]
+		if isinstance(source,str):
+			if self.db_type == 'postgres':
+				self.cursor.execute(''' SELECT r.id FROM repositories r
+										INNER JOIN sources s
+										ON r.source=s.id
+										AND s.name=%s
+										AND r.owner=%s
+										AND r.name=%s;''',(source,owner,name))
+			else:
+				self.cursor.execute(''' SELECT r.id FROM repositories r
+										INNER JOIN sources s
+										ON r.source=s.id
+										AND s.name=?
+										AND r.owner=?
+										AND r.name=?;''',(source,owner,name))
+			repo_id = self.cursor.fetchone()
+			if repo_id is None:
+				return None
+			else:
+				return repo_id[0]
+		elif isinstance(source,int):
+			if self.db_type == 'postgres':
+				self.cursor.execute(''' SELECT id FROM repositories WHERE
+										source=%s
+										AND owner=%s
+										AND name=%s;''',(source,owner,name))
+			else:
+				self.cursor.execute(''' SELECT id FROM repositories WHERE
+										source=?
+										AND owner=?
+										AND name=?;''',(source,owner,name))
+			repo_id = self.cursor.fetchone()
+			if repo_id is None:
+				return None
+			else:
+				return repo_id[0]
+		elif source is None:
+			if self.db_type == 'postgres':
+				self.cursor.execute(''' SELECT id FROM repositories WHERE
+										owner=%s
+										AND name=%s;''',(owner,name))
+			else:
+				self.cursor.execute(''' SELECT id FROM repositories WHERE
+										owner=?
+										AND name=?;''',(owner,name))
+			ans = list(self.cursor.fetchall())
+			if len(ans) == 0:
+				return None
+			elif len(ans) == 1:
+				return ans[0][0]
+			else:
+				raise ValueError('Project {}/{} could not be identified without specifying the source, {} projects found'.format(owner,name,len(ans)))
+
 
 	def submit_download_attempt(self,source,owner,repo,success,dl_time=None):
 		'''
@@ -867,38 +909,100 @@ class Database(object):
 		else:
 			raise ValueError('Unknown option for repo_list: {}'.format(option))
 
-	def get_user_id(self,login):
+	def get_user_id(self,user_id=None,identity_id=None):
 		'''
-		Gets an id for the user login. Raises an error if not found. Takes the id with the highest number of commits corresponding to that login
+		Gets an id for the user with provided info. Raises an error if not found.
+		Accepted syntaxes:
+		(user_id and identity_id cannot be both None)
+		user_id:
+		  int -> return
+		  other type: sent to identity_id
+		identity_id:
+		  int -> get user id
+		  str -> check that only one user id corresponds, otherwise throw specific error
+		  (int,<any>)-> return int
+		  (str,None) -> call same for str
+		  (str,int)
+		  (str,str)
 		'''
-		if self.db_type == 'postgres':
-			self.cursor.execute('''
-				SELECT u.id,COUNT(*) AS cnt FROM users u
-				INNER JOIN commits c
-				ON u.github_login=%s
-				AND u.id = c.author_id
-				GROUP BY u.id
-				ORDER BY cnt DESC
-				LIMIT 1
-				;''',(login,))
+		if user_id is None and identity_id is None:
+			raise ValueError('user_id and identity_id cannot both be None')
+		elif isinstance(user_id,int):
+			return user_id
+		elif user_id is not None:
+			return self.get_user_id(user_id=None,identity_id=user_id)
+		elif isinstance(identity_id,int):
+			if self.db_type == 'postgres':
+				self.cursor.execute('''
+					SELECT i.user_id FROM identities i
+					WHERE i.id=%s
+					;''',(identity_id,))
+			else:
+				self.cursor.execute('''
+					SELECT i.user_id FROM identities i
+					WHERE i.id=?
+					;''',(identity_id,))
+			ans = self.cursor.fetchone()
+			if ans is not None:
+				return ans[0]
+		elif isinstance(identity_id,str):
+			if self.db_type == 'postgres':
+				self.cursor.execute('''
+					SELECT DISTINCT i.user_id FROM identities i
+					WHERE i.identity=%s
+					;''',(identity_id,))
+			else:
+				self.cursor.execute('''
+					SELECT DISTINCT i.user_id FROM identities i
+					WHERE i.identity=?
+					;''',(identity_id,))
+			ans = list(self.cursor.fetchall())
+			if len(ans) == 1:
+				return ans[0][0]
+			elif len(ans) > 1:
+				raise ValueError('Several identities corresponding to several users ({}) fit this identity:{}'.format(len(ans),identity_id))
+		elif isinstance(identity_id,tuple) or isinstance(identity_id,list):
+			identity,identity_type = tuple(identity_id)
+			if isinstance(identity,str) and isinstance(identity_type,int):
+				if self.db_type == 'postgres':
+					self.cursor.execute('''
+						SELECT i.user_id FROM identities i
+						WHERE i.identity=%s
+						AND i.identity_type_id=%s
+						;''',(identity,identity_type))
+				else:
+					self.cursor.execute('''
+						SELECT i.user_id FROM identities i
+						WHERE i.identity=?
+						AND i.identity_type_id=?
+						;''',(identity,identity_type))
+				ans = self.cursor.fetchone()
+				if ans is not None:
+					return ans[0]
+			elif isinstance(identity,str) and isinstance(identity_type,str):
+				if self.db_type == 'postgres':
+					self.cursor.execute('''
+						SELECT i.user_id FROM identities i
+						INNER JOIN identity_types it
+						ON i.identity=%s
+						AND i.identity_type_id=it.id
+						AND it.name=%s
+						;''',(identity,identity_type))
+				else:
+					self.cursor.execute('''
+						SELECT i.user_id FROM identities i
+						INNER JOIN identity_types it
+						ON i.identity=?
+						AND i.identity_type_id=it.id
+						AND it.name=?
+						;''',(identity,identity_type))
+				ans = self.cursor.fetchone()
+				if ans is not None:
+					return ans[0]
+			else:
+				return self.get_user_id(identity_id=identity)
 		else:
-
-			self.cursor.execute('''
-				SELECT u.id, COUNT(*) AS cnt FROM users u
-				INNER JOIN commits c
-				ON u.github_login=?
-				AND u.id = c.author_id
-				GROUP BY u.id
-				ORDER BY cnt DESC
-				LIMIT 1
-				;''',(login,))
-
-		ans = self.cursor.fetchone()
-		if ans is None:
-			raise ValueError('Login not found: {}'.format(login))
-		else:
-			return ans[0]
-
+			raise ValueError('User not found or not parsed, user_id: {},identity_id: {}'.format(user_id,identity_id))
 
 	def get_user_list(self,option='all',time_delay=24*3600):
 		'''

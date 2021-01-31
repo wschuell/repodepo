@@ -101,7 +101,7 @@ class SourcesFiller(fillers.Filler):
 	'''
 	Register given sources in the database
 	'''
-	def __init__(self,source,source_urlroot,**kwargs):
+	def __init__(self,source,source_urlroot=None,**kwargs):
 		'''
 		source and source_urlroot can be strings or lists.
 		If lists they have to be of the same size
@@ -115,6 +115,13 @@ class SourcesFiller(fillers.Filler):
 			self.data_folder = self.db.data_folder
 		if isinstance(self.source,str) and isinstance(self.source_urlroot,str):
 			self.source_list = [(self.source,self.source_urlroot)]
+		elif self.source_urlroot is None:
+			if isinstance(self.source,str):
+				self.source_list = [(self.source,None)]
+			else:
+				self.source_list = [(s,None) for s in self.source]
+		elif isinstance(self.source_urlroot,str):
+			self.source_list = [(s,self.source_urlroot) for s in self.source]
 		elif len(self.source) == len(self.source_urlroot):
 			self.source_list = list(zip(self.source,self.source_urlroot))
 		else:
@@ -148,10 +155,11 @@ class RepositoriesFiller(fillers.Filler):
 		self.db.cursor.execute('SELECT url FROM urls;')
 		# self.urls = [(raw_url,cleaned_url,source_id)]
 		self.urls = list(set([(u[0],*self.clean_url(u[0])) for u in self.db.cursor.fetchall()]))
-		self.cleaned_urls = list(set([(cleaned_url,source_id) for (raw_url,cleaned_url,source_id) in self.urls]))
+		self.cleaned_urls = list(set([(cleaned_url,source_id) for (raw_url,cleaned_url,source_id) in self.urls if cleaned_url is not None]))
 
 		# source_id,owner,name,cleaned_url
 		self.repo_info_list = [(source_id,cleaned_url.split('/')[-2],cleaned_url.split('/')[-1],cleaned_url) for (cleaned_url,source_id) in self.cleaned_urls ]
+
 
 	def apply(self):
 		self.fill_source()
@@ -190,7 +198,7 @@ class RepositoriesFiller(fillers.Filler):
 		returns clean_url,source_id
 		'''
 		if url is None:
-			return None
+			return None,None
 		for ur_id,ur in self.url_roots:
 			try:
 				return self.repo_formatting(repo=url,source_urlroot=ur,output_cleaned_url=True),ur_id

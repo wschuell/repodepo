@@ -26,7 +26,7 @@ class Filler(object):
 	This class is just an abstract 'mother' class
 	"""
 
-	def __init__(self,db=None,name=None,data_folder=None):#,file_info=None):
+	def __init__(self,db=None,name=None,data_folder=None,unique=False):#,file_info=None):
 		if name is None:
 			name = self.__class__.__name__
 		self.name = name
@@ -36,6 +36,7 @@ class Filler(object):
 		self.logger = logging.getLogger('fillers.'+self.__class__.__name__)
 		self.logger.addHandler(ch)
 		self.logger.setLevel(logging.INFO)
+		self.unique = unique
 
 		# if file_info is not None:
 		# 	self.set_file_info(file_info)

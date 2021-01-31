@@ -1,6 +1,6 @@
 
 import repo_tools
-from repo_tools.fillers import generic,commit_info,github
+from repo_tools.fillers import generic,commit_info,github,meta_fillers
 import pytest
 import datetime
 import time
@@ -82,4 +82,8 @@ def test_github(testdb):
 	testdb.add_filler(github.GHLoginsFiller(fail_on_wait=True,workers=2))
 	testdb.add_filler(github.StarsFiller(fail_on_wait=True,workers=2))
 	testdb.add_filler(github.FollowersFiller(fail_on_wait=True,workers=2))
+	testdb.fill_db()
+
+def test_metafiller(testdb):
+	testdb.add_filler(meta_fillers.DummyMetaFiller())
 	testdb.fill_db()
