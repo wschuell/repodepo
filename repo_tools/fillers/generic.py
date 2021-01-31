@@ -229,8 +229,9 @@ class RepositoriesFiller(fillers.Filler):
 				break
 
 		if source_urlroot in r:
-			raise RepoSyntaxError('Repo {} has not expected syntax for source {}.'.format(repo,source_urlroot))
-
+			msg = 'Repo {} has not expected syntax for source {}.'.format(repo,source_urlroot)
+			self.logger.info(msg)
+			raise RepoSyntaxError(msg)
 		r = r.replace('//','/')
 		if r.endswith('/'):
 			r = r[:-1]
@@ -239,10 +240,14 @@ class RepositoriesFiller(fillers.Filler):
 		if r.endswith('.git'):
 			r = r[:-4]
 		if (raise_error and len(r.split('/')) != 2):
-			raise RepoSyntaxError('Repo has not expected syntax "user/project" or prefixed with {}:{}. Please fix input or update the repo_formatting method.'.format(source_urlroot,repo))
+			msg = 'Repo has not expected syntax "user/project" or prefixed with {}:{}. Please fix input or update the repo_formatting method.'.format(source_urlroot,repo)
+			self.logger.info(msg)
+			raise RepoSyntaxError(msg)
 		r = '/'.join(r.split('/')[:2])
 		if '' in r.split('/'):
-			raise ValueError('Critical syntax error for repository url: {}, parsed {}'.format(repo,r))
+			msg = 'Critical syntax error for repository url: {}, parsed {}'.format(repo,r)
+			self.logger.info(msg)
+			raise RepoSyntaxError(msg)
 		if output_cleaned_url:
 			return 'https://{}/{}'.format(source_urlroot,r)
 		else:
