@@ -210,36 +210,57 @@ class RepositoriesFiller(fillers.Filler):
 		'''
 		Formatting repositories so that they match the expected syntax 'user/project'
 		'''
+
 		r = copy.copy(repo)
+
+		# checking
 		if source_urlroot not in r:
 			raise RepoSyntaxError('Repo {} has not expected source {}.'.format(repo,source_urlroot))
-		for start_str in [
-					'{}/'.format(source_urlroot),
-					'www.{}/'.format(source_urlroot),
-					'https://{}/'.format(source_urlroot),
-					'http://{}/'.format(source_urlroot),
-					'https://www.{}/'.format(source_urlroot),
-					'http://www.{}/'.format(source_urlroot),
-					]:
-			if r.startswith(start_str):
-				if r.startswith('http'):
-					r = '/'.join(r.split('/')[3:])
-				else:
-					r = '/'.join(r.split('/')[1:])
-				break
+
+		# Removing front elements
+		for start_str in ['http://','https://','http:/','https:/','www.','/',' ','\n','\t','\r']:
+			if repo.startswith(start_str):
+				return self.repo_formatting(repo=repo[len(start_str):],source_urlroot=source_urlroot,output_cleaned_url=output_cleaned_url,raise_error=raise_error)
+
+		# Removing back elements
+		for end_str in ['.git',' ','/','\n','\t','\r']:
+			if repo.endswith(end_str):
+				return self.repo_formatting(repo=repo[:-len(end_str)],source_urlroot=source_urlroot,output_cleaned_url=output_cleaned_url,raise_error=raise_error)
+
+		# Removing double extension url_root
+		if '.' in source_urlroot:
+			ending = source_urlroot.split('.')[-1]
+			double_ending = '{}.{}'.format(source_urlroot,ending)
+			if repo.startswith(double_ending):
+				return self.repo_formatting(repo=source_urlroot+repo[len(double_ending):],source_urlroot=source_urlroot,output_cleaned_url=output_cleaned_url,raise_error=raise_error)
+
+		# Removing double url_root
+		if repo.startswith('{0}{0}'.format(source_urlroot)):
+			return self.repo_formatting(repo=repo[len(source_urlroot):],source_urlroot=source_urlroot,output_cleaned_url=output_cleaned_url,raise_error=raise_error)
+
+		if repo.startswith('{0}/{0}'.format(source_urlroot)):
+			return self.repo_formatting(repo=repo[len(source_urlroot)+1:],source_urlroot=source_urlroot,output_cleaned_url=output_cleaned_url,raise_error=raise_error)
+
+		# Typos replacement
+		repo.replace('//','/')
+
+		# checks
+		# minimum 3 fields
+		# begins with source
+
+		if not repo.startswith(source_urlroot):
+			raise RepoSyntaxError('Repo {} has not expected source {}.'.format(repo,source_urlroot))
+		else:
+			r = repo[len(source_urlroot):]
+			if r.startswith('/'):
+				r = r[1:]
 
 		if source_urlroot in r:
 			msg = 'Repo {} has not expected syntax for source {}.'.format(repo,source_urlroot)
 			self.logger.info(msg)
 			raise RepoSyntaxError(msg)
-		r = r.replace('//','/')
-		if r.endswith('/'):
-			r = r[:-1]
-		if r.startswith('/'):
-			r = r[1:]
-		if r.endswith('.git'):
-			r = r[:-4]
-		if (raise_error and len(r.split('/')) != 2):
+
+		if (raise_error and len(r.split('/')) != 2) or len(r.split('/')) < 2:
 			msg = 'Repo has not expected syntax "user/project" or prefixed with {}:{}. Please fix input or update the repo_formatting method.'.format(source_urlroot,repo)
 			self.logger.info(msg)
 			raise RepoSyntaxError(msg)
@@ -248,6 +269,7 @@ class RepositoriesFiller(fillers.Filler):
 			msg = 'Critical syntax error for repository url: {}, parsed {}'.format(repo,r)
 			self.logger.info(msg)
 			raise RepoSyntaxError(msg)
+
 		if output_cleaned_url:
 			return 'https://{}/{}'.format(source_urlroot,r)
 		else:
