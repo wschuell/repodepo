@@ -27,11 +27,14 @@ class GithubFiller(fillers.Filler):
 	"""
 	class to be inherited from, contains github credentials management
 	"""
-	def __init__(self,querymin_threshold=50,per_page=100,workers=1,api_keys_file='github_api_keys.txt',fail_on_wait=False,**kwargs):
+	def __init__(self,querymin_threshold=50,per_page=100,workers=1,api_keys_file='github_api_keys.txt',api_keys=None,fail_on_wait=False,**kwargs):
 		self.querymin_threshold = querymin_threshold
 		self.per_page = per_page
 		self.workers = workers
 		self.api_keys_file = api_keys_file
+		if api_keys is None:
+			api_keys = []
+		self.api_keys = copy.deepcopy(api_keys)
 		self.fail_on_wait = fail_on_wait
 		fillers.Filler.__init__(self,**kwargs)
 
@@ -55,17 +58,18 @@ class GithubFiller(fillers.Filler):
 		api_keys_file = os.path.join(self.data_folder,self.api_keys_file)
 		if os.path.exists(api_keys_file):
 			with open(api_keys_file,'r') as f:
-				api_keys = [l.split('#')[0] for l in f.read().split('\n')]
-		else:
-			api_keys = []
+				self.api_keys += [l.split('#')[0] for l in f.read().split('\n')]
+		elif os.path.exists(self.api_keys_file):
+			with open(self.api_keys_file,'r') as f:
+				self.api_keys += [l.split('#')[0] for l in f.read().split('\n')]
 
 		try:
-			api_keys.append(os.environ['GITHUB_API_KEY'])
+			self.api_keys.append(os.environ['GITHUB_API_KEY'])
 		except KeyError:
 			pass
 
 		self.github_requesters = [github.Github(per_page=self.per_page)]
-		for ak in set(api_keys):
+		for ak in set(self.api_keys):
 			g = github.Github(ak,per_page=self.per_page)
 			try:
 				g.get_rate_limit()
@@ -246,30 +250,75 @@ class GHLoginsFiller(GithubFiller):
 		self.db.connection.commit()
 
 	def prepare(self):
+		'''
+		ASSUMPTION: Only one github login can be associated to an email address.
+		'''
 		GithubFiller.prepare(self)
 		if self.info_list is None:
 
 			if self.force:
 				if self.db.db_type == 'postgres':
+					# self.db.cursor.execute('''
+					# 	SELECT i.id,c.repo_id,r.owner,r.name,c.sha
+					# 	FROM identities i
+					# 	INNER JOIN identity_types it
+					# 	ON i.identity_type_id = it.id AND it.name!='github_login'
+					# 	JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
+					# 		WHERE cc.author_id=i.id ORDER BY cc.created_at DESC LIMIT 1) AS c
+					# 	ON (SELECT i2.id FROM identities i2
+					# 		INNER JOIN identity_types it2
+					# 		ON i2.user_id=i.user_id AND i2.identity_type_id=it2.id AND it2.name='github_login'
+					# 		LIMIT 1) IS NULL
+					# 	INNER JOIN repositories r
+					# 	ON r.id=c.repo_id
+					# 	;''')
 					self.db.cursor.execute('''
 						SELECT i.id,c.repo_id,r.owner,r.name,c.sha
-						FROM identities i
-						JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
-							WHERE cc.author_id=i.id ORDER BY cc.created_at DESC LIMIT 1) AS c
-						ON (SELECT i2.id FROM identities i2 WHERE i2.user_id=i.user_id AND i2.identity_type_id=(SELECT it.id FROM identity_types WHERE name='github_login')) IS NULL
-						INNER JOIN repositories r
-						ON r.id=c.repo_id
+						FROM (	(SELECT i1.id FROM identities i1)
+									EXCEPT
+								(SELECT i2.id FROM identities i2
+									INNER JOIN identities i3
+									ON i3.user_id = i2.user_id
+									INNER JOIN identity_types it2
+									ON it2.id=i3.identity_type_id AND it2.name='github_login')
+								) AS i
+					 	JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
+					 		WHERE cc.author_id=i.id ORDER BY cc.created_at DESC LIMIT 1) AS c
+					 	ON true
+					 	INNER JOIN repositories r
+					 	ON c.repo_id=r.id
 						;''')
 				else:
+					# self.db.cursor.execute('''
+					# 	SELECT i.id,c.repo_id,r.owner,r.name,c.sha
+					# 	FROM identities i
+					# 	INNER JOIN identity_types it
+					# 	ON i.identity_type_id = it.id AND it.name!='github_login'
+					# 	JOIN commits c
+					# 		ON (SELECT i2.id FROM identities i2
+					# 			INNER JOIN identity_types it2
+					# 			ON i2.user_id=i.user_id AND i2.identity_type_id=it2.id AND it2.name='github_login'
+					# 			LIMIT 1) IS NULL AND
+					# 		c.id IN (SELECT cc.id FROM commits cc
+					# 			WHERE cc.author_id=i.id ORDER BY cc.created_at DESC LIMIT 1)
+					# 	INNER JOIN repositories r
+					# 	ON r.id=c.repo_id
+						# ;''')
 					self.db.cursor.execute('''
-						SELECT u.id,c.repo_id,r.owner,r.name,c.sha
-						FROM identities i
-						JOIN commits c
-							ON (SELECT i2.id FROM identities i2 WHERE i2.user_id=i.user_id AND i2.identity_type_id=(SELECT it.id FROM identity_types WHERE name='github_login')) IS NULL AND
-							c.id IN (SELECT cc.id FROM commits cc
-								WHERE cc.author_id=i.id ORDER BY cc.created_at DESC LIMIT 1)
-						INNER JOIN repositories r
-						ON r.id=c.repo_id
+						SELECT i.id,c.repo_id,r.owner,r.name,c.sha
+						FROM (	SELECT i1.id FROM identities i1
+									EXCEPT
+								SELECT i2.id FROM identities i2
+									INNER JOIN identities i3
+									ON i3.user_id = i2.user_id
+									INNER JOIN identity_types it2
+									ON it2.id=i3.identity_type_id AND it2.name='github_login'
+								) AS i
+					 	JOIN commits c
+					 	ON c.id IN (SELECT cc.id FROM commits cc
+					 		WHERE cc.author_id=i.id ORDER BY cc.created_at DESC LIMIT 1)
+					 	INNER JOIN repositories r
+					 	ON c.repo_id=r.id
 						;''')
 
 
@@ -401,7 +450,7 @@ class GHLoginsFiller(GithubFiller):
 											WHERE identity_type_id=(SELECT id FROM identity_types WHERE name='github_login')
 											AND identity=%s;''',(login,))
 				identity2 = db.cursor.fetchone()[0]
-				db.merge_identities(identity1=identity_id,identity2=identity2,autocommit=False,reason=reason)
+				db.merge_identities(identity1=identity2,identity2=identity_id,autocommit=False,reason=reason)
 			db.cursor.execute('''INSERT INTO table_updates(identity_id,table_name,success) VALUES(%s,'login',%s);''',(identity_id,(login is not None)))
 		else:
 			if login is not None:
@@ -425,7 +474,7 @@ class GHLoginsFiller(GithubFiller):
 				identity2 = db.cursor.fetchone()[0]
 
 
-				db.merge_identities(identity1=identity_id,identity2=identity2,autocommit=False,reason=reason)
+				db.merge_identities(identity1=identity2,identity2=identity_id,autocommit=False,reason=reason)
 
 			db.cursor.execute('''INSERT INTO table_updates(identity_id,table_name,success) VALUES(?,'login',?);''',(identity_id,(login is not None)))
 		if autocommit:
@@ -436,20 +485,21 @@ class ForksFiller(GithubFiller):
 	"""
 	Fills in forks info for github repositories
 	"""
-	def __init__(self,force=False,repo_list=None,**kwargs):
+	def __init__(self,force=False,repo_list=None,retry=False,**kwargs):
 		self.force = force
 		self.repo_list = repo_list
+		self.retry = retry
 		GithubFiller.__init__(self,**kwargs)
 
 
 
 	def apply(self):
-		self.fill_forks(repo_list=self.repo_list,force=self.force)
+		self.fill_forks(repo_list=self.repo_list,force=self.force,retry=self.retry)
 		self.fill_fork_ranks()
 		self.db.connection.commit()
 
 
-	def fill_forks(self,repo_list=None,force=False,workers=1,in_thread=False):
+	def fill_forks(self,repo_list=None,force=False,workers=1,in_thread=False,retry=False):
 		'''
 		Retrieving fork information from github.
 		force: retry repos that were previously not retrievable

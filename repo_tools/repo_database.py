@@ -158,19 +158,20 @@ class Database(object):
 				);
 
 				CREATE TABLE IF NOT EXISTS merged_identities(
+				id INTEGER PRIMARY KEY,
 				main_identity_id INTEGER NOT NULL REFERENCES identities(id) ON DELETE CASCADE,
 				secondary_identity_id INTEGER NOT NULL REFERENCES identities(id) ON DELETE CASCADE,
 				main_user_id INTEGER NOT NULL,
 				secondary_user_id INTEGER NOT NULL,
 				affected_identities INTEGER,
 				reason TEXT,
-				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-				PRIMARY KEY(main_identity_id,secondary_identity_id)
+				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 				);
 
-				CREATE INDEX IF NOT EXISTS merged_id_idx1 ON merged_identities(secondary_identity_id);
-				CREATE INDEX IF NOT EXISTS merged_id_idx2 ON merged_identities(main_user_id);
-				CREATE INDEX IF NOT EXISTS merged_id_idx3 ON merged_identities(secondary_user_id);
+				CREATE INDEX IF NOT EXISTS merged_id_idx1 ON merged_identities(main_identity_id);
+				CREATE INDEX IF NOT EXISTS merged_id_idx2 ON merged_identities(secondary_identity_id);
+				CREATE INDEX IF NOT EXISTS merged_id_idx3 ON merged_identities(main_user_id);
+				CREATE INDEX IF NOT EXISTS merged_id_idx4 ON merged_identities(secondary_user_id);
 
 				CREATE TABLE IF NOT EXISTS commits(
 				id INTEGER PRIMARY KEY,
@@ -330,19 +331,21 @@ class Database(object):
 				);
 
 				CREATE TABLE IF NOT EXISTS merged_identities(
+				id BIGSERIAL PRIMARY KEY,
 				main_identity_id BIGINT NOT NULL REFERENCES identities(id) ON DELETE CASCADE,
 				secondary_identity_id BIGINT NOT NULL REFERENCES identities(id) ON DELETE CASCADE,
 				main_user_id BIGINT NOT NULL,
 				secondary_user_id BIGINT NOT NULL,
 				affected_identities BIGINT,
 				reason TEXT,
-				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-				PRIMARY KEY(main_identity_id,secondary_identity_id)
+				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 				);
 
-				CREATE INDEX IF NOT EXISTS merged_id_idx1 ON merged_identities(secondary_identity_id);
-				CREATE INDEX IF NOT EXISTS merged_id_idx2 ON merged_identities(main_user_id);
-				CREATE INDEX IF NOT EXISTS merged_id_idx3 ON merged_identities(secondary_user_id);
+				CREATE INDEX IF NOT EXISTS merged_id_idx1 ON merged_identities(main_identity_id);
+				CREATE INDEX IF NOT EXISTS merged_id_idx2 ON merged_identities(secondary_identity_id);
+				CREATE INDEX IF NOT EXISTS merged_id_idx3 ON merged_identities(main_user_id);
+				CREATE INDEX IF NOT EXISTS merged_id_idx4 ON merged_identities(secondary_user_id);
+
 
 				CREATE TABLE IF NOT EXISTS commits(
 				id BIGSERIAL PRIMARY KEY,
@@ -1463,6 +1466,38 @@ class Database(object):
 		else:
 			return ans
 
+	def count_users(self):
+		self.cursor.execute('''
+				SELECT COUNT(*) FROM users
+				;''')
+		ans = self.cursor.fetchone()[0] # When no count, result is (None,)
+		if ans is None:
+			return 0
+		else:
+			return ans
+
+	def count_identities(self,user_id=None):
+		if user_id is None:
+			self.cursor.execute('''
+				SELECT COUNT(*) FROM identities
+				;''')
+		else:
+			if self.db_type == 'postgres':
+				self.cursor.execute('''
+					SELECT COUNT(*) FROM identities
+					WHERE user_id=%s
+					;''',(user_id,))
+			else:
+				self.cursor.execute('''
+					SELECT COUNT(*) FROM identities
+					WHERE user_id=?
+					;''',(user_id,))
+		ans = self.cursor.fetchone()[0] # When no count, result is (None,)
+		if ans is None:
+			return 0
+		else:
+			return ans
+
 	def insert_stars(self,stars_list,commit=True):
 		'''
 		Inserts starring events.
@@ -1577,4 +1612,35 @@ class Database(object):
 		if autocommit:
 			self.connection.commit()
 
+	def reset_merged_identities(self):
+		'''
+		Recreates a situatuion where all identities are referring to their own individual user
+		'''
+		# Recreating a user per identity
+		if self.db_type == 'postgres':
+			self.cursor.execute('''
+				INSERT INTO users(creation_identity_type_id,creation_identity)
+					SELECT i.identity_type_id,i.identity FROM identities i
+				ON CONFLICT DO NOTHING;''')
+		else:
+			self.cursor.execute('''
+				INSERT OR IGNORE INTO users(creation_identity_type_id,creation_identity)
+					SELECT i.identity_type_id,i.identity FROM identities i
+				;''')
+		# Associating each identity to its user
+		# if self.db_type == 'postgres':
+		# 	self.cursor.execute('''
+		# 		UPDATE identities SET user_id=u.id
+		# 			FROM identities i
+		# 			INNER JOIN users u
+		# 			ON i.identity=u.creation_identity
+		# 			AND i.identity_type_id=u.creation_identity_type_id
+		# 		;''')
+		# else:
+		self.cursor.execute('''
+				UPDATE identities SET user_id=(SELECT u.id FROM users u
+					WHERE identities.identity=u.creation_identity
+					AND identities.identity_type_id=u.creation_identity_type_id)
+				;''')
 
+		self.connection.commit()
