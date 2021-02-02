@@ -63,7 +63,6 @@ class CommitsFiller(fillers.Filler):
 						FROM repositories r
 						INNER JOIN sources s
 						ON s.id=r.source AND r.cloned
-						ORDER BY s.name,r.owner,r.name
 						EXCEPT
 						SELECT s.name,r.owner,r.name,r.id,extract(epoch from r.latest_commit_time)
 						FROM repositories r
@@ -71,6 +70,7 @@ class CommitsFiller(fillers.Filler):
 						ON s.id=r.source AND r.cloned
 						INNER JOIN table_updates tu
 						ON tu.table_name=%s AND tu.repo_id=r.id AND tu.success
+						ORDER BY s.name,r.owner,r.name
 						;''',(option,))
 				else:
 					self.db.cursor.execute('''
@@ -78,7 +78,6 @@ class CommitsFiller(fillers.Filler):
 						FROM repositories r
 						INNER JOIN sources s
 						ON s.id=r.source AND r.cloned
-						ORDER BY s.name,r.owner,r.name
 						EXCEPT
 						SELECT s.name,r.owner,r.name,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
 						FROM repositories r
@@ -86,6 +85,7 @@ class CommitsFiller(fillers.Filler):
 						ON s.id=r.source AND r.cloned
 						INNER JOIN table_updates tu
 						ON tu.table_name=? AND tu.repo_id=r.id AND tu.success
+						ORDER BY s.name,r.owner,r.name
 						;''',(option,))
 			else:
 				if self.db.db_type == 'postgres':
@@ -128,8 +128,6 @@ class CommitsFiller(fillers.Filler):
 				except:
 					self.logger.error('Error with {}'.format(repo_info))
 					raise
-			self.db.create_indexes(table='users')
-
 			self.logger.info('Filling in commits')
 
 			for repo_info in self.get_repo_list(all_commits=all_commits,option='commits'):
@@ -138,7 +136,6 @@ class CommitsFiller(fillers.Filler):
 				except:
 					self.logger.error('Error with {}'.format(repo_info))
 					raise
-			self.db.create_indexes(table='commits')
 
 
 			self.logger.info('Filling in repository commit ownership')
@@ -158,7 +155,6 @@ class CommitsFiller(fillers.Filler):
 				except:
 					self.logger.error('Error with {}'.format(repo_info))
 					raise
-			self.db.create_indexes(table='commit_parents')
 
 			self.db.cursor.execute('''INSERT INTO full_updates(update_type,updated_at) VALUES('commits',(SELECT CURRENT_TIMESTAMP));''')
 			self.db.connection.commit()
