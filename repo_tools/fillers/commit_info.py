@@ -59,33 +59,33 @@ class CommitsFiller(fillers.Filler):
 				# listing all repository being cloned, and not having any successful <option> table update
 				if self.db.db_type == 'postgres':
 					self.db.cursor.execute('''
-						SELECT s.name,r.owner,r.name,r.id,extract(epoch from r.latest_commit_time)
+						SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id,extract(epoch from r.latest_commit_time)
 						FROM repositories r
 						INNER JOIN sources s
 						ON s.id=r.source AND r.cloned
 						EXCEPT
-						SELECT s.name,r.owner,r.name,r.id,extract(epoch from r.latest_commit_time)
+						SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id,extract(epoch from r.latest_commit_time)
 						FROM repositories r
 						INNER JOIN sources s
 						ON s.id=r.source AND r.cloned
 						INNER JOIN table_updates tu
 						ON tu.table_name=%s AND tu.repo_id=r.id AND tu.success
-						ORDER BY s.name,r.owner,r.name
+						ORDER BY sname,rowner,rname
 						;''',(option,))
 				else:
 					self.db.cursor.execute('''
-						SELECT s.name,r.owner,r.name,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
+						SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
 						FROM repositories r
 						INNER JOIN sources s
 						ON s.id=r.source AND r.cloned
 						EXCEPT
-						SELECT s.name,r.owner,r.name,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
+						SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
 						FROM repositories r
 						INNER JOIN sources s
 						ON s.id=r.source AND r.cloned
 						INNER JOIN table_updates tu
 						ON tu.table_name=? AND tu.repo_id=r.id AND tu.success
-						ORDER BY s.name,r.owner,r.name
+						ORDER BY sname,rowner,rname
 						;''',(option,))
 			else:
 				if self.db.db_type == 'postgres':
