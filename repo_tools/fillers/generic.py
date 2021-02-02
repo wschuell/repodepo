@@ -5,6 +5,7 @@ import copy
 import pygit2
 import shutil
 import datetime
+import subprocess
 
 from repo_tools import fillers
 import repo_tools as rp
