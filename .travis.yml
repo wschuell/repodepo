@@ -24,6 +24,7 @@ before_install:
  # - sudo apt-get --yes remove postgresql\*
  - sudo apt-get install -y postgresql-12 postgresql-client-12
  - sudo sed -i 's/port = 5433/port = 5432/' /etc/postgresql/12/main/postgresql.conf
+ - sudo sed -i 's/#idle_in_transaction_session_timeout = 0/idle_in_transaction_session_timeout = 30000/' /etc/postgresql/12/main/postgresql.conf
  - sudo cp pg_hba.conf /etc/postgresql/12/main/pg_hba.conf
  - sudo service postgresql restart 12
 before_script:
