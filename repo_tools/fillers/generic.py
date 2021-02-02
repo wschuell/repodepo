@@ -370,36 +370,6 @@ class ClonesFiller(fillers.Filler):
 			return list(self.db.cursor.fetchall())
 
 
-		if option == 'all':
-		elif option == 'only_cloned':
-			self.db.cursor.execute('''
-				SELECT s.name,s.url_root,r.owner,r.name
-				FROM repositories r
-				INNER JOIN sources s
-				ON s.id=r.source AND r.cloned
-				ORDER BY s.name,r.owner,r.name
-				;''')
-			return list(self.db.cursor.fetchall())
-		elif option == 'only_not_cloned':
-
-
-		elif option == 'no_dl':
-
-			self.db.cursor.execute('''
-				SELECT s.name,s.url_root,r.owner,r.name
-				FROM repositories r
-				INNER JOIN sources s
-				ON s.id=r.source
-				LEFT JOIN table_updates tu
-				ON tu.repo_id=r.id AND tu.table_name='clones'
-				GROUP BY s.name,s.url_root,r.owner,r.name
-				HAVING COUNT(tu.repo_id)=0
-				ORDER BY s.name,r.owner,r.name
-
-				;''')
-			return list(self.db.cursor.fetchall())
-
-
 	def build_url(self,name,owner,source_urlroot,ssh_mode):
 		'''
 		building url, depending on mode (ssh or https)
