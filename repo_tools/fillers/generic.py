@@ -242,7 +242,7 @@ class RepositoriesFiller(fillers.Filler):
 			return self.repo_formatting(repo=repo[len(source_urlroot)+1:],source_urlroot=source_urlroot,output_cleaned_url=output_cleaned_url,raise_error=raise_error)
 
 		# Typos replacement
-		repo.replace('//','/')
+		repo = repo.replace('//','/')
 
 		# checks
 		# minimum 3 fields
@@ -328,18 +328,76 @@ class ClonesFiller(fillers.Filler):
 		self.clone_all()
 
 	def clone_all(self):
-		if self.force or self.update:
-			option = 'all'
-		elif self.failed:
-			option = 'only_not_cloned'
-		else:
-			option = 'no_dl'
-
-		repo_list = self.db.get_repo_list(option=option)
+		repo_list = self.get_repo_list()
 		for i,r in enumerate(repo_list):
 			source,source_urlroot,owner,name = r
 			self.logger.info('Repo {}/{}'.format(i+1,len(repo_list)))
 			self.clone(source=source,name=name,owner=owner,source_urlroot=source_urlroot,update=self.update)
+
+	def get_repo_list(self):
+
+		if self.force or self.update:
+			self.db.cursor.execute('''
+				SELECT s.name,s.url_root,r.owner,r.name
+				FROM repositories r
+				INNER JOIN sources s
+				ON s.id=r.source
+				ORDER BY s.name,r.owner,r.name
+				;''')
+			return list(self.db.cursor.fetchall())
+		elif self.failed:
+			self.db.cursor.execute('''
+				SELECT s.name,s.url_root,r.owner,r.name
+				FROM repositories r
+				INNER JOIN sources s
+				ON s.id=r.source AND NOT r.cloned
+				ORDER BY s.name,r.owner,r.name
+				;''')
+			return list(self.db.cursor.fetchall())
+		else:
+			self.db.cursor.execute('''
+				SELECT s.name,s.url_root,r.owner,r.name
+				FROM repositories r
+				INNER JOIN sources s
+				ON s.id=r.source
+				LEFT JOIN table_updates tu
+				ON tu.repo_id=r.id AND tu.table_name='clones'
+				GROUP BY s.name,s.url_root,r.owner,r.name
+				HAVING COUNT(tu.repo_id)=0
+				ORDER BY s.name,r.owner,r.name
+
+				;''')
+			return list(self.db.cursor.fetchall())
+
+
+		if option == 'all':
+		elif option == 'only_cloned':
+			self.db.cursor.execute('''
+				SELECT s.name,s.url_root,r.owner,r.name
+				FROM repositories r
+				INNER JOIN sources s
+				ON s.id=r.source AND r.cloned
+				ORDER BY s.name,r.owner,r.name
+				;''')
+			return list(self.db.cursor.fetchall())
+		elif option == 'only_not_cloned':
+
+
+		elif option == 'no_dl':
+
+			self.db.cursor.execute('''
+				SELECT s.name,s.url_root,r.owner,r.name
+				FROM repositories r
+				INNER JOIN sources s
+				ON s.id=r.source
+				LEFT JOIN table_updates tu
+				ON tu.repo_id=r.id AND tu.table_name='clones'
+				GROUP BY s.name,s.url_root,r.owner,r.name
+				HAVING COUNT(tu.repo_id)=0
+				ORDER BY s.name,r.owner,r.name
+
+				;''')
+			return list(self.db.cursor.fetchall())
 
 
 	def build_url(self,name,owner,source_urlroot,ssh_mode):
@@ -420,10 +478,13 @@ class ClonesFiller(fillers.Filler):
 				callbacks = self.callbacks[source]
 			except KeyError:
 				callbacks = None
-			repo_obj.remotes["origin"].fetch(callbacks=callbacks)
+			cmd = 'git pull'
+			cmd_output = subprocess.check_output(cmd.split(' '),cwd=repo_folder)
+			### NB: pygit2 is complex for a simple 'git pull', a solution would be to test such an implementation: https://github.com/MichaelBoselowitz/pygit2-examples/blob/master/examples.py
+			# repo_obj.remotes["origin"].fetch(callbacks=callbacks)
 			success = True
 		except pygit2.GitError as e:
-			self.logger.info('Git Error for repo {}/{}/{}'.format(source,owner,name))
+			self.logger.info('Git Error for repo {}/{}/{}: {}'.format(source,owner,name,cmd_output))
 			success = False
 
 		self.db.submit_download_attempt(success=success,source=source,repo=name,owner=owner)

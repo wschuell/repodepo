@@ -246,7 +246,7 @@ class GHLoginsFiller(GithubFiller):
 
 
 	def apply(self):
-		self.fill_gh_logins(info_list=self.info_list)
+		self.fill_gh_logins(info_list=self.info_list,workers=self.workers)
 		self.db.connection.commit()
 
 	def prepare(self):
@@ -494,9 +494,10 @@ class ForksFiller(GithubFiller):
 
 
 	def apply(self):
-		self.fill_forks(repo_list=self.repo_list,force=self.force,retry=self.retry)
+		self.fill_forks(repo_list=self.repo_list,force=self.force,retry=self.retry,workers=self.workers)
 		self.fill_fork_ranks()
 		self.db.connection.commit()
+
 
 
 	def fill_forks(self,repo_list=None,force=False,workers=1,in_thread=False,retry=False):
@@ -505,6 +506,7 @@ class ForksFiller(GithubFiller):
 		force: retry repos that were previously not retrievable
 		Otherwise trying all emails which have no login yet and never failed before
 		'''
+
 
 		if repo_list is None:
 			#build repo list
@@ -523,7 +525,6 @@ class ForksFiller(GithubFiller):
 					# repo_list.append('{}/{}'.format(r['name'],r['owner']))
 					# repo_list.append('{}/{}'.format(r[2],r[3]))
 					repo_list.append(r)
-
 
 		if workers == 1:
 			requester_gen = self.get_github_requester()
@@ -597,8 +598,8 @@ class ForksFiller(GithubFiller):
 		else:
 			with ThreadPoolExecutor(max_workers=workers) as executor:
 				futures = []
-				for infos in info_list:
-					futures.append(executor.submit(self.fill_gh_logins,info_list=[infos],workers=1,in_thread=True))
+				for repo in repo_list:
+					futures.append(executor.submit(self.fill_forks,repo_list=[repo],workers=1,in_thread=True))
 				# for future in concurrent.futures.as_completed(futures):
 				# 	pass
 				for future in futures:

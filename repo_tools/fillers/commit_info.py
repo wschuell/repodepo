@@ -38,6 +38,38 @@ class CommitsFiller(fillers.Filler):
 		self.db.connection.commit()
 
 
+	def get_repo_list(self,all_commits=False):
+
+		if all_commits:
+			self.db.cursor.execute('''
+				SELECT s.name,r.owner,r.name,r.id
+				FROM repositories r
+				INNER JOIN sources s
+				ON s.id=r.source AND r.cloned
+				ORDER BY s.name,r.owner,r.name
+				;''')
+			return [{'source':r[0],'owner':r[1],'name':r[2],'repo_id':r[3]} for r in self.db.cursor.fetchall()]
+
+		else:
+			if self.db.db_type == 'postgres':
+				self.db.cursor.execute('''
+					SELECT s.name,r.owner,r.name,r.id,extract(epoch from r.latest_commit_time)
+					FROM repositories r
+					INNER JOIN sources s
+					ON s.id=r.source AND r.cloned
+					ORDER BY s.name,r.owner,r.name
+					;''')
+			else:
+				self.db.cursor.execute('''
+					SELECT s.name,r.owner,r.name,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
+					FROM repositories r
+					INNER JOIN sources s
+					ON s.id=r.source AND r.cloned
+					ORDER BY s.name,r.owner,r.name
+					;''')
+
+			return [{'source':r[0],'owner':r[1],'name':r[2],'repo_id':r[3],'after_time':r[4]} for r in self.db.cursor.fetchall()]
+
 	def fill_commit_info(self,force=False,all_commits=False):
 		'''
 		Filling in authors, commits and parenthood using Database object methods
@@ -49,16 +81,11 @@ class CommitsFiller(fillers.Filler):
 		self.db.cursor.execute('''SELECT MAX(updated_at) FROM table_updates WHERE table_name='clones' AND success;''')
 		last_dl = self.db.cursor.fetchone()[0]
 
-		if all_commits:
-			option = 'basicinfo_dict_cloned'
-		else:
-			option = 'basicinfo_dict_time_cloned'
-
 		if force or (last_fu is None) or (last_dl is not None and last_fu<last_dl):
 
 			self.logger.info('Filling in users')
 
-			for repo_info in self.db.get_repo_list(option=option):
+			for repo_info in self.get_repo_list(all_commits=all_commits):
 				try:
 					self.fill_authors(self.list_commits(basic_info_only=True,**repo_info))
 				except:
@@ -68,7 +95,7 @@ class CommitsFiller(fillers.Filler):
 
 			self.logger.info('Filling in commits')
 
-			for repo_info in self.db.get_repo_list(option=option):
+			for repo_info in self.get_repo_list(all_commits=all_commits):
 				try:
 					self.fill_commits(self.list_commits(basic_info_only=False,**repo_info))
 				except:
@@ -79,7 +106,7 @@ class CommitsFiller(fillers.Filler):
 
 			self.logger.info('Filling in repository commit ownership')
 
-			for repo_info in self.db.get_repo_list(option=option):
+			for repo_info in self.get_repo_list(all_commits=all_commits):
 				try:
 					self.fill_commit_repos(self.list_commits(basic_info_only=False,**repo_info))
 				except:
@@ -88,7 +115,7 @@ class CommitsFiller(fillers.Filler):
 
 			self.logger.info('Filling in commit parents')
 
-			for repo_info in self.db.get_repo_list(option=option):
+			for repo_info in self.get_repo_list(all_commits=all_commits):
 				try:
 					self.fill_commit_parents(self.list_commits(basic_info_only=True,**repo_info))
 				except:
