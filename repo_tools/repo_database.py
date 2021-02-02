@@ -146,6 +146,7 @@ class Database(object):
 				UNIQUE(creation_identity_type_id,creation_identity)
 				);
 
+
 				CREATE TABLE IF NOT EXISTS identities(
 				id INTEGER PRIMARY KEY,
 				identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
@@ -156,6 +157,9 @@ class Database(object):
 				attributes TEXT,
 				UNIQUE(identity_type_id,identity)
 				);
+
+				CREATE INDEX IF NOT EXISTS identities_idx ON identities(identity);
+				CREATE INDEX IF NOT EXISTS identity_users_idx ON identities(user_id);
 
 				CREATE TABLE IF NOT EXISTS merged_identities(
 				id INTEGER PRIMARY KEY,
@@ -183,6 +187,10 @@ class Database(object):
 				deletions INTEGER,
 				UNIQUE(sha)
 				);
+
+				CREATE INDEX IF NOT EXISTS commits_ac_idx ON commits(author_id,created_at);
+				CREATE INDEX IF NOT EXISTS commits_rc_idx ON commits(repo_id,created_at);
+				CREATE INDEX IF NOT EXISTS commits_cra_idx ON commits(created_at,repo_id,author_id);
 
 				CREATE TABLE IF NOT EXISTS commit_repos(
 				commit_id INTEGER REFERENCES commits(id) ON DELETE CASCADE,
@@ -330,6 +338,10 @@ class Database(object):
 				UNIQUE(identity_type_id,identity)
 				);
 
+
+				CREATE INDEX IF NOT EXISTS identities_idx ON identities(identity);
+				CREATE INDEX IF NOT EXISTS identity_users_idx ON identities(user_id);
+
 				CREATE TABLE IF NOT EXISTS merged_identities(
 				id BIGSERIAL PRIMARY KEY,
 				main_identity_id BIGINT NOT NULL REFERENCES identities(id) ON DELETE CASCADE,
@@ -357,6 +369,10 @@ class Database(object):
 				deletions INT,
 				UNIQUE(sha)
 				);
+
+				CREATE INDEX IF NOT EXISTS commits_ac_idx ON commits(author_id,created_at);
+				CREATE INDEX IF NOT EXISTS commits_rc_idx ON commits(repo_id,created_at);
+				CREATE INDEX IF NOT EXISTS commits_cra_idx ON commits(created_at,repo_id,author_id);
 
 				CREATE TABLE IF NOT EXISTS commit_repos(
 				commit_id BIGINT REFERENCES commits(id) ON DELETE CASCADE,
@@ -1337,30 +1353,30 @@ class Database(object):
 		if autocommit:
 			self.connection.commit()
 
-	def create_indexes(self,table=None):
-		'''
-		Creating indexes for the various tables that are not specified at table creation, where insertion time could be impacted by their presence
-		'''
-		if table == 'user' or table is None:
-			self.logger.info('Creating indexes for table user')
-			self.cursor.execute('''
-				CREATE INDEX IF NOT EXISTS user_names_idx ON users(name)
-				;''')
-		elif table == 'commits' or table is None:
-			self.logger.info('Creating indexes for table commits')
-			self.cursor.execute('''
-				CREATE INDEX IF NOT EXISTS commits_ac_idx ON commits(author_id,created_at)
-				;''')
-			self.cursor.execute('''
-				CREATE INDEX IF NOT EXISTS commits_rc_idx ON commits(repo_id,created_at)
-				;''')
-			self.cursor.execute('''
-				CREATE INDEX IF NOT EXISTS commits_cra_idx ON commits(created_at,repo_id,author_id)
-				;''')
-		elif table == 'commit_parents' or table is None:
-			self.logger.info('Creating indexes for table commit_parents')
-			pass
-		self.connection.commit()
+	# def create_indexes(self,table=None):
+	# 	'''
+	# 	Creating indexes for the various tables that are not specified at table creation, where insertion time could be impacted by their presence
+	# 	'''
+	# 	if table == 'user' or table is None:
+	# 		self.logger.info('Creating indexes for table user')
+	# 		self.cursor.execute('''
+	# 			CREATE INDEX IF NOT EXISTS user_names_idx ON users(name)
+	# 			;''')
+	# 	elif table == 'commits' or table is None:
+	# 		self.logger.info('Creating indexes for table commits')
+	# 		self.cursor.execute('''
+	# 			CREATE INDEX IF NOT EXISTS commits_ac_idx ON commits(author_id,created_at)
+	# 			;''')
+	# 		self.cursor.execute('''
+	# 			CREATE INDEX IF NOT EXISTS commits_rc_idx ON commits(repo_id,created_at)
+	# 			;''')
+	# 		self.cursor.execute('''
+	# 			CREATE INDEX IF NOT EXISTS commits_cra_idx ON commits(created_at,repo_id,author_id)
+	# 			;''')
+	# 	elif table == 'commit_parents' or table is None:
+	# 		self.logger.info('Creating indexes for table commit_parents')
+	# 		pass
+	# 	self.connection.commit()
 
 	def get_last_dl(self,repo_id,success=None):
 		'''

@@ -17,10 +17,12 @@ class CommitsFiller(fillers.Filler):
 
 	def __init__(self,
 			only_null_commit_origs=True,
+			all_commits=False,
 			force=False,
 					**kwargs):
 		self.force=force
 		self.only_null_commit_origs = only_null_commit_origs
+		self.all_commits = all_commits
 		fillers.Filler.__init__(self,**kwargs)
 
 	def prepare(self):
@@ -35,12 +37,12 @@ class CommitsFiller(fillers.Filler):
 		pass
 
 	def apply(self):
-		self.fill_commit_info(force=self.force)
+		self.fill_commit_info(force=self.force,all_commits=self.all_commits)
 		self.fill_commit_orig_repo(only_null=self.only_null_commit_origs)
 		self.db.connection.commit()
 
 
-	def get_repo_list(self,all_commits=False):
+	def get_repo_list(self,all_commits=False,option=None):
 
 		if all_commits:
 			self.db.cursor.execute('''
@@ -53,22 +55,55 @@ class CommitsFiller(fillers.Filler):
 			return [{'source':r[0],'owner':r[1],'name':r[2],'repo_id':r[3]} for r in self.db.cursor.fetchall()]
 
 		else:
-			if self.db.db_type == 'postgres':
-				self.db.cursor.execute('''
-					SELECT s.name,r.owner,r.name,r.id,extract(epoch from r.latest_commit_time)
-					FROM repositories r
-					INNER JOIN sources s
-					ON s.id=r.source AND r.cloned
-					ORDER BY s.name,r.owner,r.name
-					;''')
+			if option is not None:
+				# listing all repository being cloned, and not having any successful <option> table update
+				if self.db.db_type == 'postgres':
+					self.db.cursor.execute('''
+						SELECT s.name,r.owner,r.name,r.id,extract(epoch from r.latest_commit_time)
+						FROM repositories r
+						INNER JOIN sources s
+						ON s.id=r.source AND r.cloned
+						ORDER BY s.name,r.owner,r.name
+						EXCEPT
+						SELECT s.name,r.owner,r.name,r.id,extract(epoch from r.latest_commit_time)
+						FROM repositories r
+						INNER JOIN sources s
+						ON s.id=r.source AND r.cloned
+						INNER JOIN table_updates tu
+						ON tu.table_name=%s AND tu.repo_id=r.id AND tu.success
+						;''',(option,))
+				else:
+					self.db.cursor.execute('''
+						SELECT s.name,r.owner,r.name,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
+						FROM repositories r
+						INNER JOIN sources s
+						ON s.id=r.source AND r.cloned
+						ORDER BY s.name,r.owner,r.name
+						EXCEPT
+						SELECT s.name,r.owner,r.name,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
+						FROM repositories r
+						INNER JOIN sources s
+						ON s.id=r.source AND r.cloned
+						INNER JOIN table_updates tu
+						ON tu.table_name=? AND tu.repo_id=r.id AND tu.success
+						;''',(option,))
 			else:
-				self.db.cursor.execute('''
-					SELECT s.name,r.owner,r.name,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
-					FROM repositories r
-					INNER JOIN sources s
-					ON s.id=r.source AND r.cloned
-					ORDER BY s.name,r.owner,r.name
-					;''')
+				if self.db.db_type == 'postgres':
+					self.db.cursor.execute('''
+						SELECT s.name,r.owner,r.name,r.id,extract(epoch from r.latest_commit_time)
+						FROM repositories r
+						INNER JOIN sources s
+						ON s.id=r.source AND r.cloned
+						ORDER BY s.name,r.owner,r.name
+						;''')
+				else:
+					self.db.cursor.execute('''
+						SELECT s.name,r.owner,r.name,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
+						FROM repositories r
+						INNER JOIN sources s
+						ON s.id=r.source AND r.cloned
+						ORDER BY s.name,r.owner,r.name
+						;''')
 
 			return [{'source':r[0],'owner':r[1],'name':r[2],'repo_id':r[3],'after_time':r[4]} for r in self.db.cursor.fetchall()]
 
@@ -85,9 +120,9 @@ class CommitsFiller(fillers.Filler):
 
 		if force or (last_fu is None) or (last_dl is not None and last_fu<last_dl):
 
-			self.logger.info('Filling in users')
+			self.logger.info('Filling in identities')
 
-			for repo_info in self.get_repo_list(all_commits=all_commits):
+			for repo_info in self.get_repo_list(all_commits=all_commits,option='identities'):
 				try:
 					self.fill_authors(self.list_commits(basic_info_only=True,**repo_info))
 				except:
@@ -97,7 +132,7 @@ class CommitsFiller(fillers.Filler):
 
 			self.logger.info('Filling in commits')
 
-			for repo_info in self.get_repo_list(all_commits=all_commits):
+			for repo_info in self.get_repo_list(all_commits=all_commits,option='commits'):
 				try:
 					self.fill_commits(self.list_commits(basic_info_only=False,**repo_info))
 				except:
@@ -108,7 +143,7 @@ class CommitsFiller(fillers.Filler):
 
 			self.logger.info('Filling in repository commit ownership')
 
-			for repo_info in self.get_repo_list(all_commits=all_commits):
+			for repo_info in self.get_repo_list(all_commits=all_commits,option='commit_repos'):
 				try:
 					self.fill_commit_repos(self.list_commits(basic_info_only=False,**repo_info))
 				except:
@@ -117,7 +152,7 @@ class CommitsFiller(fillers.Filler):
 
 			self.logger.info('Filling in commit parents')
 
-			for repo_info in self.get_repo_list(all_commits=all_commits):
+			for repo_info in self.get_repo_list(all_commits=all_commits,option='commit_parents'):
 				try:
 					self.fill_commit_parents(self.list_commits(basic_info_only=True,**repo_info))
 				except:
@@ -380,51 +415,51 @@ class CommitsFiller(fillers.Filler):
 		if autocommit:
 			self.db.connection.commit()
 
-	def fill_commit_orig_repo(self,commit_info_list,autocommit=True):
-		'''
-		Filling commits attribute is_orig_repo, based on forks table
-		'''
+	# def fill_commit_orig_repo(self,commit_info_list,autocommit=True):
+	# 	'''
+	# 	Filling commits attribute is_orig_repo, based on forks table
+	# 	'''
 
-		tracked_data = {'latest_commit_time':0,'empty':True}
-		def tracked_gen(orig_gen):
-			for c in orig_gen:
-				tracked_data['last_commit'] = c
-				tracked_data['empty'] = False
-				tracked_data['latest_commit_time'] = max(tracked_data['latest_commit_time'],c['time'])
-				yield c
+	# 	tracked_data = {'latest_commit_time':0,'empty':True}
+	# 	def tracked_gen(orig_gen):
+	# 		for c in orig_gen:
+	# 			tracked_data['last_commit'] = c
+	# 			tracked_data['empty'] = False
+	# 			tracked_data['latest_commit_time'] = max(tracked_data['latest_commit_time'],c['time'])
+	# 			yield c
 
-		if self.db.db_type == 'postgres':
-			extras.execute_batch(self.db.cursor,'''
-				INSERT INTO commit_repos(commit_id,repo_id)
-					VALUES(
-							(SELECT id FROM commits WHERE sha=%s),
-							%s
-							)
-				ON CONFLICT DO NOTHING;
-				''',((c['sha'],c['repo_id'],) for c in tracked_gen(commit_info_list)))
+	# 	if self.db.db_type == 'postgres':
+	# 		extras.execute_batch(self.db.cursor,'''
+	# 			INSERT INTO commit_repos(commit_id,repo_id)
+	# 				VALUES(
+	# 						(SELECT id FROM commits WHERE sha=%s),
+	# 						%s
+	# 						)
+	# 			ON CONFLICT DO NOTHING;
+	# 			''',((c['sha'],c['repo_id'],) for c in tracked_gen(commit_info_list)))
 
-		else:
-			self.db.cursor.executemany('''
-				INSERT OR IGNORE INTO commit_repos(commit_id,repo_id)
-					VALUES(
-							(SELECT id FROM commits WHERE sha=?),
-							?
-							);
-				''',((c['sha'],c['repo_id'],) for c in tracked_gen(commit_info_list)))
-
-
-		if not tracked_data['empty']:
-			repo_id = tracked_data['last_commit']['repo_id']
-			latest_commit_time = datetime.datetime.fromtimestamp(tracked_data['latest_commit_time'])
-			if self.db.db_type == 'postgres':
-				self.db.cursor.execute('''INSERT INTO table_updates(repo_id,table_name,latest_commit_time) VALUES(%s,'commit_repos',%s) ;''',(repo_id,latest_commit_time))
-			else:
-				self.db.cursor.execute('''INSERT INTO table_updates(repo_id,table_name,latest_commit_time) VALUES(?,'commit_repos',?) ;''',(repo_id,latest_commit_time))
+	# 	else:
+	# 		self.db.cursor.executemany('''
+	# 			INSERT OR IGNORE INTO commit_repos(commit_id,repo_id)
+	# 				VALUES(
+	# 						(SELECT id FROM commits WHERE sha=?),
+	# 						?
+	# 						);
+	# 			''',((c['sha'],c['repo_id'],) for c in tracked_gen(commit_info_list)))
 
 
+	# 	if not tracked_data['empty']:
+	# 		repo_id = tracked_data['last_commit']['repo_id']
+	# 		latest_commit_time = datetime.datetime.fromtimestamp(tracked_data['latest_commit_time'])
+	# 		if self.db.db_type == 'postgres':
+	# 			self.db.cursor.execute('''INSERT INTO table_updates(repo_id,table_name,latest_commit_time) VALUES(%s,'commit_orig_repos',%s) ;''',(repo_id,latest_commit_time))
+	# 		else:
+	# 			self.db.cursor.execute('''INSERT INTO table_updates(repo_id,table_name,latest_commit_time) VALUES(?,'commit_orig_repos',?) ;''',(repo_id,latest_commit_time))
 
-		if autocommit:
-			self.db.connection.commit()
+
+
+	# 	if autocommit:
+	# 		self.db.connection.commit()
 
 	def fill_commit_parents(self,commit_info_list,autocommit=True):
 		'''

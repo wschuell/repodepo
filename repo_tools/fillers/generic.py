@@ -390,13 +390,15 @@ class ClonesFiller(fillers.Filler):
 			last_commit_time = datetime.datetime.fromtimestamp(repo_obj.revparse_single('HEAD').commit_time)
 			self.db.submit_download_attempt(source=source,owner=owner,repo=repo,success=True,dl_time=last_commit_time)
 
-	def clone(self,source,name,owner,source_urlroot,replace=False,update=False):
+	def clone(self,source,name,owner,source_urlroot,replace=False,update=False,db=None):
 		'''
 		Cloning one repo.
 		Skipping if folder exists by default; not if replace=True in this case delete folder and restart
 		Executing update_repo if repo already exists and update is True
 
 		'''
+		if db is None:
+			db = self.db
 		repo_folder = os.path.join(self.data_folder,'cloned_repos',source,owner,name)
 		if os.path.exists(repo_folder):
 			if replace:
@@ -454,8 +456,9 @@ class ClonesFiller(fillers.Filler):
 			### NB: pygit2 is complex for a simple 'git pull', a solution would be to test such an implementation: https://github.com/MichaelBoselowitz/pygit2-examples/blob/master/examples.py
 			# repo_obj.remotes["origin"].fetch(callbacks=callbacks)
 			success = True
-		except pygit2.GitError as e:
-			self.logger.info('Git Error for repo {}/{}/{}: {}'.format(source,owner,name,cmd_output))
+		# except pygit2.GitError as e:
+		except subprocess.CalledProcessError as e:
+			self.logger.info('Git Error for repo {}/{}/{}: {}'.format(source,owner,name,e))
 			success = False
 
 		self.db.submit_download_attempt(success=success,source=source,repo=name,owner=owner)
