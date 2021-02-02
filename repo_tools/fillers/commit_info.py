@@ -17,7 +17,9 @@ class CommitsFiller(fillers.Filler):
 
 	def __init__(self,
 			only_null_commit_origs=True,
+			force=False,
 					**kwargs):
+		self.force=force
 		self.only_null_commit_origs = only_null_commit_origs
 		fillers.Filler.__init__(self,**kwargs)
 
@@ -33,7 +35,7 @@ class CommitsFiller(fillers.Filler):
 		pass
 
 	def apply(self):
-		self.fill_commit_info()
+		self.fill_commit_info(force=self.force)
 		self.fill_commit_orig_repo(only_null=self.only_null_commit_origs)
 		self.db.connection.commit()
 
