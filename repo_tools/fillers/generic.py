@@ -7,6 +7,8 @@ import shutil
 import datetime
 import subprocess
 
+from psycopg2 import extras
+
 from repo_tools import fillers
 import repo_tools as rp
 
@@ -280,7 +282,7 @@ class ClonesFiller(fillers.Filler):
 	'''
 	Tries to clone all repositories present in the DB
 	'''
-	def __init__(self,force=False,update=False,failed=False,ssh_sources=None,ssh_key=os.path.join(os.environ['HOME'],'.ssh','id_rsa'),sources=None,rm_first=False,**kwargs):
+	def __init__(self,precheck_cloned=False,force=False,update=False,failed=False,ssh_sources=None,ssh_key=os.path.join(os.environ['HOME'],'.ssh','id_rsa'),sources=None,rm_first=False,**kwargs):
 		'''
 		if sources is None, repositories of all sources are cloned. Otherwise, considered as a whitelist of sources to batch-clone.
 
@@ -292,6 +294,7 @@ class ClonesFiller(fillers.Filler):
 		self.update = update
 		self.failed = failed
 		self.rm_first = rm_first
+		self.precheck_cloned = precheck_cloned
 
 		self.ssh_key = ssh_key
 		if ssh_sources is None:
@@ -315,6 +318,30 @@ class ClonesFiller(fillers.Filler):
 		if self.rm_first and os.path.exists(os.path.join(self.data_folder,'cloned_repos')):
 			shutil.rmtree(os.path.join(self.data_folder,'cloned_repos'))
 		self.make_folder() # creating folder if not existing
+
+		if self.precheck_cloned:
+			self.db.cursor.execute('''
+				SELECT s.name,r.owner,r.name,r.id
+				FROM repositories r
+				INNER JOIN sources s
+				ON s.id=r.source
+				AND r.cloned
+				ORDER BY s.name,r.owner,r.name
+				;''')
+			repo_ids_to_update = []
+			for source_name,repo_owner,repo_name,repo_id in self.db.cursor.fetchall():
+				if not os.path.exists(os.path.join(self.data_folder,'cloned_repos',source_name,repo_owner,repo_name,'.git')):
+					repo_ids_to_update.append((repo_id,))
+
+			if self.db.db_type == 'postgres':
+				extras.execute_batch(self.db.cursor,'UPDATE repositories SET cloned=false WHERE id=%s;',repo_ids_to_update)
+			else:
+				self.db.cursor.executemany('UPDATE repositories SET cloned=false WHERE id=?;',repo_ids_to_update)
+			if len(repo_ids_to_update):
+				self.logger.info('{} repositories set as cloned but not found in cloned_repos folder, setting to not cloned'.format(len(repo_ids_to_update)))
+			else:
+				self.logger.info('All repositories set as cloned found in cloned_repos folder')
+			self.db.commit()
 
 	def make_folder(self):
 		'''

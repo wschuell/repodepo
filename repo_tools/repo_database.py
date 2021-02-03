@@ -1735,9 +1735,9 @@ class Database(object):
 				url = 'https://{}/{}/{}'.format(url_root,new_owner,new_name)
 
 				if self.db_type == 'postgres':
-					self.cursor.execute('SELECT name FROM source WHERE id=%s;',(new_source_id,))
+					self.cursor.execute('SELECT name FROM sources WHERE id=%s;',(new_source_id,))
 				else:
-					self.cursor.execute('SELECT name FROM source WHERE id=?;',(new_source_id,))
+					self.cursor.execute('SELECT name FROM sources WHERE id=?;',(new_source_id,))
 				new_source_name = self.cursor.fetchone()[0]
 
 				# add url
@@ -1761,7 +1761,8 @@ class Database(object):
 							url_id=(SELECT id FROM urls WHERE url=%s),
 							source_id=%s,
 							owner=%s,
-							name=%s
+							name=%s,
+							cloned=false
 						WHERE id=%s
 						;''',(url,new_source_id,new_owner,new_name,obsolete_id))
 				else:
@@ -1781,7 +1782,8 @@ class Database(object):
 							url_id=(SELECT id FROM urls WHERE url=?),
 							source_id=?,
 							owner=?,
-							name=?
+							name=?,
+							cloned=false
 						WHERE id=?
 						;''',(url,new_source_id,new_owner,new_name,obsolete_id))
 
