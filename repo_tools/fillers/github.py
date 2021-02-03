@@ -610,7 +610,7 @@ class ForksFiller(GithubFiller):
 		if self.db.db_type == 'postgres':
 			self.db.cursor.execute('''
 				INSERT INTO forks(forking_repo_id,forking_repo_url,forked_repo_id,forked_at,fork_rank)
-				SELECT f2.forking_repo_id,f2.forking_repo_url,f1.forked_repo_id,f2.forked_at,f2.fork_rank+1
+					SELECT f1.forking_repo_id,f1.forking_repo_url,f2.forked_repo_id,f1.forked_at,f2.fork_rank+f1.fork_rank
 						FROM forks f1
 						INNER JOIN forks f2
 						ON f1.forked_repo_id=f2.forking_repo_id
@@ -621,10 +621,10 @@ class ForksFiller(GithubFiller):
 		else:
 			self.db.cursor.execute('''
 				INSERT OR IGNORE INTO forks(forking_repo_id,forking_repo_url,forked_repo_id,forked_at,fork_rank)
-					SELECT f2.forking_repo_id,f2.forking_repo_url,f1.forked_repo_id,f2.forked_at,f2.fork_rank+1
+					SELECT f1.forking_repo_id,f1.forking_repo_url,f2.forked_repo_id,f1.forked_at,f2.fork_rank+f1.fork_rank
 						FROM forks f1
 						INNER JOIN forks f2
-						ON f2.forked_repo_id=f1.forking_repo_id
+						ON f1.forked_repo_id=f2.forking_repo_id
 
 				;
 				''')

@@ -64,12 +64,12 @@ class CommitsFiller(fillers.Filler):
 						INNER JOIN sources s
 						ON s.id=r.source AND r.cloned
 						EXCEPT
-						SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id,extract(epoch from r.latest_commit_time)
+						(SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id,extract(epoch from r.latest_commit_time)
 						FROM repositories r
 						INNER JOIN sources s
 						ON s.id=r.source AND r.cloned
 						INNER JOIN table_updates tu
-						ON tu.table_name=%s AND tu.repo_id=r.id AND tu.success
+						ON tu.table_name=%s AND tu.repo_id=r.id AND tu.success)
 						ORDER BY sname,rowner,rname
 						;''',(option,))
 				else:
@@ -123,6 +123,7 @@ class CommitsFiller(fillers.Filler):
 			self.logger.info('Filling in identities')
 
 			for repo_info in self.get_repo_list(all_commits=all_commits,option='identities'):
+				self.logger.info('Filling identities info for {source}/{owner}/{name}'.format(**repo_info))
 				try:
 					self.fill_authors(self.list_commits(basic_info_only=True,**repo_info))
 				except:
@@ -131,6 +132,7 @@ class CommitsFiller(fillers.Filler):
 			self.logger.info('Filling in commits')
 
 			for repo_info in self.get_repo_list(all_commits=all_commits,option='commits'):
+				self.logger.info('Filling commits info for {source}/{owner}/{name}'.format(**repo_info))
 				try:
 					self.fill_commits(self.list_commits(basic_info_only=False,**repo_info))
 				except:
@@ -141,6 +143,7 @@ class CommitsFiller(fillers.Filler):
 			self.logger.info('Filling in repository commit ownership')
 
 			for repo_info in self.get_repo_list(all_commits=all_commits,option='commit_repos'):
+				self.logger.info('Filling commit ownership info for {source}/{owner}/{name}'.format(**repo_info))
 				try:
 					self.fill_commit_repos(self.list_commits(basic_info_only=False,**repo_info))
 				except:
@@ -150,6 +153,7 @@ class CommitsFiller(fillers.Filler):
 			self.logger.info('Filling in commit parents')
 
 			for repo_info in self.get_repo_list(all_commits=all_commits,option='commit_parents'):
+				self.logger.info('Filling commit parenthood info for {source}/{owner}/{name}'.format(**repo_info))
 				try:
 					self.fill_commit_parents(self.list_commits(basic_info_only=True,**repo_info))
 				except:
@@ -506,7 +510,7 @@ class CommitsFiller(fillers.Filler):
 		if autocommit:
 			self.db.connection.commit()
 
-	def fill_commit_orig_repo(self,only_null=True):
+	def fill_commit_orig_repo(self,only_null=True,autocommit=True):
 		'''
 		Setting the repo_id field for commits table, using the forks table and supposing that it is updated.
 
@@ -564,6 +568,8 @@ class CommitsFiller(fillers.Filler):
 
 
 		else:
+
+
 			# update is_orig_repo to true for roots of fork trees
 			self.db.cursor.execute('''
 					UPDATE commit_repos SET is_orig_repo=true
@@ -598,10 +604,32 @@ class CommitsFiller(fillers.Filler):
 								)
 					;''')
 
+
 		self.db.cursor.execute('''
-			UPDATE commits SET repo_id=(
-					SELECT cp.repo_id FROM commit_repos cp
-						WHERE cp.commit_id=commits.id
-						AND cp.is_orig_repo)
-			;
-			''')
+				SELECT r.owner,r.name,COUNT(*) FROM repositories r
+					INNER JOIN commit_repos cr2
+						ON r.id=cr2.repo_id AND cr2.is_orig_repo
+					INNER JOIN
+						(SELECT cr.commit_id,COUNT(DISTINCT cr.repo_id) AS cnt FROM commit_repos cr
+							WHERE cr.is_orig_repo
+							GROUP BY cr.commit_id
+							HAVING COUNT(DISTINCT cr.repo_id)>1) AS c
+						ON c.commit_id=cr2.commit_id
+					GROUP BY r.owner,r.name
+				;
+				''')
+		results = list(self.db.cursor.fetchall())
+		if len(results):
+			error_str = 'Several repos are considered origin repos of the same commits. Repos in this situation: {}, First ten: {}'.format(len(results),['{}/{}:{}'.format(*r) for r in results[:10]])
+			raise ValueError(error_str)
+
+		self.db.cursor.execute('''
+				UPDATE commits SET repo_id=(
+						SELECT cp.repo_id FROM commit_repos cp
+							WHERE cp.commit_id=commits.id
+							AND cp.is_orig_repo)
+				;
+				''')
+
+		if autocommit:
+			self.db.connection.commit()
