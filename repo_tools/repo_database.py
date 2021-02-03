@@ -280,6 +280,12 @@ class Database(object):
 				CREATE INDEX IF NOT EXISTS packages_date_idx ON packages(created_at);
 				CREATE INDEX IF NOT EXISTS packages_repo_idx ON packages(repo_id);
 
+				CREATE TABLE IF NOT EXISTS merged_repositories(
+				id BIGSERIAL PRIMARY KEY,
+				new_repo TEXT,
+				obsolete_repo TEXT,
+				merged_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+				);
 		'''
 			for q in self.DB_INIT.split(';')[:-1]:
 				self.cursor.execute(q)
@@ -464,6 +470,13 @@ class Database(object):
 				CREATE INDEX IF NOT EXISTS packages_idx ON packages(source_id,name);
 				CREATE INDEX IF NOT EXISTS packages_date_idx ON packages(created_at);
 				CREATE INDEX IF NOT EXISTS packages_repo_idx ON packages(repo_id);
+
+				CREATE TABLE IF NOT EXISTS merged_repositories(
+				id BIGSERIAL PRIMARY KEY,
+				new_repo TEXT,
+				obsolete_repo TEXT,
+				merged_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+				);
 				'''
 
 			self.cursor.execute(self.DB_INIT)
@@ -1401,17 +1414,36 @@ class Database(object):
 		if ans is not None:
 			return ans[0]
 
-	def get_source_info(self,source):
+	def get_source_info(self,source=None,repo_id=None):
 		'''
 		Returns source_urlroot if source exists, otherwise throws and error
 		'''
-		if self.db_type == 'postgres':
-			self.cursor.execute('SELECT id,url_root FROM sources WHERE name=%s;',(source,))
+		if isinstance(source,str):
+			if self.db_type == 'postgres':
+				self.cursor.execute('SELECT id,url_root FROM sources WHERE name=%s;',(source,))
+			else:
+				self.cursor.execute('SELECT id,url_root FROM sources WHERE name=?;',(source,))
+			ans = self.cursor.fetchone()
+		elif isinstance(source,int):
+			if self.db_type == 'postgres':
+				self.cursor.execute('SELECT id,url_root FROM sources WHERE id=%s;',(source,))
+			else:
+				self.cursor.execute('SELECT id,url_root FROM sources WHERE id=?;',(source,))
+			ans = self.cursor.fetchone()
+		elif source is None and repo_id is not None:
+			if self.db_type == 'postgres':
+				self.cursor.execute('''SELECT s.id,s.url_root FROM sources s
+								INNER JOIN repositories r
+								ON r.id=%s AND r.source=s.id;''',(repo_id,))
+			else:
+				self.cursor.execute('''SELECT s.id,s.url_root FROM sources s
+								INNER JOIN repositories r
+								ON r.id=? AND r.source=s.id;''',(repo_id,))
+			ans = self.cursor.fetchone()
 		else:
-			self.cursor.execute('SELECT id,url_root FROM sources WHERE name=?;',(source,))
-		ans = self.cursor.fetchone()
+			ans = None
 		if ans is None:
-			raise ValueError('Unregistered source {}'.format(source))
+			raise ValueError('Unregistered or unparsed source {} or repo_id {}'.format(source,repo_id))
 		else:
 			return ans
 
@@ -1660,3 +1692,221 @@ class Database(object):
 				;''')
 
 		self.connection.commit()
+
+	def merge_repos(self,
+		obsolete_id=None,
+		obsolete_source=None,
+		obsolete_owner=None,
+		obsolete_name=None,
+		new_id=None,
+		new_source=None,
+		new_owner=None,
+		new_name=None,
+		merging_reason_source='repository merge process'
+		):
+		'''
+		Merge process of two repositories, e.g. when a URL redirect is detected. All information attributed to the new repo.
+		Table_updates of obsolete are deleted (through cascade), just in case one forgets to update one table in the repo_id update process.
+		'''
+
+		# checks
+		if (new_id is None and (new_owner is None or new_name is None)) or (obsolete_id is None and (obsolete_owner is None or obsolete_name is None)):
+			raise SyntaxError('Insufficent info provided for merging repositories (id,source,owner,name): \n new ({},{},{},{}) \n obsolete ({},{},{},{})'.format(new_id,new_source,new_owner,new_name,obsolete_id,obsolete_source,obsolete_owner,obsolete_name))
+
+		if new_id is None:
+			new_id = self.get_repo_id(source=new_source,owner=new_owner,name=new_name)
+		if obsolete_id is None:
+			obsolete_id = self.get_repo_id(source=obsolete_source,owner=obsolete_owner,name=obsolete_name)
+		if obsolete_source is None:
+			obsolete_source = self.get_source_info(repo_id=obsolete_id)[0]
+
+		if new_id == obsolete_id:
+			self.logger.info('Repositories to be merged already match(id,source,owner,name): \n new ({},{},{},{}) \n obsolete ({},{},{},{})'.format(new_id,new_source,new_owner,new_name,obsolete_id,obsolete_source,obsolete_owner,obsolete_name))
+		else:
+			self.logger.info('Repositories to be merged (id,source,owner,name): \n new ({},{},{},{}) \n obsolete ({},{},{},{})'.format(new_id,new_source,new_owner,new_name,obsolete_id,obsolete_source,obsolete_owner,obsolete_name))
+			if new_id is None: # in this case we know new_owner and new_name were provided
+
+				self.register_source(source=merging_reason_source)
+
+				# build url
+				if new_source is None:
+					new_source = obsolete_source
+				new_source_id,url_root = self.get_source_info(source=new_source)
+				url = 'https://{}/{}/{}'.format(url_root,new_owner,new_name)
+
+				if self.db_type == 'postgres':
+					self.cursor.execute('SELECT name FROM source WHERE id=%s;',(new_source_id,))
+				else:
+					self.cursor.execute('SELECT name FROM source WHERE id=?;',(new_source_id,))
+				new_source_name = self.cursor.fetchone()[0]
+
+				# add url
+				self.register_urls(urls=[(url,url,new_source_id)],source=merging_reason_source)
+
+				# change url,source,owner,name
+				if self.db_type == 'postgres':
+					self.cursor.execute('''SELECT cu.url
+							FROM urls cu
+							INNER JOIN urls u
+								ON cu.id=u.cleaned_url
+							INNER JOIN repositories r
+								ON r.url_id=u.id
+								AND r.id=%s
+						;''',(obsolete_id,))
+
+					old_url = self.cursor.fetchone()[0]
+
+					self.cursor.execute('''
+						UPDATE repositories SET
+							url_id=(SELECT id FROM urls WHERE url=%s),
+							source_id=%s,
+							owner=%s,
+							name=%s
+						WHERE id=%s
+						;''',(url,new_source_id,new_owner,new_name,obsolete_id))
+				else:
+					self.cursor.execute('''SELECT cu.url
+							FROM urls cu
+							INNER JOIN urls u
+								ON cu.id=u.cleaned_url
+							INNER JOIN repositories r
+								ON r.url_id=u.id
+								AND r.id=?
+						;''',(obsolete_id,))
+
+					old_url = self.cursor.fetchone()[0]
+
+					self.cursor.execute('''
+						UPDATE repositories SET
+							url_id=(SELECT id FROM urls WHERE url=?),
+							source_id=?,
+							owner=?,
+							name=?
+						WHERE id=?
+						;''',(url,new_source_id,new_owner,new_name,obsolete_id))
+
+
+			else:
+				if self.db_type == 'postgres':
+
+					self.cursor.execute('''SELECT cu.url
+							FROM urls cu
+							INNER JOIN urls u
+								ON cu.id=u.cleaned_url
+							INNER JOIN repositories r
+								ON r.url_id=u.id
+								AND r.id=%s
+						;''',(obsolete_id,))
+
+					old_url = self.cursor.fetchone()[0]
+
+					self.cursor.execute('''SELECT cu.url
+							FROM urls cu
+							INNER JOIN urls u
+								ON cu.id=u.cleaned_url
+							INNER JOIN repositories r
+								ON r.url_id=u.id
+								AND r.id=%s
+						;''',(new_id,))
+
+					url = self.cursor.fetchone()[0]
+
+					self.cursor.execute('''
+						UPDATE packages SET repo_id=%s
+						WHERE repo_id=%s
+						ON CONFLICT DO NOTHING
+						;''',(new_id,obsolete_id))
+					self.cursor.execute('''
+						UPDATE commits SET repo_id=%s
+						WHERE repo_id=%s
+						ON CONFLICT DO NOTHING
+						;''',(new_id,obsolete_id))
+					self.cursor.execute('''
+						UPDATE stars SET repo_id=%s
+						WHERE repo_id=%s
+						ON CONFLICT DO NOTHING
+						;''',(new_id,obsolete_id))
+					self.cursor.execute('''
+						UPDATE commit_repos SET repo_id=%s
+						WHERE repo_id=%s
+						ON CONFLICT DO NOTHING
+						;''',(new_id,obsolete_id))
+					self.cursor.execute('''
+						UPDATE forks SET forked_repo_id=%s
+						WHERE forked_repo_id=%s
+						ON CONFLICT DO NOTHING
+						;''',(new_id,obsolete_id))
+					self.cursor.execute('''
+						UPDATE forks SET forking_repo_id=%s,forking_repo_url=%s
+						WHERE forking_repo_id=%s
+						ON CONFLICT DO NOTHING
+						;''',(new_id,url[8:],obsolete_id))
+
+
+					self.cursor.execute('DELETE FROM repositories WHERE id=%s CASCADE;',(obsolete_id,))
+
+
+				else:
+					self.cursor.execute('''SELECT cu.url
+							FROM urls cu
+							INNER JOIN urls u
+								ON cu.id=u.cleaned_url
+							INNER JOIN repositories r
+								ON r.url_id=u.id
+								AND r.id=?
+						;''',(obsolete_id,))
+
+					old_url = self.cursor.fetchone()[0]
+
+					self.cursor.execute('''SELECT cu.url
+							FROM urls cu
+							INNER JOIN urls u
+								ON cu.id=u.cleaned_url
+							INNER JOIN repositories r
+								ON r.url_id=u.id
+								AND r.id=?
+						;''',(new_id,))
+
+					url = self.cursor.fetchone()[0]
+
+					self.cursor.execute('''
+						UPDATE OR IGNORE packages SET repo_id=?
+						WHERE repo_id=?
+						;''',(new_id,obsolete_id))
+					self.cursor.execute('''
+						UPDATE OR IGNORE commits SET repo_id=?
+						WHERE repo_id=?
+						;''',(new_id,obsolete_id))
+					self.cursor.execute('''
+						UPDATE OR IGNORE stars SET repo_id=?
+						WHERE repo_id=?
+						;''',(new_id,obsolete_id))
+					self.cursor.execute('''
+						UPDATE OR IGNORE commit_repos SET repo_id=?
+						WHERE repo_id=?
+						;''',(new_id,obsolete_id))
+					self.cursor.execute('''
+						UPDATE OR IGNORE forks SET forked_repo_id=?
+						WHERE forked_repo_id=?
+						;''',(new_id,obsolete_id))
+					self.cursor.execute('''
+						UPDATE OR IGNORE forks SET forking_repo_id=?,forking_repo_url=?
+						WHERE forking_repo_id=?
+						;''',(new_id,url[8:],obsolete_id))
+
+
+					self.cursor.execute('DELETE FROM repositories WHERE id=? CASCADE;',(obsolete_id,))
+
+
+			if self.db_type == 'postgres':
+				self.cursor.execute('''
+						INSERT INTO merged_repositories(new_repo,obsolete_repo)
+						VALUES(%s,%s)
+						;''',(url,old_url))
+			else:
+				self.cursor.execute('''
+						INSERT INTO merged_repositories(new_repo,obsolete_repo)
+						VALUES(?,?)
+						;''',(url,old_url))
+
+			self.connection.commit()

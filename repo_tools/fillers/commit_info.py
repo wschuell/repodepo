@@ -523,7 +523,13 @@ class CommitsFiller(fillers.Filler):
 		For repos lower in fork rank, is_orig_repo is set to false.
 		Table commits is filled with ids of true is_orig_repo, provided there are no NULL values remaining
 
-		NB: This supposes that forks have been filled in before!!
+
+		NB: This supposes that forks have been filled in before!! And that if a commit is part of a set of repos that are part of a fork tree, all repos are part of the fork tree.
+		This last comment could lead to 2 repositories fitting to is_orig_repo in a suposedly rare case:
+			- on a first update, one single repo is present for a given commit and gets orig status.
+			- on a second update, more repos have been added, part of a fork tree, but the first repo is not part of that tree
+			- the root of the fork tree get the orig status
+		This is avoided with a run with only_null set to False.
 		'''
 		if only_null:
 			# update is_orig_repo to true for roots of fork trees
@@ -569,6 +575,10 @@ class CommitsFiller(fillers.Filler):
 
 		else:
 
+
+			# set all origs to NULL
+			self.db.cursor.execute('''
+					UPDATE commit_repos SET is_orig_repo=NULL;''')
 
 			# update is_orig_repo to true for roots of fork trees
 			self.db.cursor.execute('''
