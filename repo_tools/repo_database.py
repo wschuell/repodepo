@@ -1761,15 +1761,22 @@ class Database(object):
 					else:
 						old_url = ans[0]
 
+					self.cursor.execute('''SELECT u.id
+							FROM urls u
+							WHERE u.url=%s
+						;''',(url,))
+
+					url_id = self.cursor.fetchone()[0]
+
 					self.cursor.execute('''
 						UPDATE repositories SET
-							url_id=(SELECT id FROM urls WHERE url=%s),
+							url_id=%s,
 							source=%s,
 							owner=%s,
 							name=%s,
 							cloned=false
 						WHERE id=%s
-						;''',(url,new_source_id,new_owner,new_name,obsolete_id))
+						;''',(url_id,new_source_id,new_owner,new_name,obsolete_id))
 
 					self.cursor.execute('''DELETE FROM table_updates WHERE repo_id=%s AND table_name='clones';''',(obsolete_id,))
 				else:
@@ -1788,15 +1795,22 @@ class Database(object):
 					else:
 						old_url = ans[0]
 
+					self.cursor.execute('''SELECT u.id
+							FROM urls u
+							WHERE u.url=?
+						;''',(url,))
+
+					url_id = self.cursor.fetchone()[0]
+
 					self.cursor.execute('''
 						UPDATE repositories SET
-							url_id=(SELECT id FROM urls WHERE url=?),
+							url_id=?,
 							source=?,
 							owner=?,
 							name=?,
 							cloned=false
 						WHERE id=?
-						;''',(url,new_source_id,new_owner,new_name,obsolete_id))
+						;''',(url_id,new_source_id,new_owner,new_name,obsolete_id))
 
 					self.cursor.execute('''DELETE FROM table_updates WHERE repo_id=? AND table_name='clones';''',(obsolete_id,))
 
@@ -1846,19 +1860,23 @@ class Database(object):
 					self.cursor.execute('''
 						UPDATE stars SET repo_id=%s
 						WHERE repo_id=%s
-						;''',(new_id,obsolete_id))
+						AND NOT EXISTS (SELECT repo_id FROM stars s WHERE s.repo_id=%s AND stars.login=s.login AND stars.identity_type_id=s.identity_type_id)
+						;''',(new_id,obsolete_id,new_id))
 					self.cursor.execute('''
 						UPDATE commit_repos SET repo_id=%s
 						WHERE repo_id=%s
-						;''',(new_id,obsolete_id))
+						AND NOT EXISTS (SELECT repo_id FROM commits_repos cr WHERE cr.repo_id=%s AND commit_repos.commit_id=cr.commit_id)
+						;''',(new_id,obsolete_id,new_id))
 					self.cursor.execute('''
 						UPDATE forks SET forked_repo_id=%s
 						WHERE forked_repo_id=%s
-						;''',(new_id,obsolete_id))
+						AND NOT EXISTS (SELECT forked_repo_id FROM forks f WHERE f.forked_repo_id=%s AND forks.forking_repo_url=f.forking_repo_url)
+						;''',(new_id,obsolete_id,new_id))
 					self.cursor.execute('''
 						UPDATE forks SET forking_repo_id=%s,forking_repo_url=%s
 						WHERE forking_repo_id=%s
-						;''',(new_id,url[8:],obsolete_id))
+						AND NOT EXISTS (SELECT forked_repo_id FROM forks f WHERE f.forking_repo_id=%s AND forks.forked_repo_id=f.forked_repo_id)
+						;''',(new_id,url[8:],obsolete_id,new_id))
 
 
 					self.cursor.execute('DELETE FROM repositories WHERE id=%s;',(obsolete_id,))
@@ -1908,19 +1926,23 @@ class Database(object):
 					self.cursor.execute('''
 						UPDATE OR IGNORE stars SET repo_id=?
 						WHERE repo_id=?
-						;''',(new_id,obsolete_id))
+						AND NOT EXISTS (SELECT repo_id FROM stars s WHERE s.repo_id=? AND stars.login=s.login AND stars.identity_type_id=s.identity_type_id)
+						;''',(new_id,obsolete_id,new_id))
 					self.cursor.execute('''
 						UPDATE OR IGNORE commit_repos SET repo_id=?
 						WHERE repo_id=?
-						;''',(new_id,obsolete_id))
+						AND NOT EXISTS (SELECT repo_id FROM commits_repos cr WHERE cr.repo_id=? AND commit_repos.commit_id=cr.commit_id)
+						;''',(new_id,obsolete_id,new_id))
 					self.cursor.execute('''
 						UPDATE OR IGNORE forks SET forked_repo_id=?
 						WHERE forked_repo_id=?
-						;''',(new_id,obsolete_id))
+						AND NOT EXISTS (SELECT forked_repo_id FROM forks f WHERE f.forked_repo_id=? AND forks.forking_repo_id=f.forking_repo_id AND forks.forking_repo_url=f.forking_repo_url)
+						;''',(new_id,obsolete_id,new_id))
 					self.cursor.execute('''
 						UPDATE OR IGNORE forks SET forking_repo_id=?,forking_repo_url=?
 						WHERE forking_repo_id=?
-						;''',(new_id,url[8:],obsolete_id))
+						AND NOT EXISTS (SELECT forked_repo_id FROM forks f WHERE f.forking_repo_id=? AND forks.forked_repo_id=f.forked_repo_id)
+						;''',(new_id,url[8:],obsolete_id,new_id))
 
 
 					self.cursor.execute('DELETE FROM repositories WHERE id=?;',(obsolete_id,))
