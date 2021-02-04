@@ -2,6 +2,8 @@ import os
 import datetime
 import logging
 import sqlite3
+import glob
+import shutil
 
 import csv
 import copy
@@ -41,6 +43,7 @@ class Database(object):
 
 	def __init__(self,db_type='sqlite',db_name='repo_tools',db_folder='.',db_user='postgres',port='5432',host='localhost',data_folder='./datafolder',password=None,clean_first=False,do_init=False,timeout=5):
 		self.db_type = db_type
+		self.logger = logger
 		if db_type == 'sqlite':
 			if db_name.startswith(':memory:'):
 				self.connection = sqlite3.connect(db_name, detect_types=sqlite3.PARSE_DECLTYPES)
@@ -75,7 +78,6 @@ class Database(object):
 			self.clean_db()
 		if do_init:
 			self.init_db()
-		self.logger = logger
 		self.fillers = []
 		self.data_folder = data_folder
 		if not os.path.exists(self.data_folder):
@@ -281,11 +283,35 @@ class Database(object):
 				CREATE INDEX IF NOT EXISTS packages_repo_idx ON packages(repo_id);
 
 				CREATE TABLE IF NOT EXISTS merged_repositories(
-				id BIGSERIAL PRIMARY KEY,
+				id INTEGER PRIMARY KEY,
 				new_repo TEXT,
 				obsolete_repo TEXT,
 				merged_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 				);
+
+				CREATE TABLE IF NOT EXISTS sponsor_repos(
+				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
+				sponsor_identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
+				sponsor_login TEXT,
+				sponsor_id INTEGER REFERENCES identities(id) ON DELETE CASCADE,
+				created_at TIMESTAMP NOT NULL,
+				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				PRIMARY KEY(repo_id,created_at,sponsor_identity_type_id,sponsor_login,sponsor_id)
+				);
+
+				CREATE INDEX IF NOT EXISTS sponsor_repos_idx ON sponsor_repos(sponsor_id,created_at);
+
+				CREATE TABLE IF NOT EXISTS sponsor_users(
+				sponsored_id INTEGER REFERENCES identities(id) ON DELETE CASCADE,
+				sponsor_identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
+				sponsor_id INTEGER REFERENCES identities(id) ON DELETE CASCADE,
+				sponsor_login TEXT,
+				created_at TIMESTAMP NOT NULL,
+				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				PRIMARY KEY(sponsored_id,created_at,sponsor_identity_type_id,sponsor_login,sponsor_id)
+				);
+
+				CREATE INDEX IF NOT EXISTS sponsor_users_idx ON sponsor_users(sponsor_id,created_at);
 		'''
 			for q in self.DB_INIT.split(';')[:-1]:
 				self.cursor.execute(q)
@@ -477,6 +503,30 @@ class Database(object):
 				obsolete_repo TEXT,
 				merged_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 				);
+
+				CREATE TABLE IF NOT EXISTS sponsor_repos(
+				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
+				sponsor_identity_type_id BIGINT REFERENCES identity_types(id) ON DELETE CASCADE,
+				sponsor_login TEXT,
+				sponsor_id BIGINT REFERENCES identities(id) ON DELETE CASCADE,
+				created_at TIMESTAMP NOT NULL,
+				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				PRIMARY KEY(repo_id,created_at,sponsor_identity_type_id,sponsor_login,sponsor_id)
+				);
+
+				CREATE INDEX IF NOT EXISTS sponsor_repos_idx ON sponsor_repos(sponsor_id,created_at);
+
+				CREATE TABLE IF NOT EXISTS sponsor_users(
+				sponsored_id BIGINT REFERENCES identities(id) ON DELETE CASCADE,
+				sponsor_identity_type_id BIGINT REFERENCES identity_types(id) ON DELETE CASCADE,
+				sponsor_id BIGINT REFERENCES identities(id) ON DELETE CASCADE,
+				sponsor_login TEXT,
+				created_at TIMESTAMP NOT NULL,
+				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				PRIMARY KEY(sponsored_id,created_at,sponsor_identity_type_id,sponsor_login,sponsor_id)
+				);
+
+				CREATE INDEX IF NOT EXISTS sponsor_users_idx ON sponsor_users(sponsor_id,created_at);
 				'''
 
 			self.cursor.execute(self.DB_INIT)
@@ -496,6 +546,8 @@ class Database(object):
 			self.connection = sqlite3.connect(self.db_path,timeout=self.timeout, detect_types=sqlite3.PARSE_DECLTYPES)
 			self.cursor = self.connection.cursor()
 		else:
+			self.cursor.execute('DROP TABLE IF EXISTS sponsor_users;')
+			self.cursor.execute('DROP TABLE IF EXISTS sponsor_repos;')
 			self.cursor.execute('DROP TABLE IF EXISTS packages;')
 			self.cursor.execute('DROP TABLE IF EXISTS followers;')
 			self.cursor.execute('DROP TABLE IF EXISTS stars;')
@@ -1741,6 +1793,16 @@ class Database(object):
 			new_id = self.get_repo_id(source=new_source,owner=new_owner,name=new_name)
 		if obsolete_id is None:
 			obsolete_id = self.get_repo_id(source=obsolete_source,owner=obsolete_owner,name=obsolete_name)
+		if obsolete_owner is None:
+			if self.db_type == 'postgres':
+				self.cursor.execute('SELECT owner,name FROM repositories WHERE id=%s;',(obsolete_id,))
+			else:
+				self.cursor.execute('SELECT owner,name FROM repositories WHERE id=?;',(obsolete_id,))
+			ans = self.cursor.fetchone()[0]
+			if ans is None:
+				raise ValueError('repository not found: {}'.format(obsolete_id))
+			else:
+				obsolete_owner,obsolete_name = ans
 		if obsolete_source is None:
 			obsolete_source = self.get_source_info(repo_id=obsolete_id)[0]
 
@@ -1756,6 +1818,7 @@ class Database(object):
 				if new_source is None:
 					new_source = obsolete_source
 				new_source_id,url_root = self.get_source_info(source=new_source)
+				obsolete_source_id,obsolete_url_root = self.get_source_info(source=obsolete_source)
 				url = 'https://{}/{}/{}'.format(url_root,new_owner,new_name)
 
 				if self.db_type == 'postgres':
@@ -1763,6 +1826,12 @@ class Database(object):
 				else:
 					self.cursor.execute('SELECT name FROM sources WHERE id=?;',(new_source_id,))
 				new_source_name = self.cursor.fetchone()[0]
+
+				if self.db_type == 'postgres':
+					self.cursor.execute('SELECT name FROM sources WHERE id=%s;',(obsolete_source_id,))
+				else:
+					self.cursor.execute('SELECT name FROM sources WHERE id=?;',(obsolete_source_id,))
+				obsolete_source_name = self.cursor.fetchone()[0]
 
 				# add url
 				self.register_urls(url_list=[(url,url,new_source_id)],source=merging_reason_source)
@@ -1791,17 +1860,30 @@ class Database(object):
 
 					url_id = self.cursor.fetchone()[0]
 
+					self.cursor.execute('''SELECT r.url_id
+							FROM repositories r
+							WHERE r.id=%s
+						;''',(obsolete_id,))
+
+					old_url_id = self.cursor.fetchone()[0]
+					self.connection.commit()
+
 					self.cursor.execute('''
 						UPDATE repositories SET
 							url_id=%s,
 							source=%s,
 							owner=%s,
-							name=%s,
-							cloned=false
+							name=%s
 						WHERE id=%s
 						;''',(url_id,new_source_id,new_owner,new_name,obsolete_id))
 
 					self.cursor.execute('''DELETE FROM table_updates WHERE repo_id=%s AND table_name='clones';''',(obsolete_id,))
+
+					if old_url_id is not None:
+						self.cursor.execute('''UPDATE urls SET cleaned_url=%s
+							WHERE urls.cleaned_url=(SELECT u.cleaned_url FROM urls u WHERE u.id=%s)
+						;''',(url_id,old_url_id,))
+
 				else:
 					self.cursor.execute('''SELECT cu.url
 							FROM urls cu
@@ -1825,18 +1907,37 @@ class Database(object):
 
 					url_id = self.cursor.fetchone()[0]
 
+					self.cursor.execute('''SELECT r.url_id
+							FROM repositories r
+							WHERE r.id=?
+						;''',(obsolete_id,))
+
+					old_url_id = self.cursor.fetchone()[0]
+					self.connection.commit()
+
 					self.cursor.execute('''
 						UPDATE repositories SET
 							url_id=?,
 							source=?,
 							owner=?,
-							name=?,
-							cloned=false
+							name=?
 						WHERE id=?
 						;''',(url_id,new_source_id,new_owner,new_name,obsolete_id))
 
 					self.cursor.execute('''DELETE FROM table_updates WHERE repo_id=? AND table_name='clones';''',(obsolete_id,))
 
+					if old_url_id is not None:
+						self.cursor.execute('''UPDATE urls SET cleaned_url=?
+							WHERE urls.cleaned_url=(SELECT u.cleaned_url FROM urls u WHERE u.id=?)
+						;''',(url_id,old_url_id,))
+
+				if os.path.exists(os.path.join(self.data_folder,'cloned_repos',obsolete_source_name,obsolete_owner,obsolete_name)):
+					if not os.path.exists(os.path.join(self.data_folder,'cloned_repos',new_source_name,new_owner,new_name)):
+						if not os.path.exists(os.path.join(self.data_folder,'cloned_repos',new_source_name,new_owner)):
+							os.makedirs(os.path.join(self.data_folder,'cloned_repos',new_source_name,new_owner))
+						shutil.move(os.path.join(self.data_folder,'cloned_repos',obsolete_source_name,obsolete_owner,obsolete_name),os.path.join(self.data_folder,'cloned_repos',new_source_name,new_owner,new_name))
+						if not os.listdir(os.path.join(self.data_folder,'cloned_repos',new_source_name,new_owner)):
+							shutil.rmtree(os.path.join(self.data_folder,'cloned_repos',new_source_name,new_owner))
 			else:
 				if self.db_type == 'postgres':
 
@@ -1849,6 +1950,23 @@ class Database(object):
 								AND r.id=%s
 						;''',(obsolete_id,))
 
+
+					self.cursor.execute('''SELECT r.url_id
+							FROM repositories r
+							WHERE r.id=%s
+						;''',(new_id,))
+
+					url_id = self.cursor.fetchone()[0]
+
+
+					self.cursor.execute('''SELECT r.url_id
+							FROM repositories r
+							WHERE r.id=%s
+						;''',(obsolete_id,))
+
+					old_url_id = self.cursor.fetchone()[0]
+
+					self.connection.commit()
 
 					ans = self.cursor.fetchone()
 					if ans is None:
@@ -1904,6 +2022,11 @@ class Database(object):
 
 					self.cursor.execute('DELETE FROM repositories WHERE id=%s;',(obsolete_id,))
 
+					if old_url_id is not None:
+						self.cursor.execute('''UPDATE urls SET cleaned_url=%s
+							WHERE urls.cleaned_url=(SELECT u.cleaned_url FROM urls u WHERE u.id=%s)
+						;''',(url_id,old_url_id,))
+
 
 				else:
 					self.cursor.execute('''SELECT cu.url
@@ -1938,6 +2061,23 @@ class Database(object):
 						url = ans[0]
 
 
+					self.cursor.execute('''SELECT r.url_id
+							FROM repositories r
+							WHERE r.id=?
+						;''',(new_id,))
+
+					url_id = self.cursor.fetchone()[0]
+
+
+					self.cursor.execute('''SELECT r.url_id
+							FROM repositories r
+							WHERE r.id=?
+						;''',(obsolete_id,))
+
+					old_url_id = self.cursor.fetchone()[0]
+
+					self.connection.commit()
+
 					self.cursor.execute('''
 						UPDATE OR IGNORE packages SET repo_id=?
 						WHERE repo_id=?
@@ -1969,6 +2109,11 @@ class Database(object):
 
 
 					self.cursor.execute('DELETE FROM repositories WHERE id=?;',(obsolete_id,))
+
+					if old_url_id is not None:
+						self.cursor.execute('''UPDATE urls SET cleaned_url=?
+							WHERE urls.cleaned_url=(SELECT u.cleaned_url FROM urls u WHERE u.id=?)
+						;''',(url_id,old_url_id,))
 
 
 			if self.db_type == 'postgres':
