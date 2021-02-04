@@ -889,37 +889,60 @@ class Database(object):
 
 		elif option == 'starinfo_dict':
 			self.cursor.execute('''
-				SELECT s.name,r.owner,r.name,r.id,tu.updated_at
+				SELECT s.name,r.owner,r.name,r.id,MAX(tu.updated_at)
 				FROM repositories r
 				INNER JOIN sources s
 				ON s.id=r.source
 				LEFT OUTER JOIN table_updates tu
 				ON tu.repo_id=r.id AND tu.table_name='stars'
+				GROUP BY s.name,r.owner,r.name
 				ORDER BY s.name,r.owner,r.name
 				;''')
 			return [{'source':r[0],'owner':r[1],'name':r[2],'repo_id':r[3],'last_star_update':r[4]} for r in self.cursor.fetchall()]
 
 		elif option == 'starinfo':
 			self.cursor.execute('''
-				SELECT s.name,r.owner,r.name,r.id,tu.updated_at,tu.success
-				FROM repositories r
-				INNER JOIN sources s
-				ON s.id=r.source
-				LEFT OUTER JOIN table_updates tu
-				ON tu.repo_id=r.id AND tu.table_name='stars'
-				ORDER BY s.name,r.owner,r.name
+				SELECT t1.sname,t1.rowner,t1.rname,t1.rid,t1.updated,t1.succ FROM
+					(SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ
+						FROM repositories r
+						INNER JOIN sources s
+						ON s.id=r.source
+						LEFT OUTER JOIN table_updates tu
+						ON tu.repo_id=r.id AND tu.table_name='stars'
+						ORDER BY r.owner,r.name,tu.updated_at ) as t1
+					INNER JOIN
+						(SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id AS rid,max(tu.updated_at) AS updated
+						FROM repositories r
+						INNER JOIN sources s
+						ON s.id=r.source
+						LEFT OUTER JOIN table_updates tu
+						ON tu.repo_id=r.id AND tu.table_name='stars'
+						GROUP BY r.owner,r.name,r.id,s."name" ) AS t2
+				ON t1.updated=t2.updated
+				ORDER BY t1.sname,t1.rowner,t1.rname
 				;''')
 			return list(self.cursor.fetchall())
 
 		elif option == 'forkinfo':
 			self.cursor.execute('''
-				SELECT s.name,r.owner,r.name,r.id,tu.updated_at,tu.success
-				FROM repositories r
-				INNER JOIN sources s
-				ON s.id=r.source
-				LEFT OUTER JOIN table_updates tu
-				ON tu.repo_id=r.id AND tu.table_name='forks'
-				ORDER BY s.name,r.owner,r.name
+				SELECT t1.sname,t1.rowner,t1.rname,t1.rid,t1.updated,t1.succ FROM
+					(SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ
+						FROM repositories r
+						INNER JOIN sources s
+						ON s.id=r.source
+						LEFT OUTER JOIN table_updates tu
+						ON tu.repo_id=r.id AND tu.table_name='forks'
+						ORDER BY r.owner,r.name,tu.updated_at ) as t1
+					INNER JOIN
+						(SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id AS rid,max(tu.updated_at) AS updated
+						FROM repositories r
+						INNER JOIN sources s
+						ON s.id=r.source
+						LEFT OUTER JOIN table_updates tu
+						ON tu.repo_id=r.id AND tu.table_name='forks'
+						GROUP BY r.owner,r.name,r.id,s."name" ) AS t2
+				ON t1.updated=t2.updated
+				ORDER BY t1.sname,t1.rowner,t1.rname
 				;''')
 			return list(self.cursor.fetchall())
 
