@@ -141,11 +141,12 @@ class RepositoriesFiller(fillers.Filler):
 	Goes through packages to associate them back with the created repos
 	Uses sources already in the database, dont forget to register them beforehand
 	'''
-	def __init__(self,source='autofill_repos_from_urls',**kwargs):
+	def __init__(self,source='autofill_repos_from_urls',force=False,**kwargs):
 		'''
 
 		'''
 		self.source = source
+		self.force = force
 		fillers.Filler.__init__(self,**kwargs)
 
 	def prepare(self):
@@ -155,12 +156,21 @@ class RepositoriesFiller(fillers.Filler):
 		self.db.cursor.execute('SELECT id,url_root FROM sources WHERE url_root IS NOT NULL;')
 		self.url_roots = list(self.db.cursor.fetchall())
 
-		self.db.cursor.execute('SELECT url FROM urls;')
-		# self.urls = [(raw_url,cleaned_url,source_id)]
+		if self.force:
+
+			self.db.cursor.execute('SELECT url FROM urls;')
+			# self.urls = [(raw_url,cleaned_url,source_id)]
+		else:
+			self.db.cursor.execute('''
+					SELECT u.url FROM urls u
+					LEFT OUTER JOIN repositories r
+					ON r.url_id=u.id
+					WHERE r.url_id IS NULL AND (u.id=u.cleaned_url OR u.cleaned_url IS NULL)
+					;''')
 		self.urls = list(set([(u[0],*self.clean_url(u[0])) for u in self.db.cursor.fetchall()]))
 		self.cleaned_urls = list(set([(cleaned_url,source_id) for (raw_url,cleaned_url,source_id) in self.urls if cleaned_url is not None]))
 
-		# source_id,owner,name,cleaned_url
+			# source_id,owner,name,cleaned_url
 		self.repo_info_list = [(source_id,cleaned_url.split('/')[-2],cleaned_url.split('/')[-1],cleaned_url) for (cleaned_url,source_id) in self.cleaned_urls ]
 
 
@@ -315,6 +325,8 @@ class ClonesFiller(fillers.Filler):
 	def prepare(self):
 		if self.data_folder is None:
 			self.data_folder = self.db.data_folder
+		elif self.data_folder != self.db.data_folder:
+			raise ValueError('Data folder for ClonesFiller should not be different than db.data_folder. This ensures safe clones renaming when detecting change in repo name.')
 		if self.rm_first and os.path.exists(os.path.join(self.data_folder,'cloned_repos')):
 			shutil.rmtree(os.path.join(self.data_folder,'cloned_repos'))
 		self.make_folder() # creating folder if not existing

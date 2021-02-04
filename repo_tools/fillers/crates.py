@@ -20,6 +20,7 @@ class CratesFiller(generic.PackageFiller):
 			password=None,
 			host='localhost',
 			package_limit=None,
+			force=False,
 					**kwargs):
 		self.source = source
 		self.source_urlroot = source_urlroot
@@ -29,6 +30,7 @@ class CratesFiller(generic.PackageFiller):
 						'user':user,
 						'password':password,
 						'host':host}
+		self.force = force
 		fillers.Filler.__init__(self,**kwargs)
 
 	def prepare(self):
@@ -47,6 +49,25 @@ class CratesFiller(generic.PackageFiller):
 		crates_conn = psycopg2.connect(**self.conninfo)
 		try:
 			self.package_list = self.get_packages_from_crates(conn=crates_conn)
+			if not self.force:
+				if self.db.db_type == 'postgres':
+					self.db.cursor.execute('''SELECT MAX(p.created_at) FROM packages p
+									INNER JOIN sources s
+									ON p.source_id=s.id
+									AND s.name=%s
+									; ''',(self.source,))
+				else:
+					self.db.cursor.execute('''SELECT MAX(p.created_at) FROM packages p
+									INNER JOIN sources s
+									ON p.source_id=s.id
+									AND s.name=?
+									; ''',(self.source,))
+				ans = self.db.cursor.fetchone()
+				if ans is not None:
+					last_created_at = ans[0]
+					if isinstance(last_created_at,str):
+						last_created_at = datetime.datetime.strptime(last_created_at,'%Y-%m-%d %H:%M:%S')
+					self.package_list = [(i,n,c_at,r) for (i,n,c_at,r) in self.package_list if c_at>last_created_at]
 		finally:
 			crates_conn.close()
 

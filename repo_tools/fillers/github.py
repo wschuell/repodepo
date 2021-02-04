@@ -78,27 +78,40 @@ class GithubFiller(fillers.Filler):
 			else:
 				self.github_requesters.append(g)
 
-	def get_github_requester(self):
+	def get_github_requester(self,random_pick=True):
 		'''
 		Going through requesters respecting threshold of minimum remaining api queries
 		'''
 		if not hasattr(self,'github_requesters'):
 			self.set_github_requesters()
-		while True:
-			for i,rq in enumerate(self.github_requesters):
-				self.logger.debug('Using github requester {}, {} queries remaining'.format(i,rq.get_rate_limit().core.remaining))
-				# time.sleep(0.5)
-				while rq.get_rate_limit().core.remaining > self.querymin_threshold:
-					yield rq
-			if any(((rq.get_rate_limit().core.remaining > self.querymin_threshold) for rq in self.github_requesters)):
-				continue
-			elif self.fail_on_wait:
-				raise IOError('All {} API keys are below the min remaining query threshold'.format(len(self.github_requesters)))
-			else:
-				earliest_reset = min([calendar.timegm(rq.get_rate_limit().core.reset.timetuple()) for rq in self.github_requesters])
-				time_to_reset =  earliest_reset - calendar.timegm(time.gmtime())
-				self.logger.info('Waiting for reset of at least one github requester, sleeping {} seconds'.format(time_to_reset+1))
-				time.sleep(time_to_reset+1)
+		if random_pick:
+			while True:
+				active_requesters = [rq for rq in self.github_requesters if rq.get_rate_limit().core.remaining > self.querymin_threshold]
+				if len(active_requesters):
+					yield random.choice(active_requesters)
+				elif self.fail_on_wait:
+					raise IOError('All {} API keys are below the min remaining query threshold'.format(len(self.github_requesters)))
+				else:
+					earliest_reset = min([calendar.timegm(rq.get_rate_limit().core.reset.timetuple()) for rq in self.github_requesters])
+					time_to_reset =  earliest_reset - calendar.timegm(time.gmtime())
+					self.logger.info('Waiting for reset of at least one github requester, sleeping {} seconds'.format(time_to_reset+1))
+					time.sleep(time_to_reset+1)
+		else:
+			while True:
+				for i,rq in enumerate(self.github_requesters):
+					self.logger.debug('Using github requester {}, {} queries remaining'.format(i,rq.get_rate_limit().core.remaining))
+					# time.sleep(0.5)
+					while rq.get_rate_limit().core.remaining > self.querymin_threshold:
+						yield rq
+				if any(((rq.get_rate_limit().core.remaining > self.querymin_threshold) for rq in self.github_requesters)):
+					continue
+				elif self.fail_on_wait:
+					raise IOError('All {} API keys are below the min remaining query threshold'.format(len(self.github_requesters)))
+				else:
+					earliest_reset = min([calendar.timegm(rq.get_rate_limit().core.reset.timetuple()) for rq in self.github_requesters])
+					time_to_reset =  earliest_reset - calendar.timegm(time.gmtime())
+					self.logger.info('Waiting for reset of at least one github requester, sleeping {} seconds'.format(time_to_reset+1))
+					time.sleep(time_to_reset+1)
 
 
 class StarsFiller(GithubFiller):
@@ -143,6 +156,8 @@ class StarsFiller(GithubFiller):
 					# repo_list.append('{}/{}'.format(r['name'],r['owner']))
 					# repo_list.append('{}/{}'.format(r[2],r[3]))
 					repo_list.append(r)
+			self.db.connection.commit()
+
 
 		if workers == 1:
 			requester_gen = self.get_github_requester()
@@ -177,6 +192,7 @@ class StarsFiller(GithubFiller):
 						repo_id = db.get_repo_id(owner=checked_repo_owner,name=checked_repo_name,source='GitHub')
 					while requester.get_rate_limit().core.remaining > self.querymin_threshold:
 						nb_stars = db.count_stars(source=source,repo=repo_name,owner=owner)
+						db.connection.commit()
 						# sg_list = list(repo_apiobj.get_stargazers_with_dates()[nb_stars:nb_stars+per_page])
 						sg_list = list(repo_apiobj.get_stargazers_with_dates().get_page(int(nb_stars/self.per_page)))
 
@@ -186,6 +202,7 @@ class StarsFiller(GithubFiller):
 								time.sleep(1+random.random()) # to avoid database locked issues, and smooth a bit concurrency
 							# db.insert_stars(stars_list=[{'repo_id':repo_id,'source':source,'repo':repo_name,'owner':owner,'starred_at':sg.starred_at,'login':sg.user.login} for sg in sg_list],commit=False)
 							self.insert_stars(db=db,stars_list=[{'repo_id':repo_id,'source':source,'repo':repo_name,'owner':owner,'starred_at':sg.starred_at,'login':sg.user.login} for sg in sg_list],commit=False)
+							db.connection.commit()
 						else:
 							self.logger.info('Filled stars for repo {}/{}: {}'.format(owner,repo_name,nb_stars))
 							db.insert_update(repo_id=repo_id,table='stars',success=True)
@@ -372,6 +389,8 @@ class GHLoginsFiller(GithubFiller):
 						;''')
 
 			self.info_list = list(self.db.cursor.fetchall())
+			self.db.connection.commit()
+
 
 	def fill_gh_logins(self,info_list=None,workers=1,in_thread=False):
 		'''
@@ -532,6 +551,8 @@ class ForksFiller(GithubFiller):
 					# repo_list.append('{}/{}'.format(r[2],r[3]))
 					repo_list.append(r)
 
+			self.db.connection.commit() # avoids a lock 'idle in transaction' for the previous select query
+
 		if workers == 1:
 			requester_gen = self.get_github_requester()
 			if in_thread:
@@ -565,6 +586,8 @@ class ForksFiller(GithubFiller):
 						repo_id = db.get_repo_id(owner=checked_repo_owner,name=checked_repo_name,source='GitHub')
 					while requester.get_rate_limit().core.remaining > self.querymin_threshold:
 						nb_forks = db.count_forks(source=source,repo=repo_name,owner=owner)
+						db.connection.commit()
+
 						# sg_list = list(repo_apiobj.get_stargazers_with_dates()[nb_stars:nb_stars+per_page])
 						sg_list = list(repo_apiobj.get_forks().get_page(int(nb_forks/self.per_page)))
 						forks_list=[{'repo_id':repo_id,'source':source,'repo':repo_name,'owner':owner,'repo_fullname':sg.full_name,'created_at':sg.created_at} for sg in sg_list]
@@ -578,10 +601,8 @@ class ForksFiller(GithubFiller):
 									INSERT INTO forks(forking_repo_id,forked_repo_id,forking_repo_url,forked_at)
 									VALUES((SELECT r.id FROM repositories r
 												INNER JOIN sources s
-												ON s.name=%s AND s.id=r.source AND CONCAT(r.owner,'/',r.name)=%s),
-											%s,
-											%s,
-											%s)
+												ON s.name=%s AND s.id=r.source AND CONCAT(r.owner,'/',r.name)=%s)
+											,%s,%s,%s)
 									ON CONFLICT DO NOTHING
 									;''',((s['source'],s['repo_fullname'],s['repo_id'],'github.com/'+s['repo_fullname'],s['created_at']) for s in forks_list))
 							else:
@@ -589,13 +610,11 @@ class ForksFiller(GithubFiller):
 									INSERT OR IGNORE INTO forks(forking_repo_id,forked_repo_id,forking_repo_url,forked_at)
 									VALUES((SELECT r.id FROM repositories r
 												INNER JOIN sources s
-												ON s.name=? AND s.id=r.source AND r.owner || '/' || r.name =?),
-											?,
-											?,
-											?)
+												ON s.name=? AND s.id=r.source AND CONCAT(r.owner,'/',r.name)=?)
+											,?,?,?)
 									;''',((s['source'],s['repo_fullname'],s['repo_id'],'github.com/'+s['repo_fullname'],s['created_at']) for s in forks_list))
-
 							#db.insert_forks(,commit=False)
+							db.connection.commit()
 						else:
 							self.logger.info('Filled forks for repo {}/{}: {}'.format(owner,repo_name,nb_forks))
 							db.insert_update(repo_id=repo_id,table='forks',success=True)
@@ -644,6 +663,9 @@ class ForksFiller(GithubFiller):
 		if rowcount > 0:
 			self.logger.info('Filled {} missing indirect fork relations'.format(rowcount))
 			self.fill_fork_ranks(step=step+1)
+
+		self.db.connection.commit()
+
 
 class FollowersFiller(GithubFiller):
 	"""
@@ -732,6 +754,8 @@ class FollowersFiller(GithubFiller):
 					ON tu.success AND tu.identity_id=i.id AND tu.table_name='followers';
 					''')
 			self.login_list = list(self.db.cursor.fetchall())
+		self.db.connection.commit()
+
 
 	def fill_followers(self,retry=False,login_list=None,workers=1,in_thread=False):
 		'''
@@ -765,12 +789,15 @@ class FollowersFiller(GithubFiller):
 				else:
 					while requester.get_rate_limit().core.remaining > self.querymin_threshold:
 						nb_followers = db.count_followers(login_id=login_id)
+						db.connection.commit()
+
 						sg_list = list(login_apiobj.get_followers().get_page(int(nb_followers/self.per_page)))
 
 						if nb_followers < self.per_page*(int(nb_followers/self.per_page))+len(sg_list):
 							if db.db_type == 'sqlite' and in_thread:
 								time.sleep(1+random.random()) # to avoid database locked issues, and smooth a bit concurrency
-							self.insert_followers(db=db,followers_list=[{'login_id':login_id,'identity_type_id':identity_type_id,'login':login,'follower_login':sg.login} for sg in sg_list],commit=False)
+							self.insert_followers(db=db,followers_list=[{'login_id':login_id,'identity_type_id':identity_type_id,'login':login,'follower_login':sg.login} for sg in sg_list],commit=True)
+
 						else:
 							self.logger.info('Filled followers for login {}: {}'.format(login,nb_followers))
 							db.insert_update(identity_id=login_id,table='followers',success=True)
