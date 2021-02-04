@@ -16,12 +16,9 @@ class DummyMetaFiller(fillers.Filler):
 	"""
 	Meta Filler with dummy data
 	"""
-	def __init__(self,workers=1,api_keys_file=None,packages_file=None,**kwargs):
+	def __init__(self,workers=1,api_keys_file='github_api_keys.txt',packages_file=None,**kwargs):
 		self.workers = workers
-		if api_keys_file is None:
-			self.api_keys_file = os.path.join(os.path.dirname(os.path.dirname(rp.__file__)),'tests','testmodule','dummy_data','github_api_keys.txt')
-		else:
-			self.api_keys_file = api_keys_file
+		self.api_keys_file = api_keys_file
 		if packages_file is None:
 			self.packages_file = os.path.join(os.path.dirname(os.path.dirname(rp.__file__)),'tests','testmodule','dummy_data','packages.csv')
 		else:

@@ -62,11 +62,16 @@ class GithubFiller(fillers.Filler):
 		elif os.path.exists(self.api_keys_file):
 			with open(self.api_keys_file,'r') as f:
 				self.api_keys += [l.split('#')[0] for l in f.read().split('\n')]
-
+		elif os.path.exists(os.path.join(os.environ['HOME'],'.repo_tools',self.api_keys_file)):
+			with open(os.path.join(os.environ['HOME'],'.repo_tools',self.api_keys_file),'r') as f:
+				self.api_keys += [l.split('#')[0] for l in f.read().split('\n')]
 		try:
 			self.api_keys.append(os.environ['GITHUB_API_KEY'])
 		except KeyError:
 			pass
+
+		if not len(self.api_keys):
+			self.logger.info('No API keys found for Github, using default anonymous (but limited) authentication.\nLooking for api_keys_file in db.data_folder, then in current folder, then in ~/.repo_tools/.\nAdding content of environment variable GITHUB_API_KEY.')
 
 		self.github_requesters = [github.Github(per_page=self.per_page)]
 		for ak in set(self.api_keys):
