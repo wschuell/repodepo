@@ -1865,7 +1865,7 @@ class Database(object):
 					self.cursor.execute('''
 						UPDATE commit_repos SET repo_id=%s
 						WHERE repo_id=%s
-						AND NOT EXISTS (SELECT repo_id FROM commits_repos cr WHERE cr.repo_id=%s AND commit_repos.commit_id=cr.commit_id)
+						AND NOT EXISTS (SELECT repo_id FROM commit_repos cr WHERE cr.repo_id=%s AND commit_repos.commit_id=cr.commit_id)
 						;''',(new_id,obsolete_id,new_id))
 					self.cursor.execute('''
 						UPDATE forks SET forked_repo_id=%s
@@ -1931,7 +1931,7 @@ class Database(object):
 					self.cursor.execute('''
 						UPDATE OR IGNORE commit_repos SET repo_id=?
 						WHERE repo_id=?
-						AND NOT EXISTS (SELECT repo_id FROM commits_repos cr WHERE cr.repo_id=? AND commit_repos.commit_id=cr.commit_id)
+						AND NOT EXISTS (SELECT repo_id FROM commit_repos cr WHERE cr.repo_id=? AND commit_repos.commit_id=cr.commit_id)
 						;''',(new_id,obsolete_id,new_id))
 					self.cursor.execute('''
 						UPDATE OR IGNORE forks SET forked_repo_id=?
