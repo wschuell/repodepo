@@ -505,6 +505,7 @@ class Database(object):
 			self.cursor.execute('DROP TABLE IF EXISTS commits;')
 			self.cursor.execute('DROP TABLE IF EXISTS table_updates;')
 			self.cursor.execute('DROP TABLE IF EXISTS merged_identities;')
+			self.cursor.execute('DROP TABLE IF EXISTS merged_repositories;')
 			self.cursor.execute('DROP TABLE IF EXISTS identities;')
 			self.cursor.execute('DROP TABLE IF EXISTS users;')
 			self.cursor.execute('DROP TABLE IF EXISTS identity_types;')
@@ -1741,7 +1742,7 @@ class Database(object):
 				new_source_name = self.cursor.fetchone()[0]
 
 				# add url
-				self.register_urls(urls=[(url,url,new_source_id)],source=merging_reason_source)
+				self.register_urls(url_list=[(url,url,new_source_id)],source=merging_reason_source)
 
 				# change url,source,owner,name
 				if self.db_type == 'postgres':
@@ -1754,17 +1755,23 @@ class Database(object):
 								AND r.id=%s
 						;''',(obsolete_id,))
 
-					old_url = self.cursor.fetchone()[0]
+					ans = self.cursor.fetchone()
+					if ans is None:
+						old_url = '{},{},{}'.format(obsolete_source,obsolete_owner,obsolete_name)
+					else:
+						old_url = ans[0]
 
 					self.cursor.execute('''
 						UPDATE repositories SET
 							url_id=(SELECT id FROM urls WHERE url=%s),
-							source_id=%s,
+							source=%s,
 							owner=%s,
 							name=%s,
 							cloned=false
 						WHERE id=%s
 						;''',(url,new_source_id,new_owner,new_name,obsolete_id))
+
+					self.cursor.execute('''DELETE FROM table_updates WHERE repo_id=%s AND table_name='clones';''',(obsolete_id,))
 				else:
 					self.cursor.execute('''SELECT cu.url
 							FROM urls cu
@@ -1775,18 +1782,23 @@ class Database(object):
 								AND r.id=?
 						;''',(obsolete_id,))
 
-					old_url = self.cursor.fetchone()[0]
+					ans = self.cursor.fetchone()
+					if ans is None:
+						old_url = '{},{},{}'.format(obsolete_source,obsolete_owner,obsolete_name)
+					else:
+						old_url = ans[0]
 
 					self.cursor.execute('''
 						UPDATE repositories SET
 							url_id=(SELECT id FROM urls WHERE url=?),
-							source_id=?,
+							source=?,
 							owner=?,
 							name=?,
 							cloned=false
 						WHERE id=?
 						;''',(url,new_source_id,new_owner,new_name,obsolete_id))
 
+					self.cursor.execute('''DELETE FROM table_updates WHERE repo_id=? AND table_name='clones';''',(obsolete_id,))
 
 			else:
 				if self.db_type == 'postgres':
@@ -1800,7 +1812,12 @@ class Database(object):
 								AND r.id=%s
 						;''',(obsolete_id,))
 
-					old_url = self.cursor.fetchone()[0]
+
+					ans = self.cursor.fetchone()
+					if ans is None:
+						old_url = '{},{},{}'.format(obsolete_source,obsolete_owner,obsolete_name)
+					else:
+						old_url = ans[0]
 
 					self.cursor.execute('''SELECT cu.url
 							FROM urls cu
@@ -1811,41 +1828,40 @@ class Database(object):
 								AND r.id=%s
 						;''',(new_id,))
 
-					url = self.cursor.fetchone()[0]
+
+					ans = self.cursor.fetchone()
+					if ans is None:
+						url = '{},{},{}'.format(new_source,new_owner,new_name)
+					else:
+						url = ans[0]
 
 					self.cursor.execute('''
 						UPDATE packages SET repo_id=%s
 						WHERE repo_id=%s
-						ON CONFLICT DO NOTHING
 						;''',(new_id,obsolete_id))
 					self.cursor.execute('''
 						UPDATE commits SET repo_id=%s
 						WHERE repo_id=%s
-						ON CONFLICT DO NOTHING
 						;''',(new_id,obsolete_id))
 					self.cursor.execute('''
 						UPDATE stars SET repo_id=%s
 						WHERE repo_id=%s
-						ON CONFLICT DO NOTHING
 						;''',(new_id,obsolete_id))
 					self.cursor.execute('''
 						UPDATE commit_repos SET repo_id=%s
 						WHERE repo_id=%s
-						ON CONFLICT DO NOTHING
 						;''',(new_id,obsolete_id))
 					self.cursor.execute('''
 						UPDATE forks SET forked_repo_id=%s
 						WHERE forked_repo_id=%s
-						ON CONFLICT DO NOTHING
 						;''',(new_id,obsolete_id))
 					self.cursor.execute('''
 						UPDATE forks SET forking_repo_id=%s,forking_repo_url=%s
 						WHERE forking_repo_id=%s
-						ON CONFLICT DO NOTHING
 						;''',(new_id,url[8:],obsolete_id))
 
 
-					self.cursor.execute('DELETE FROM repositories WHERE id=%s CASCADE;',(obsolete_id,))
+					self.cursor.execute('DELETE FROM repositories WHERE id=%s;',(obsolete_id,))
 
 
 				else:
@@ -1858,7 +1874,11 @@ class Database(object):
 								AND r.id=?
 						;''',(obsolete_id,))
 
-					old_url = self.cursor.fetchone()[0]
+					ans = self.cursor.fetchone()
+					if ans is None:
+						old_url = '{},{},{}'.format(obsolete_source,obsolete_owner,obsolete_name)
+					else:
+						old_url = ans[0]
 
 					self.cursor.execute('''SELECT cu.url
 							FROM urls cu
@@ -1869,7 +1889,13 @@ class Database(object):
 								AND r.id=?
 						;''',(new_id,))
 
-					url = self.cursor.fetchone()[0]
+
+					ans = self.cursor.fetchone()
+					if ans is None:
+						url = '{},{},{}'.format(new_source,new_owner,new_name)
+					else:
+						url = ans[0]
+
 
 					self.cursor.execute('''
 						UPDATE OR IGNORE packages SET repo_id=?
@@ -1897,7 +1923,7 @@ class Database(object):
 						;''',(new_id,url[8:],obsolete_id))
 
 
-					self.cursor.execute('DELETE FROM repositories WHERE id=? CASCADE;',(obsolete_id,))
+					self.cursor.execute('DELETE FROM repositories WHERE id=?;',(obsolete_id,))
 
 
 			if self.db_type == 'postgres':

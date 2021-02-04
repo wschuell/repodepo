@@ -48,6 +48,15 @@ def test_repo(testdb):
 	testdb.register_url(source='GitHub',repo_url='https://github.com/test/test')
 	testdb.register_repo(source='GitHub',repo='test',owner='test')
 
+def test_merge_repos(testdb):
+	testdb.register_source(source='GitHub',source_urlroot='github.com')
+	testdb.register_url(source='GitHub',repo_url='https://github.com/test/test')
+	testdb.register_repo(source='GitHub',repo='test',owner='test')
+	testdb.register_url(source='GitHub',repo_url='https://github.com/test1/test2')
+	testdb.register_repo(source='GitHub',repo='test2',owner='test1')
+	testdb.merge_repos(obsolete_source='GitHub',obsolete_owner='test',obsolete_name='test',new_owner='test1',new_name='test2')
+	testdb.merge_repos(obsolete_source='GitHub',obsolete_owner='test1',obsolete_name='test2',new_owner='test3',new_name='test2')
+
 
 def test_dl(testdb):
 	testdb.register_source(source='GitHub',source_urlroot='github.com')

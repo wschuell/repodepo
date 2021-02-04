@@ -335,13 +335,15 @@ class ClonesFiller(fillers.Filler):
 
 			if self.db.db_type == 'postgres':
 				extras.execute_batch(self.db.cursor,'UPDATE repositories SET cloned=false WHERE id=%s;',repo_ids_to_update)
+				extras.execute_batch(self.db.cursor,'''DELETE FROM table_updates WHERE repo_id=%s AND table_name='clones';''',repo_ids_to_update)
 			else:
 				self.db.cursor.executemany('UPDATE repositories SET cloned=false WHERE id=?;',repo_ids_to_update)
+				self.db.cursor.executemany('''DELETE FROM table_updates WHERE repo_id=? AND table_name='clones';''',repo_ids_to_update)
 			if len(repo_ids_to_update):
 				self.logger.info('{} repositories set as cloned but not found in cloned_repos folder, setting to not cloned'.format(len(repo_ids_to_update)))
 			else:
 				self.logger.info('All repositories set as cloned found in cloned_repos folder')
-			self.db.commit()
+			self.db.connection.commit()
 
 	def make_folder(self):
 		'''

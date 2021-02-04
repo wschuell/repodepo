@@ -47,6 +47,7 @@ class DummyMetaFiller(fillers.Filler):
 			api_keys_file = os.path.basename(self.api_keys_file)
 
 		self.db.add_filler(github.ForksFiller(fail_on_wait=True,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
+		self.db.add_filler(generic.ClonesFiller())
 		self.db.add_filler(commit_info.CommitsFiller())
 		self.db.add_filler(github.GHLoginsFiller(fail_on_wait=True,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
 		self.db.add_filler(github.StarsFiller(fail_on_wait=True,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))

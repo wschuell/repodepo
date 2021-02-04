@@ -174,6 +174,7 @@ class StarsFiller(GithubFiller):
 						db.merge_repos(obsolete_owner=owner,obsolete_name=repo_name,new_owner=checked_repo_owner,new_name=checked_repo_name,obsolete_source=source)
 						repo_name = checked_repo_name
 						owner = checked_repo_owner
+						repo_id = db.get_repo_id(owner=checked_repo_owner,name=checked_repo_name,source='GitHub')
 					while requester.get_rate_limit().core.remaining > self.querymin_threshold:
 						nb_stars = db.count_stars(source=source,repo=repo_name,owner=owner)
 						# sg_list = list(repo_apiobj.get_stargazers_with_dates()[nb_stars:nb_stars+per_page])
@@ -561,6 +562,7 @@ class ForksFiller(GithubFiller):
 						db.merge_repos(obsolete_owner=owner,obsolete_name=repo_name,new_owner=checked_repo_owner,new_name=checked_repo_name,obsolete_source=source)
 						repo_name = checked_repo_name
 						owner = checked_repo_owner
+						repo_id = db.get_repo_id(owner=checked_repo_owner,name=checked_repo_name,source='GitHub')
 					while requester.get_rate_limit().core.remaining > self.querymin_threshold:
 						nb_forks = db.count_forks(source=source,repo=repo_name,owner=owner)
 						# sg_list = list(repo_apiobj.get_stargazers_with_dates()[nb_stars:nb_stars+per_page])
