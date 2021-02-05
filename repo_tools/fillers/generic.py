@@ -205,13 +205,14 @@ class RepositoriesFiller(fillers.Filler):
 		#for p in self.package_list if p[3] is not None and self.clean_url(p[3])[0] is not None])
 		self.db.register_repositories(repo_info_list=self.repo_info_list)
 
-		self.db.cursor.execute('''
-			UPDATE packages SET repo_id=(SELECT r.id FROM repositories r
-								INNER JOIN urls u
-								ON r.url_id=u.id
-								INNER JOIN urls u2
-								ON u2.cleaned_url=u.id AND u2.id=packages.url_id)
-			;''')
+		if len(self.repo_info_list):
+			self.db.cursor.execute('''
+				UPDATE packages SET repo_id=(SELECT r.id FROM repositories r
+									INNER JOIN urls u
+									ON r.url_id=u.id
+									INNER JOIN urls u2
+									ON u2.cleaned_url=u.id AND u2.id=packages.url_id)
+				;''')
 		self.db.connection.commit()
 
 	def clean_url(self,url):

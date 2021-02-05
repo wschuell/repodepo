@@ -23,11 +23,13 @@ from repo_tools import fillers
 from repo_tools.fillers import generic
 import repo_tools as rp
 
+from github.GithubException import UnknownObjectException,RateLimitExceededException
+
 class GithubFiller(fillers.Filler):
 	"""
 	class to be inherited from, contains github credentials management
 	"""
-	def __init__(self,querymin_threshold=50,per_page=100,workers=1,api_keys_file='github_api_keys.txt',api_keys=None,fail_on_wait=False,**kwargs):
+	def __init__(self,querymin_threshold=50,per_page=100,workers=1,api_keys_file='github_api_keys.txt',api_keys=None,fail_on_wait=False,start_offset=None,**kwargs):
 		self.querymin_threshold = querymin_threshold
 		self.per_page = per_page
 		self.workers = workers
@@ -36,6 +38,7 @@ class GithubFiller(fillers.Filler):
 			api_keys = []
 		self.api_keys = copy.deepcopy(api_keys)
 		self.fail_on_wait = fail_on_wait
+		self.start_offset = start_offset
 		fillers.Filler.__init__(self,**kwargs)
 
 	def prepare(self):
@@ -64,6 +67,9 @@ class GithubFiller(fillers.Filler):
 				self.api_keys += [l.split('#')[0] for l in f.read().split('\n')]
 		elif os.path.exists(os.path.join(os.environ['HOME'],'.repo_tools',self.api_keys_file)):
 			with open(os.path.join(os.environ['HOME'],'.repo_tools',self.api_keys_file),'r') as f:
+				self.api_keys += [l.split('#')[0] for l in f.read().split('\n')]
+		if os.path.exists(os.path.join(os.environ['HOME'],'.repo_tools','github_api_keys.txt')):
+			with open(os.path.join(os.environ['HOME'],'.repo_tools','github_api_keys.txt'),'r') as f:
 				self.api_keys += [l.split('#')[0] for l in f.read().split('\n')]
 		try:
 			self.api_keys.append(os.environ['GITHUB_API_KEY'])
@@ -163,6 +169,8 @@ class StarsFiller(GithubFiller):
 					repo_list.append(r)
 			self.db.connection.commit()
 
+		if self.start_offset is not None:
+			repo_list = [r for r in repo_list if r[1]>=self.start_offset]
 
 		if workers == 1:
 			requester_gen = self.get_github_requester()
@@ -183,7 +191,7 @@ class StarsFiller(GithubFiller):
 				requester = next(requester_gen)
 				try:
 					repo_apiobj = requester.get_repo('{}/{}'.format(owner,repo_name))
-				except github.GithubException:
+				except UnknownObjectException:
 					self.logger.info('No such repository: {}/{}'.format(owner,repo_name))
 					db.insert_update(repo_id=repo_id,table='stars',success=False)
 					repo_list.pop(0)
@@ -203,8 +211,8 @@ class StarsFiller(GithubFiller):
 
 						if nb_stars < self.per_page*(int(nb_stars/self.per_page))+len(sg_list):
 							# if in_thread:
-							if db.db_type == 'sqlite' and in_thread:
-								time.sleep(1+random.random()) # to avoid database locked issues, and smooth a bit concurrency
+							#if db.db_type == 'sqlite' and in_thread:
+								#time.sleep(1+random.random()) # to avoid database locked issues, and smooth a bit concurrency
 							# db.insert_stars(stars_list=[{'repo_id':repo_id,'source':source,'repo':repo_name,'owner':owner,'starred_at':sg.starred_at,'login':sg.user.login} for sg in sg_list],commit=False)
 							self.insert_stars(db=db,stars_list=[{'repo_id':repo_id,'source':source,'repo':repo_name,'owner':owner,'starred_at':sg.starred_at,'login':sg.user.login} for sg in sg_list],commit=False)
 							db.connection.commit()
@@ -315,6 +323,7 @@ class GHLoginsFiller(GithubFiller):
 					 	ON true
 					 	INNER JOIN repositories r
 					 	ON c.repo_id=r.id
+						ORDER BY i.id
 						;''')
 				else:
 					# self.db.cursor.execute('''
@@ -347,6 +356,7 @@ class GHLoginsFiller(GithubFiller):
 					 		WHERE cc.author_id=i.id ORDER BY cc.created_at DESC LIMIT 1)
 					 	INNER JOIN repositories r
 					 	ON c.repo_id=r.id
+						ORDER BY i.id
 						;''')
 
 
@@ -370,6 +380,7 @@ class GHLoginsFiller(GithubFiller):
 						ON true
 						INNER JOIN repositories r
 						ON r.id=c.repo_id
+						ORDER BY i.id
 						;''')
 				else:
 					self.db.cursor.execute('''
@@ -391,6 +402,7 @@ class GHLoginsFiller(GithubFiller):
 								WHERE cc.author_id=i.id ORDER BY cc.created_at DESC LIMIT 1)
 						INNER JOIN repositories r
 						ON r.id=c.repo_id
+						ORDER BY i.id
 						;''')
 
 			self.info_list = list(self.db.cursor.fetchall())
@@ -407,6 +419,10 @@ class GHLoginsFiller(GithubFiller):
 		if info_list is None:
 			info_list = self.info_list
 
+
+		if self.start_offset is not None:
+			info_list = [r for r in info_list if r[0]>=self.start_offset]
+
 		if workers == 1:
 			requester_gen = self.get_github_requester()
 			if in_thread:
@@ -421,10 +437,10 @@ class GHLoginsFiller(GithubFiller):
 					repo_apiobj = requester.get_repo('{}/{}'.format(repo_owner,repo_name))
 					try:
 						commit_apiobj = repo_apiobj.get_commit(commit_sha)
-					except github.GithubException:
+					except UnknownObjectException:
 						self.logger.info('No such commit: {}/{}/{}'.format(repo_owner,repo_name,commit_sha))
 						commit_apiobj = None
-				except github.GithubException:
+				except UnknownObjectException:
 					self.logger.info('No such repository: {}/{}'.format(repo_owner,repo_name))
 					# db.insert_update(identity_id=identity_id,table='stars',success=False)
 				else:
@@ -438,7 +454,7 @@ class GHLoginsFiller(GithubFiller):
 							try:
 								login = commit_apiobj.author.login
 								self.logger.info('Found login {} for user id {}'.format(login,identity_id))
-							except github.GithubException:
+							except UnknownObjectException:
 								self.logger.info('No login available for user id {}, uncompletable object error'.format(identity_id))
 								login = None
 						self.set_gh_login(db=db,identity_id=identity_id,login=login,reason='Email/login match through github API for commit {}'.format(commit_sha))
@@ -558,6 +574,10 @@ class ForksFiller(GithubFiller):
 
 			self.db.connection.commit() # avoids a lock 'idle in transaction' for the previous select query
 
+
+		if self.start_offset is not None:
+			repo_list = [r for r in repo_list if r[1]>=self.start_offset]
+
 		if workers == 1:
 			requester_gen = self.get_github_requester()
 			if in_thread:
@@ -577,7 +597,7 @@ class ForksFiller(GithubFiller):
 				requester = next(requester_gen)
 				try:
 					repo_apiobj = requester.get_repo('{}/{}'.format(owner,repo_name))
-				except github.GithubException:
+				except UnknownObjectException:
 					self.logger.info('No such repository: {}/{}'.format(owner,repo_name))
 					db.insert_update(repo_id=repo_id,table='forks',success=False)
 					repo_list.pop(0)
@@ -599,8 +619,8 @@ class ForksFiller(GithubFiller):
 
 						if nb_forks < self.per_page*(int(nb_forks/self.per_page))+len(sg_list):
 							# if in_thread:
-							if db.db_type == 'sqlite' and in_thread:
-								time.sleep(1+random.random()) # to avoid database locked issues, and smooth a bit concurrency
+							#if db.db_type == 'sqlite' and in_thread:
+							#	time.sleep(1+random.random()) # to avoid database locked issues, and smooth a bit concurrency
 							if self.db.db_type == 'postgres':
 								extras.execute_batch(db.cursor,'''
 									INSERT INTO forks(forking_repo_id,forked_repo_id,forking_repo_url,forked_at)
@@ -744,7 +764,8 @@ class FollowersFiller(GithubFiller):
 				self.db.cursor.execute('''
 					SELECT i.id,i.identity,i.identity_type_id FROM identities i
 					INNER JOIN identity_types it
-					ON it.id=i.identity_type_id AND it.name='github_login';
+					ON it.id=i.identity_type_id AND it.name='github_login'
+					ORDER BY i.identity;
 					''')
 			else:
 				self.db.cursor.execute('''
@@ -756,7 +777,8 @@ class FollowersFiller(GithubFiller):
 					INNER JOIN identity_types it
 					ON it.id=i.identity_type_id AND it.name='github_login'
 					INNER JOIN table_updates tu
-					ON tu.success AND tu.identity_id=i.id AND tu.table_name='followers';
+					ON tu.success AND tu.identity_id=i.id AND tu.table_name='followers'
+					ORDER BY identity;
 					''')
 			self.login_list = list(self.db.cursor.fetchall())
 		self.db.connection.commit()
@@ -767,9 +789,11 @@ class FollowersFiller(GithubFiller):
 		Filling followers
 		Checking if an entry exists in table_updates with login_id and table_name followers
 
-		login syntax: (source,owner,name,repo_id,follower_update)
+		login syntax: (identity_id,identity(login),identity_type_id)
 		'''
 
+		if self.start_offset is not None:
+			login_list = [r for r in login_list if r[1]>=self.start_offset]
 		if workers == 1:
 			requester_gen = self.get_github_requester()
 			if in_thread:
@@ -786,7 +810,7 @@ class FollowersFiller(GithubFiller):
 				requester = next(requester_gen)
 				try:
 					login_apiobj = requester.get_user('{}'.format(login))
-				except github.GithubException:
+				except UnknownObjectException:
 					self.logger.info('No such login: {}'.format(login))
 					db.insert_update(identity_id=login_id,table='followers',success=False)
 					login_list.pop(0)
@@ -799,8 +823,8 @@ class FollowersFiller(GithubFiller):
 						sg_list = list(login_apiobj.get_followers().get_page(int(nb_followers/self.per_page)))
 
 						if nb_followers < self.per_page*(int(nb_followers/self.per_page))+len(sg_list):
-							if db.db_type == 'sqlite' and in_thread:
-								time.sleep(1+random.random()) # to avoid database locked issues, and smooth a bit concurrency
+							# if db.db_type == 'sqlite' and in_thread:
+							# 	time.sleep(1+random.random()) # to avoid database locked issues, and smooth a bit concurrency
 							self.insert_followers(db=db,followers_list=[{'login_id':login_id,'identity_type_id':identity_type_id,'login':login,'follower_login':sg.login} for sg in sg_list],commit=True)
 
 						else:
