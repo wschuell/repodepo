@@ -16,13 +16,14 @@ class DummyMetaFiller(fillers.Filler):
 	"""
 	Meta Filler with dummy data
 	"""
-	def __init__(self,workers=1,api_keys_file='github_api_keys.txt',packages_file=None,**kwargs):
+	def __init__(self,workers=1,api_keys_file='github_api_keys.txt',packages_file=None,fail_on_wait=False,**kwargs):
 		self.workers = workers
 		self.api_keys_file = api_keys_file
 		if packages_file is None:
 			self.packages_file = os.path.join(os.path.dirname(os.path.dirname(rp.__file__)),'tests','testmodule','dummy_data','packages.csv')
 		else:
 			self.packages_file = packages
+		self.fail_on_wait = fail_on_wait
 		fillers.Filler.__init__(self,**kwargs)
 
 	def prepare(self):
@@ -34,7 +35,6 @@ class DummyMetaFiller(fillers.Filler):
 			self.db.add_filler(generic.PackageFiller(package_list_file=self.packages_file))
 
 		self.db.add_filler(generic.RepositoriesFiller())
-		self.db.add_filler(generic.ClonesFiller())
 
 		if os.path.isabs(self.api_keys_file):
 			data_folder = None
@@ -43,9 +43,9 @@ class DummyMetaFiller(fillers.Filler):
 			data_folder = os.path.dirname(self.api_keys_file)
 			api_keys_file = os.path.basename(self.api_keys_file)
 
-		self.db.add_filler(github.ForksFiller(fail_on_wait=True,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
-		self.db.add_filler(generic.ClonesFiller())
-		self.db.add_filler(commit_info.CommitsFiller())
-		self.db.add_filler(github.GHLoginsFiller(fail_on_wait=True,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
-		self.db.add_filler(github.StarsFiller(fail_on_wait=True,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
-		self.db.add_filler(github.FollowersFiller(fail_on_wait=True,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
+		self.db.add_filler(github.ForksFiller(fail_on_wait=self.fail_on_wait,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
+		self.db.add_filler(generic.ClonesFiller()) # Clones after forks to have up-to-date repo URLS (detect redirects)
+		self.db.add_filler(commit_info.CommitsFiller()) # Commits after forks because fork info needed for repo commit ownership
+		self.db.add_filler(github.GHLoginsFiller(fail_on_wait=self.fail_on_wait,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
+		self.db.add_filler(github.StarsFiller(fail_on_wait=self.fail_on_wait,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
+		self.db.add_filler(github.FollowersFiller(fail_on_wait=self.fail_on_wait,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))

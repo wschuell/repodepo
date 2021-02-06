@@ -284,9 +284,17 @@ class Database(object):
 
 				CREATE TABLE IF NOT EXISTS merged_repositories(
 				id INTEGER PRIMARY KEY,
-				new_repo TEXT,
-				obsolete_repo TEXT,
-				merged_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				merged_at TIMESTAMP DEFAULT NULL,
+				new_id TEXT,
+				new_source TEXT,
+				new_owner TEXT,
+				new_name TEXT,
+				obsolete_id TEXT,
+				obsolete_source TEXT,
+				obsolete_owner TEXT,
+				obsolete_name TEXT,
+				merging_reason_source TEXT
 				);
 
 				CREATE TABLE IF NOT EXISTS sponsor_repos(
@@ -499,9 +507,17 @@ class Database(object):
 
 				CREATE TABLE IF NOT EXISTS merged_repositories(
 				id BIGSERIAL PRIMARY KEY,
-				new_repo TEXT,
-				obsolete_repo TEXT,
-				merged_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				merged_at TIMESTAMP DEFAULT NULL,
+				new_id TEXT,
+				new_source TEXT,
+				new_owner TEXT,
+				new_name TEXT,
+				obsolete_id TEXT,
+				obsolete_source TEXT,
+				obsolete_owner TEXT,
+				obsolete_name TEXT,
+				merging_reason_source TEXT
 				);
 
 				CREATE TABLE IF NOT EXISTS sponsor_repos(
@@ -1769,7 +1785,8 @@ class Database(object):
 
 		self.connection.commit()
 
-	def merge_repos(self,
+	def plan_repo_merge(self,
+		merged_repo_table_id=None,
 		obsolete_id=None,
 		obsolete_source=None,
 		obsolete_owner=None,
@@ -1778,12 +1795,169 @@ class Database(object):
 		new_source=None,
 		new_owner=None,
 		new_name=None,
-		merging_reason_source='repository merge process'
+		merging_reason_source='repository merge process',
+		autocommit=True
+		):
+		'''
+		Setting the repo merging process in the table merged_repositories for later execution, returning the id of the row
+		'''
+
+		# checks
+		if (new_id is None and (new_owner is None or new_name is None)) or (obsolete_id is None and (obsolete_owner is None or obsolete_name is None)):
+			raise SyntaxError('Insufficent info provided for merging repositories (id,source,owner,name): \n new ({},{},{},{}) \n obsolete ({},{},{},{})'.format(new_id,new_source,new_owner,new_name,obsolete_id,obsolete_source,obsolete_owner,obsolete_name))
+
+		self.register_source(source=merging_reason_source)
+		if self.db_type == 'postgres':
+			self.cursor.execute('''
+				INSERT INTO merged_repositories(
+				new_id,
+				new_source,
+				new_owner,
+				new_name,
+				obsolete_id,
+				obsolete_source,
+				obsolete_owner,
+				obsolete_name,
+				merging_reason_source)
+					VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)
+					RETURNING id
+				;''',(new_id,
+				new_source,
+				new_owner,
+				new_name,
+				obsolete_id,
+				obsolete_source,
+				obsolete_owner,
+				obsolete_name,
+				merging_reason_source,))
+			row_id = self.cursor.fetchone()[0]
+		else:
+			self.cursor.execute('''
+				INSERT INTO merged_repositories(
+				new_id,
+				new_source,
+				new_owner,
+				new_name,
+				obsolete_id,
+				obsolete_source,
+				obsolete_owner,
+				obsolete_name,
+				merging_reason_source)
+					VALUES(?,?,?,?,?,?,?,?,?)
+				;''',(new_id,
+				new_source,
+				new_owner,
+				new_name,
+				obsolete_id,
+				obsolete_source,
+				obsolete_owner,
+				obsolete_name,
+				merging_reason_source,))
+			row_id = self.cursor.lastrowid
+
+		assert isinstance(row_id,int), 'expected int for row_id, got {}'.format(row_id)
+
+		if autocommit:
+			self.connection.commit()
+		return row_id
+
+	def validate_merge_repos(self,merged_repo_table_id):
+		'''
+		Sets the relevant merging process to done
+		'''
+		if self.db_type == 'postgres':
+			self.cursor.execute('''
+				UPDATE merged_repositories SET merged_at=CURRENT_TIMESTAMP
+					WHERE id=%s
+					;''',(merged_repo_table_id,))
+		else:
+			self.cursor.execute('''
+				UPDATE merged_repositories SET merged_at=CURRENT_TIMESTAMP
+					WHERE id=?
+					;''',(merged_repo_table_id,))
+		self.connection.commit()
+
+	def batch_merge_repos(self):
+		'''
+		Checks for repo merging processes planned but not done yet (=merged_at is NULL in merged_repositories table)
+		and executes the merges
+		'''
+		self.cursor.execute('''
+			SELECT id,
+				new_id,
+				new_source,
+				new_owner,
+				new_name,
+				obsolete_id,
+				obsolete_source,
+				obsolete_owner,
+				obsolete_name,
+				merging_reason_source FROM merged_repositories
+			WHERE merged_at is NULL
+			;''')
+
+		merge_list = [ {
+							'merged_repo_table_id': merged_repo_table_id,
+							'new_id':new_id,
+							'new_source':new_source,
+							'new_owner':new_owner,
+							'new_name':new_name,
+							'obsolete_id':obsolete_id,
+							'obsolete_source':obsolete_source,
+							'obsolete_owner':obsolete_owner,
+							'obsolete_name':obsolete_name,
+							'merging_reason_source':merging_reason_source,
+						} for  (merged_repo_table_id,
+				new_id,
+				new_source,
+				new_owner,
+				new_name,
+				obsolete_id,
+				obsolete_source,
+				obsolete_owner,
+				obsolete_name,
+				merging_reason_source) in self.cursor.fetchall() ]
+
+		self.logger.info('Batch merging {} repos'.format(len(merge_list)))
+
+		for merge_dict in merge_list:
+			self.merge_repos(**merge_dict)
+
+
+
+	def merge_repos(self,
+		merged_repo_table_id=None,
+		obsolete_id=None,
+		obsolete_source=None,
+		obsolete_owner=None,
+		obsolete_name=None,
+		new_id=None,
+		new_source=None,
+		new_owner=None,
+		new_name=None,
+		merging_reason_source='repository merge process',
+		fail_on_no_repo_id=True
 		):
 		'''
 		Merge process of two repositories, e.g. when a URL redirect is detected. All information attributed to the new repo.
 		Table_updates of obsolete are deleted (through cascade), just in case one forgets to update one table in the repo_id update process.
 		'''
+
+		if merging_reason_source is None:
+			merging_reason_source = 'repository merge process'
+
+		if merged_repo_table_id is None:
+			merged_repo_table_id = self.plan_repo_merge(
+							new_id=new_id,
+							new_source=new_source,
+							new_owner=new_owner,
+							new_name=new_name,
+							obsolete_id=obsolete_id,
+							obsolete_source=obsolete_source,
+							obsolete_owner=obsolete_owner,
+							obsolete_name=obsolete_name,
+							merging_reason_source=merging_reason_source
+							)
 
 		# checks
 		if (new_id is None and (new_owner is None or new_name is None)) or (obsolete_id is None and (obsolete_owner is None or obsolete_name is None)):
@@ -1793,14 +1967,21 @@ class Database(object):
 			new_id = self.get_repo_id(source=new_source,owner=new_owner,name=new_name)
 		if obsolete_id is None:
 			obsolete_id = self.get_repo_id(source=obsolete_source,owner=obsolete_owner,name=obsolete_name)
+			if obsolete_id is None:
+				if fail_on_no_repo_id:
+					raise ValueError('Repository to be merged {}/{}/{} not found in DB. Destination repo: {}/{}/{} ({})'.format(obsolete_source,obsolete_owner,obsolete_name,new_source,new_owner,new_name,new_id))
+				else:
+					self.validate_merge_repos(merged_repo_table_id=merged_repo_table_id)
+					return
+
 		if obsolete_owner is None:
 			if self.db_type == 'postgres':
 				self.cursor.execute('SELECT owner,name FROM repositories WHERE id=%s;',(obsolete_id,))
 			else:
 				self.cursor.execute('SELECT owner,name FROM repositories WHERE id=?;',(obsolete_id,))
-			ans = self.cursor.fetchone()[0]
-			if ans is None:
-				raise ValueError('repository not found: {}'.format(obsolete_id))
+			ans = self.cursor.fetchone()
+			if ans[0] is None:
+				raise ValueError('Repository id not found: {}'.format(obsolete_id))
 			else:
 				obsolete_owner,obsolete_name = ans
 		if obsolete_source is None:
@@ -1931,6 +2112,7 @@ class Database(object):
 							WHERE urls.cleaned_url=(SELECT u.cleaned_url FROM urls u WHERE u.id=?)
 						;''',(url_id,old_url_id,))
 
+				# Moving cloned repo if exists. But clones should be filled after forks or stars, to avoid failed cloning.
 				if os.path.exists(os.path.join(self.data_folder,'cloned_repos',obsolete_source_name,obsolete_owner,obsolete_name)):
 					if not os.path.exists(os.path.join(self.data_folder,'cloned_repos',new_source_name,new_owner,new_name)):
 						if not os.path.exists(os.path.join(self.data_folder,'cloned_repos',new_source_name,new_owner)):
@@ -2116,15 +2298,4 @@ class Database(object):
 						;''',(url_id,old_url_id,))
 
 
-			if self.db_type == 'postgres':
-				self.cursor.execute('''
-						INSERT INTO merged_repositories(new_repo,obsolete_repo)
-						VALUES(%s,%s)
-						;''',(url,old_url))
-			else:
-				self.cursor.execute('''
-						INSERT INTO merged_repositories(new_repo,obsolete_repo)
-						VALUES(?,?)
-						;''',(url,old_url))
-
-			self.connection.commit()
+		self.validate_merge_repos(merged_repo_table_id=merged_repo_table_id)

@@ -139,6 +139,7 @@ class StarsFiller(GithubFiller):
 	def apply(self):
 		self.fill_stars(force=self.force,retry=self.retry,repo_list=self.repo_list,workers=self.workers)
 		self.db.connection.commit()
+		self.db.batch_merge_repos()
 
 	def fill_stars(self,force=False,retry=False,repo_list=None,workers=1,in_thread=False):
 		'''
@@ -198,11 +199,35 @@ class StarsFiller(GithubFiller):
 					new_repo = True
 				else:
 					checked_repo_owner,checked_repo_name = repo_apiobj.full_name.split('/')
+					to_be_merged = False
 					if (checked_repo_owner,checked_repo_name) != (owner,repo_name):
-						db.merge_repos(obsolete_owner=owner,obsolete_name=repo_name,new_owner=checked_repo_owner,new_name=checked_repo_name,obsolete_source=source)
-						repo_name = checked_repo_name
-						owner = checked_repo_owner
-						repo_id = db.get_repo_id(owner=checked_repo_owner,name=checked_repo_name,source='GitHub')
+						to_be_merged = True
+						self.db.plan_repo_merge(
+							new_id=None,
+							new_source=None,
+							new_owner=checked_repo_owner,
+							new_name=checked_repo_name,
+							obsolete_id=repo_id,
+							obsolete_source=source,
+							obsolete_owner=owner,
+							obsolete_name=repo_name,
+							merging_reason_source='Repo redirect detected on github REST API when processing stars'
+							)
+						# db.merge_repos(obsolete_owner=owner,obsolete_name=repo_name,new_owner=checked_repo_owner,new_name=checked_repo_name,obsolete_source=source)
+						# repo_id = db.get_repo_id(owner=checked_repo_owner,name=checked_repo_name,source='GitHub')
+						# repo_name = checked_repo_name
+						# owner = checked_repo_owner
+					if repo_apiobj.watchers_count == 0:
+						if to_be_merged:
+							self.logger.info('No stars for repo {}/{} ({}/{})'.format(checked_repo_owner,checked_repo_name,owner,repo_name))
+						else:
+							self.logger.info('No stars for repo {}/{}'.format(owner,repo_name))
+						db.insert_update(repo_id=repo_id,table='stars',success=True)
+						db.connection.commit()
+						repo_list.pop(0)
+						new_repo = True
+						break
+
 					while requester.get_rate_limit().core.remaining > self.querymin_threshold:
 						nb_stars = db.count_stars(source=source,repo=repo_name,owner=owner)
 						db.connection.commit()
@@ -217,7 +242,11 @@ class StarsFiller(GithubFiller):
 							self.insert_stars(db=db,stars_list=[{'repo_id':repo_id,'source':source,'repo':repo_name,'owner':owner,'starred_at':sg.starred_at,'login':sg.user.login} for sg in sg_list],commit=False)
 							db.connection.commit()
 						else:
-							self.logger.info('Filled stars for repo {}/{}: {}'.format(owner,repo_name,nb_stars))
+
+							if to_be_merged:
+								self.logger.info('Filled stars for repo {}/{} ({}/{}): {}'.format(checked_repo_owner,checked_repo_name,owner,repo_name,nb_stars))
+							else:
+								self.logger.info('Filled stars for repo {}/{}: {}'.format(owner,repo_name,nb_stars))
 							db.insert_update(repo_id=repo_id,table='stars',success=True)
 							db.connection.commit()
 							repo_list.pop(0)
@@ -543,6 +572,7 @@ class ForksFiller(GithubFiller):
 		self.fill_forks(repo_list=self.repo_list,force=self.force,retry=self.retry,workers=self.workers)
 		self.fill_fork_ranks()
 		self.db.connection.commit()
+		self.db.batch_merge_repos()
 
 
 
@@ -604,11 +634,36 @@ class ForksFiller(GithubFiller):
 					new_repo = True
 				else:
 					checked_repo_owner,checked_repo_name = repo_apiobj.full_name.split('/')
+					to_be_merged = False
 					if (checked_repo_owner,checked_repo_name) != (owner,repo_name):
-						db.merge_repos(obsolete_owner=owner,obsolete_name=repo_name,new_owner=checked_repo_owner,new_name=checked_repo_name,obsolete_source=source)
-						repo_name = checked_repo_name
-						owner = checked_repo_owner
-						repo_id = db.get_repo_id(owner=checked_repo_owner,name=checked_repo_name,source='GitHub')
+						to_be_merged = True
+						self.db.plan_repo_merge(
+							new_id=None,
+							new_source=None,
+							new_owner=checked_repo_owner,
+							new_name=checked_repo_name,
+							obsolete_id=repo_id,
+							obsolete_source=source,
+							obsolete_owner=owner,
+							obsolete_name=repo_name,
+							merging_reason_source='Repo redirect detected on github REST API when processing forks'
+							)
+						# db.merge_repos(obsolete_owner=owner,obsolete_name=repo_name,new_owner=checked_repo_owner,new_name=checked_repo_name,obsolete_source=source)
+						# repo_id = db.get_repo_id(owner=checked_repo_owner,name=checked_repo_name,source='GitHub')
+						# repo_name = checked_repo_name
+						# owner = checked_repo_ownerif repo_apiobj.watchers_count == 0:
+
+					if repo_apiobj.forks_count == 0:
+						if to_be_merged:
+							self.logger.info('No forks for repo {}/{} ({}/{})'.format(checked_repo_owner,checked_repo_name,owner,repo_name))
+						else:
+							self.logger.info('No forks for repo {}/{}'.format(owner,repo_name))
+						db.insert_update(repo_id=repo_id,table='forks',success=True)
+						db.connection.commit()
+						repo_list.pop(0)
+						new_repo = True
+						break
+
 					while requester.get_rate_limit().core.remaining > self.querymin_threshold:
 						nb_forks = db.count_forks(source=source,repo=repo_name,owner=owner)
 						db.connection.commit()
@@ -641,7 +696,10 @@ class ForksFiller(GithubFiller):
 							#db.insert_forks(,commit=False)
 							db.connection.commit()
 						else:
-							self.logger.info('Filled forks for repo {}/{}: {}'.format(owner,repo_name,nb_forks))
+							if to_be_merged:
+								self.logger.info('Filled forks for repo {}/{} ({}/{}): {}'.format(checked_repo_owner,checked_repo_name,owner,repo_name,nb_forks))
+							else:
+								self.logger.info('Filled forks for repo {}/{}: {}'.format(owner,repo_name,nb_forks))
 							db.insert_update(repo_id=repo_id,table='forks',success=True)
 							db.connection.commit()
 							repo_list.pop(0)
@@ -816,6 +874,15 @@ class FollowersFiller(GithubFiller):
 					login_list.pop(0)
 					new_login = True
 				else:
+
+					if login_apiobj.followers == 0:
+						self.logger.info('No followers for login: {}'.format(login))
+						db.insert_update(identity_id=login_id,table='followers',success=True)
+						db.connection.commit()
+						login_list.pop(0)
+						new_login = True
+						break
+
 					while requester.get_rate_limit().core.remaining > self.querymin_threshold:
 						nb_followers = db.count_followers(login_id=login_id)
 						db.connection.commit()

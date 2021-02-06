@@ -72,14 +72,25 @@ def test_commits(testdb):
 	testdb.add_filler(commit_info.CommitsFiller(data_folder='dummy_clones'))
 	testdb.fill_db()
 
+def test_merge_repositories(testdb):
+	testdb.add_filler(generic.SourcesFiller(source=['GitHub',],source_urlroot=['github.com',]))
+	testdb.add_filler(generic.PackageFiller(package_list_file='packages.csv',data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))
+	testdb.add_filler(generic.RepositoriesFiller())
+	testdb.add_filler(generic.ClonesFiller(data_folder='dummy_clones'))
+	testdb.add_filler(commit_info.CommitsFiller(data_folder='dummy_clones'))
+	testdb.fill_db()
+	testdb.plan_repo_merge(new_id=2,obsolete_id=1,obsolete_source='GitHub')
+	testdb.batch_merge_repos()
+	testdb.plan_repo_merge(new_id=None,new_owner='blah',new_name='blih',obsolete_id=2,obsolete_source='GitHub')
+	testdb.batch_merge_repos()
+
 def test_github(testdb):
 	testdb.add_filler(generic.SourcesFiller(source=['GitHub',],source_urlroot=['github.com',]))
 	testdb.add_filler(generic.PackageFiller(package_list_file='packages.csv',data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))
 	testdb.add_filler(generic.RepositoriesFiller())
-	testdb.add_filler(generic.ClonesFiller(data_folder='dummy_clones',update=True))
 	testdb.add_filler(github.ForksFiller(fail_on_wait=True,workers=2))
-	testdb.add_filler(generic.ClonesFiller(data_folder='dummy_clones'))
-	testdb.add_filler(commit_info.CommitsFiller(data_folder='dummy_clones'))
+	testdb.add_filler(generic.ClonesFiller(data_folder='dummy_clones',update=True)) # Clones after forks to have up-to-date repo URLS (detect redirects)
+	testdb.add_filler(commit_info.CommitsFiller(data_folder='dummy_clones')) # Commits after forks because fork info needed for repo commit ownership
 	testdb.add_filler(github.GHLoginsFiller(fail_on_wait=True,workers=2))
 	testdb.add_filler(github.StarsFiller(fail_on_wait=True,workers=2))
 	testdb.add_filler(github.FollowersFiller(fail_on_wait=True,workers=2))
@@ -89,10 +100,9 @@ def test_reset_merged_identities(testdb):
 	testdb.add_filler(generic.SourcesFiller(source=['GitHub',],source_urlroot=['github.com',]))
 	testdb.add_filler(generic.PackageFiller(package_list_file='packages.csv',data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))
 	testdb.add_filler(generic.RepositoriesFiller())
-	testdb.add_filler(generic.ClonesFiller(data_folder='dummy_clones'))
 	testdb.add_filler(github.ForksFiller(fail_on_wait=True,workers=2))
-	testdb.add_filler(generic.ClonesFiller(data_folder='dummy_clones'))
-	testdb.add_filler(commit_info.CommitsFiller(data_folder='dummy_clones'))
+	testdb.add_filler(generic.ClonesFiller(data_folder='dummy_clones')) # Clones after forks to have up-to-date repo URLS (detect redirects)
+	testdb.add_filler(commit_info.CommitsFiller(data_folder='dummy_clones')) # Commits after forks because fork info needed for repo commit ownership
 	testdb.add_filler(github.GHLoginsFiller(fail_on_wait=True,workers=2))
 	testdb.fill_db()
 	count = testdb.count_users()
@@ -104,5 +114,5 @@ def test_reset_merged_identities(testdb):
 	assert testdb.count_users() == count
 
 def test_metafiller(testdb):
-	testdb.add_filler(meta_fillers.DummyMetaFiller())
+	testdb.add_filler(meta_fillers.DummyMetaFiller(fail_on_wait=True))
 	testdb.fill_db()
