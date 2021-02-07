@@ -6,7 +6,7 @@ import time
 import random
 
 from repo_tools import fillers
-from repo_tools.fillers import generic,github,commit_info
+from repo_tools.fillers import generic,github_rest,commit_info
 import repo_tools as rp
 
 
@@ -43,9 +43,9 @@ class DummyMetaFiller(fillers.Filler):
 			data_folder = os.path.dirname(self.api_keys_file)
 			api_keys_file = os.path.basename(self.api_keys_file)
 
-		self.db.add_filler(github.ForksFiller(fail_on_wait=self.fail_on_wait,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
+		self.db.add_filler(github_rest.ForksFiller(fail_on_wait=self.fail_on_wait,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
 		self.db.add_filler(generic.ClonesFiller()) # Clones after forks to have up-to-date repo URLS (detect redirects)
 		self.db.add_filler(commit_info.CommitsFiller()) # Commits after forks because fork info needed for repo commit ownership
-		self.db.add_filler(github.GHLoginsFiller(fail_on_wait=self.fail_on_wait,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
-		self.db.add_filler(github.StarsFiller(fail_on_wait=self.fail_on_wait,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
-		self.db.add_filler(github.FollowersFiller(fail_on_wait=self.fail_on_wait,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
+		self.db.add_filler(github_rest.GHLoginsFiller(fail_on_wait=self.fail_on_wait,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
+		self.db.add_filler(github_rest.StarsFiller(fail_on_wait=self.fail_on_wait,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
+		self.db.add_filler(github_rest.FollowersFiller(fail_on_wait=self.fail_on_wait,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
