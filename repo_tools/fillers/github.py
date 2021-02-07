@@ -174,87 +174,89 @@ class StarsFiller(GithubFiller):
 			repo_list = [r for r in repo_list if r[1]>=self.start_offset]
 
 		if workers == 1:
-			requester_gen = self.get_github_requester()
-			if in_thread:
-				db = self.db.copy()
-			else:
-				db = self.db
-			new_repo = True
-			while len(repo_list):
-				current_repo = repo_list[0]
-				# owner,repo_name = current_repo.split('/')
-				# source = 'GitHub'
-				# repo_id = db.get_repo_id(owner=owner,source=source,name=repo_name)
-				source,owner,repo_name,repo_id = current_repo[:4]
-				if new_repo:
-					new_repo = False
-					self.logger.info('Filling stars for repo {}/{}'.format(owner,repo_name))
-				requester = next(requester_gen)
-				try:
-					repo_apiobj = requester.get_repo('{}/{}'.format(owner,repo_name))
-				except UnknownObjectException:
-					self.logger.info('No such repository: {}/{}'.format(owner,repo_name))
-					db.insert_update(repo_id=repo_id,table='stars',success=False)
-					repo_list.pop(0)
-					new_repo = True
+			try:
+				if in_thread:
+					db = self.db.copy()
 				else:
-					checked_repo_owner,checked_repo_name = repo_apiobj.full_name.split('/')
-					to_be_merged = False
-					if (checked_repo_owner,checked_repo_name) != (owner,repo_name):
-						to_be_merged = True
-						self.db.plan_repo_merge(
-							new_id=None,
-							new_source=None,
-							new_owner=checked_repo_owner,
-							new_name=checked_repo_name,
-							obsolete_id=repo_id,
-							obsolete_source=source,
-							obsolete_owner=owner,
-							obsolete_name=repo_name,
-							merging_reason_source='Repo redirect detected on github REST API when processing stars'
-							)
-						# db.merge_repos(obsolete_owner=owner,obsolete_name=repo_name,new_owner=checked_repo_owner,new_name=checked_repo_name,obsolete_source=source)
-						# repo_id = db.get_repo_id(owner=checked_repo_owner,name=checked_repo_name,source='GitHub')
-						# repo_name = checked_repo_name
-						# owner = checked_repo_owner
-					if repo_apiobj.watchers_count == 0:
-						if to_be_merged:
-							self.logger.info('No stars for repo {}/{} ({}/{})'.format(checked_repo_owner,checked_repo_name,owner,repo_name))
-						else:
-							self.logger.info('No stars for repo {}/{}'.format(owner,repo_name))
-						db.insert_update(repo_id=repo_id,table='stars',success=True)
-						db.connection.commit()
+					db = self.db
+				requester_gen = self.get_github_requester()
+				new_repo = True
+				while len(repo_list):
+					current_repo = repo_list[0]
+					# owner,repo_name = current_repo.split('/')
+					# source = 'GitHub'
+					# repo_id = db.get_repo_id(owner=owner,source=source,name=repo_name)
+					source,owner,repo_name,repo_id = current_repo[:4]
+					if new_repo:
+						new_repo = False
+						self.logger.info('Filling stars for repo {}/{}'.format(owner,repo_name))
+					requester = next(requester_gen)
+					try:
+						repo_apiobj = requester.get_repo('{}/{}'.format(owner,repo_name))
+					except UnknownObjectException:
+						self.logger.info('No such repository: {}/{}'.format(owner,repo_name))
+						db.insert_update(repo_id=repo_id,table='stars',success=False)
 						repo_list.pop(0)
 						new_repo = True
-						break
-
-					while requester.get_rate_limit().core.remaining > self.querymin_threshold:
-						nb_stars = db.count_stars(source=source,repo=repo_name,owner=owner)
-						db.connection.commit()
-						# sg_list = list(repo_apiobj.get_stargazers_with_dates()[nb_stars:nb_stars+per_page])
-						sg_list = list(repo_apiobj.get_stargazers_with_dates().get_page(int(nb_stars/self.per_page)))
-
-						if nb_stars < self.per_page*(int(nb_stars/self.per_page))+len(sg_list):
-							# if in_thread:
-							#if db.db_type == 'sqlite' and in_thread:
-								#time.sleep(1+random.random()) # to avoid database locked issues, and smooth a bit concurrency
-							# db.insert_stars(stars_list=[{'repo_id':repo_id,'source':source,'repo':repo_name,'owner':owner,'starred_at':sg.starred_at,'login':sg.user.login} for sg in sg_list],commit=False)
-							self.insert_stars(db=db,stars_list=[{'repo_id':repo_id,'source':source,'repo':repo_name,'owner':owner,'starred_at':sg.starred_at,'login':sg.user.login} for sg in sg_list],commit=False)
-							db.connection.commit()
-						else:
-
+					else:
+						checked_repo_owner,checked_repo_name = repo_apiobj.full_name.split('/')
+						to_be_merged = False
+						if (checked_repo_owner,checked_repo_name) != (owner,repo_name):
+							to_be_merged = True
+							self.db.plan_repo_merge(
+								new_id=None,
+								new_source=None,
+								new_owner=checked_repo_owner,
+								new_name=checked_repo_name,
+								obsolete_id=repo_id,
+								obsolete_source=source,
+								obsolete_owner=owner,
+								obsolete_name=repo_name,
+								merging_reason_source='Repo redirect detected on github REST API when processing stars'
+								)
+							# db.merge_repos(obsolete_owner=owner,obsolete_name=repo_name,new_owner=checked_repo_owner,new_name=checked_repo_name,obsolete_source=source)
+							# repo_id = db.get_repo_id(owner=checked_repo_owner,name=checked_repo_name,source='GitHub')
+							# repo_name = checked_repo_name
+							# owner = checked_repo_owner
+						if repo_apiobj.watchers_count == 0:
 							if to_be_merged:
-								self.logger.info('Filled stars for repo {}/{} ({}/{}): {}'.format(checked_repo_owner,checked_repo_name,owner,repo_name,nb_stars))
+								self.logger.info('No stars for repo {}/{} ({}/{})'.format(checked_repo_owner,checked_repo_name,owner,repo_name))
 							else:
-								self.logger.info('Filled stars for repo {}/{}: {}'.format(owner,repo_name,nb_stars))
+								self.logger.info('No stars for repo {}/{}'.format(owner,repo_name))
 							db.insert_update(repo_id=repo_id,table='stars',success=True)
 							db.connection.commit()
 							repo_list.pop(0)
 							new_repo = True
 							break
-			if in_thread:
-				db.cursor.close()
-				db.connection.close()
+
+						while requester.get_rate_limit().core.remaining > self.querymin_threshold:
+							nb_stars = db.count_stars(source=source,repo=repo_name,owner=owner)
+							db.connection.commit()
+							# sg_list = list(repo_apiobj.get_stargazers_with_dates()[nb_stars:nb_stars+per_page])
+							sg_list = list(repo_apiobj.get_stargazers_with_dates().get_page(int(nb_stars/self.per_page)))
+
+							if nb_stars < self.per_page*(int(nb_stars/self.per_page))+len(sg_list):
+								# if in_thread:
+								#if db.db_type == 'sqlite' and in_thread:
+									#time.sleep(1+random.random()) # to avoid database locked issues, and smooth a bit concurrency
+								# db.insert_stars(stars_list=[{'repo_id':repo_id,'source':source,'repo':repo_name,'owner':owner,'starred_at':sg.starred_at,'login':sg.user.login} for sg in sg_list],commit=False)
+								self.insert_stars(db=db,stars_list=[{'repo_id':repo_id,'source':source,'repo':repo_name,'owner':owner,'starred_at':sg.starred_at,'login':sg.user.login} for sg in sg_list],commit=False)
+								db.connection.commit()
+							else:
+
+								if to_be_merged:
+									self.logger.info('Filled stars for repo {}/{} ({}/{}): {}'.format(checked_repo_owner,checked_repo_name,owner,repo_name,nb_stars))
+								else:
+									self.logger.info('Filled stars for repo {}/{}: {}'.format(owner,repo_name,nb_stars))
+								db.insert_update(repo_id=repo_id,table='stars',success=True)
+								db.connection.commit()
+								repo_list.pop(0)
+								new_repo = True
+								break
+			finally:
+				if in_thread and 'db' in locals():
+					db.cursor.close()
+					db.connection.close()
 
 		else:
 			with ThreadPoolExecutor(max_workers=workers) as executor:
@@ -453,43 +455,45 @@ class GHLoginsFiller(GithubFiller):
 			info_list = [r for r in info_list if r[0]>=self.start_offset]
 
 		if workers == 1:
-			requester_gen = self.get_github_requester()
-			if in_thread:
-				db = self.db.copy()
-			else:
-				db = self.db
-			for infos in info_list:
-				identity_id,repo_id,repo_owner,repo_name,commit_sha = infos
-				self.logger.info('Filling gh login for user id {}'.format(identity_id))
-				requester = next(requester_gen)
-				try:
-					repo_apiobj = requester.get_repo('{}/{}'.format(repo_owner,repo_name))
-					try:
-						commit_apiobj = repo_apiobj.get_commit(commit_sha)
-					except UnknownObjectException:
-						self.logger.info('No such commit: {}/{}/{}'.format(repo_owner,repo_name,commit_sha))
-						commit_apiobj = None
-				except UnknownObjectException:
-					self.logger.info('No such repository: {}/{}'.format(repo_owner,repo_name))
-					# db.insert_update(identity_id=identity_id,table='stars',success=False)
+			try:
+				if in_thread:
+					db = self.db.copy()
 				else:
-					if commit_apiobj is None:
-						pass
+					db = self.db
+				requester_gen = self.get_github_requester()
+				for infos in info_list:
+					identity_id,repo_id,repo_owner,repo_name,commit_sha = infos
+					self.logger.info('Filling gh login for user id {}'.format(identity_id))
+					requester = next(requester_gen)
+					try:
+						repo_apiobj = requester.get_repo('{}/{}'.format(repo_owner,repo_name))
+						try:
+							commit_apiobj = repo_apiobj.get_commit(commit_sha)
+						except UnknownObjectException:
+							self.logger.info('No such commit: {}/{}/{}'.format(repo_owner,repo_name,commit_sha))
+							commit_apiobj = None
+					except UnknownObjectException:
+						self.logger.info('No such repository: {}/{}'.format(repo_owner,repo_name))
+						# db.insert_update(identity_id=identity_id,table='stars',success=False)
 					else:
-						if commit_apiobj.author is None:
-							login = None
-							self.logger.info('No login available for user id {}'.format(identity_id))
+						if commit_apiobj is None:
+							pass
 						else:
-							try:
-								login = commit_apiobj.author.login
-								self.logger.info('Found login {} for user id {}'.format(login,identity_id))
-							except UnknownObjectException:
-								self.logger.info('No login available for user id {}, uncompletable object error'.format(identity_id))
+							if commit_apiobj.author is None:
 								login = None
-						self.set_gh_login(db=db,identity_id=identity_id,login=login,reason='Email/login match through github API for commit {}'.format(commit_sha))
-			if in_thread:
-				db.cursor.close()
-				db.connection.close()
+								self.logger.info('No login available for user id {}'.format(identity_id))
+							else:
+								try:
+									login = commit_apiobj.author.login
+									self.logger.info('Found login {} for user id {}'.format(login,identity_id))
+								except UnknownObjectException:
+									self.logger.info('No login available for user id {}, uncompletable object error'.format(identity_id))
+									login = None
+							self.set_gh_login(db=db,identity_id=identity_id,login=login,reason='Email/login match through github API for commit {}'.format(commit_sha))
+			finally:
+				if in_thread and 'db' in locals():
+					db.cursor.close()
+					db.connection.close()
 		else:
 			with ThreadPoolExecutor(max_workers=workers) as executor:
 				futures = []
@@ -609,106 +613,107 @@ class ForksFiller(GithubFiller):
 			repo_list = [r for r in repo_list if r[1]>=self.start_offset]
 
 		if workers == 1:
-			requester_gen = self.get_github_requester()
-			if in_thread:
-				db = self.db.copy()
-			else:
-				db = self.db
-			new_repo = True
-			while len(repo_list):
-				current_repo = repo_list[0]
-				# owner,repo_name = current_repo.split('/')
-				# source = 'GitHub'
-				# repo_id = db.get_repo_id(owner=owner,source=source,name=repo_name)
-				source,owner,repo_name,repo_id = current_repo[:4]
-				if new_repo:
-					new_repo = False
-					self.logger.info('Filling forks for repo {}/{}'.format(owner,repo_name))
-				requester = next(requester_gen)
-				try:
-					repo_apiobj = requester.get_repo('{}/{}'.format(owner,repo_name))
-				except UnknownObjectException:
-					self.logger.info('No such repository: {}/{}'.format(owner,repo_name))
-					db.insert_update(repo_id=repo_id,table='forks',success=False)
-					repo_list.pop(0)
-					new_repo = True
+			try:
+				if in_thread:
+					db = self.db.copy()
 				else:
-					checked_repo_owner,checked_repo_name = repo_apiobj.full_name.split('/')
-					to_be_merged = False
-					if (checked_repo_owner,checked_repo_name) != (owner,repo_name):
-						to_be_merged = True
-						self.db.plan_repo_merge(
-							new_id=None,
-							new_source=None,
-							new_owner=checked_repo_owner,
-							new_name=checked_repo_name,
-							obsolete_id=repo_id,
-							obsolete_source=source,
-							obsolete_owner=owner,
-							obsolete_name=repo_name,
-							merging_reason_source='Repo redirect detected on github REST API when processing forks'
-							)
-						# db.merge_repos(obsolete_owner=owner,obsolete_name=repo_name,new_owner=checked_repo_owner,new_name=checked_repo_name,obsolete_source=source)
-						# repo_id = db.get_repo_id(owner=checked_repo_owner,name=checked_repo_name,source='GitHub')
-						# repo_name = checked_repo_name
-						# owner = checked_repo_ownerif repo_apiobj.watchers_count == 0:
-
-					if repo_apiobj.forks_count == 0:
-						if to_be_merged:
-							self.logger.info('No forks for repo {}/{} ({}/{})'.format(checked_repo_owner,checked_repo_name,owner,repo_name))
-						else:
-							self.logger.info('No forks for repo {}/{}'.format(owner,repo_name))
-						db.insert_update(repo_id=repo_id,table='forks',success=True)
-						db.connection.commit()
+					db = self.db
+				requester_gen = self.get_github_requester()
+				new_repo = True
+				while len(repo_list):
+					current_repo = repo_list[0]
+					# owner,repo_name = current_repo.split('/')
+					# source = 'GitHub'
+					# repo_id = db.get_repo_id(owner=owner,source=source,name=repo_name)
+					source,owner,repo_name,repo_id = current_repo[:4]
+					if new_repo:
+						new_repo = False
+						self.logger.info('Filling forks for repo {}/{}'.format(owner,repo_name))
+					requester = next(requester_gen)
+					try:
+						repo_apiobj = requester.get_repo('{}/{}'.format(owner,repo_name))
+					except UnknownObjectException:
+						self.logger.info('No such repository: {}/{}'.format(owner,repo_name))
+						db.insert_update(repo_id=repo_id,table='forks',success=False)
 						repo_list.pop(0)
 						new_repo = True
-						break
+					else:
+						checked_repo_owner,checked_repo_name = repo_apiobj.full_name.split('/')
+						to_be_merged = False
+						if (checked_repo_owner,checked_repo_name) != (owner,repo_name):
+							to_be_merged = True
+							self.db.plan_repo_merge(
+								new_id=None,
+								new_source=None,
+								new_owner=checked_repo_owner,
+								new_name=checked_repo_name,
+								obsolete_id=repo_id,
+								obsolete_source=source,
+								obsolete_owner=owner,
+								obsolete_name=repo_name,
+								merging_reason_source='Repo redirect detected on github REST API when processing forks'
+								)
+							# db.merge_repos(obsolete_owner=owner,obsolete_name=repo_name,new_owner=checked_repo_owner,new_name=checked_repo_name,obsolete_source=source)
+							# repo_id = db.get_repo_id(owner=checked_repo_owner,name=checked_repo_name,source='GitHub')
+							# repo_name = checked_repo_name
+							# owner = checked_repo_ownerif repo_apiobj.watchers_count == 0:
 
-					while requester.get_rate_limit().core.remaining > self.querymin_threshold:
-						nb_forks = db.count_forks(source=source,repo=repo_name,owner=owner)
-						db.connection.commit()
-
-						# sg_list = list(repo_apiobj.get_stargazers_with_dates()[nb_stars:nb_stars+per_page])
-						sg_list = list(repo_apiobj.get_forks().get_page(int(nb_forks/self.per_page)))
-						forks_list=[{'repo_id':repo_id,'source':source,'repo':repo_name,'owner':owner,'repo_fullname':sg.full_name,'created_at':sg.created_at} for sg in sg_list]
-
-						if nb_forks < self.per_page*(int(nb_forks/self.per_page))+len(sg_list):
-							# if in_thread:
-							#if db.db_type == 'sqlite' and in_thread:
-							#	time.sleep(1+random.random()) # to avoid database locked issues, and smooth a bit concurrency
-							if self.db.db_type == 'postgres':
-								extras.execute_batch(db.cursor,'''
-									INSERT INTO forks(forking_repo_id,forked_repo_id,forking_repo_url,forked_at)
-									VALUES((SELECT r.id FROM repositories r
-												INNER JOIN sources s
-												ON s.name=%s AND s.id=r.source AND CONCAT(r.owner,'/',r.name)=%s)
-											,%s,%s,%s)
-									ON CONFLICT DO NOTHING
-									;''',((s['source'],s['repo_fullname'],s['repo_id'],'github.com/'+s['repo_fullname'],s['created_at']) for s in forks_list))
-							else:
-								db.cursor.executemany('''
-									INSERT OR IGNORE INTO forks(forking_repo_id,forked_repo_id,forking_repo_url,forked_at)
-									VALUES((SELECT r.id FROM repositories r
-												INNER JOIN sources s
-												ON s.name=? AND s.id=r.source AND CONCAT(r.owner,'/',r.name)=?)
-											,?,?,?)
-									;''',((s['source'],s['repo_fullname'],s['repo_id'],'github.com/'+s['repo_fullname'],s['created_at']) for s in forks_list))
-							#db.insert_forks(,commit=False)
-							db.connection.commit()
-						else:
+						if repo_apiobj.forks_count == 0:
 							if to_be_merged:
-								self.logger.info('Filled forks for repo {}/{} ({}/{}): {}'.format(checked_repo_owner,checked_repo_name,owner,repo_name,nb_forks))
+								self.logger.info('No forks for repo {}/{} ({}/{})'.format(checked_repo_owner,checked_repo_name,owner,repo_name))
 							else:
-								self.logger.info('Filled forks for repo {}/{}: {}'.format(owner,repo_name,nb_forks))
+								self.logger.info('No forks for repo {}/{}'.format(owner,repo_name))
 							db.insert_update(repo_id=repo_id,table='forks',success=True)
 							db.connection.commit()
 							repo_list.pop(0)
 							new_repo = True
 							break
 
-			if in_thread:
-				db.cursor.close()
-				db.connection.close()
+						while requester.get_rate_limit().core.remaining > self.querymin_threshold:
+							nb_forks = db.count_forks(source=source,repo=repo_name,owner=owner)
+							db.connection.commit()
+
+							# sg_list = list(repo_apiobj.get_stargazers_with_dates()[nb_stars:nb_stars+per_page])
+							sg_list = list(repo_apiobj.get_forks().get_page(int(nb_forks/self.per_page)))
+							forks_list=[{'repo_id':repo_id,'source':source,'repo':repo_name,'owner':owner,'repo_fullname':sg.full_name,'created_at':sg.created_at} for sg in sg_list]
+
+							if nb_forks < self.per_page*(int(nb_forks/self.per_page))+len(sg_list):
+								# if in_thread:
+								#if db.db_type == 'sqlite' and in_thread:
+								#	time.sleep(1+random.random()) # to avoid database locked issues, and smooth a bit concurrency
+								if self.db.db_type == 'postgres':
+									extras.execute_batch(db.cursor,'''
+										INSERT INTO forks(forking_repo_id,forked_repo_id,forking_repo_url,forked_at)
+										VALUES((SELECT r.id FROM repositories r
+													INNER JOIN sources s
+													ON s.name=%s AND s.id=r.source AND CONCAT(r.owner,'/',r.name)=%s)
+												,%s,%s,%s)
+										ON CONFLICT DO NOTHING
+										;''',((s['source'],s['repo_fullname'],s['repo_id'],'github.com/'+s['repo_fullname'],s['created_at']) for s in forks_list))
+								else:
+									db.cursor.executemany('''
+										INSERT OR IGNORE INTO forks(forking_repo_id,forked_repo_id,forking_repo_url,forked_at)
+										VALUES((SELECT r.id FROM repositories r
+													INNER JOIN sources s
+													ON s.name=? AND s.id=r.source AND CONCAT(r.owner,'/',r.name)=?)
+												,?,?,?)
+										;''',((s['source'],s['repo_fullname'],s['repo_id'],'github.com/'+s['repo_fullname'],s['created_at']) for s in forks_list))
+								#db.insert_forks(,commit=False)
+								db.connection.commit()
+							else:
+								if to_be_merged:
+									self.logger.info('Filled forks for repo {}/{} ({}/{}): {}'.format(checked_repo_owner,checked_repo_name,owner,repo_name,nb_forks))
+								else:
+									self.logger.info('Filled forks for repo {}/{}: {}'.format(owner,repo_name,nb_forks))
+								db.insert_update(repo_id=repo_id,table='forks',success=True)
+								db.connection.commit()
+								repo_list.pop(0)
+								new_repo = True
+								break
+			finally:
+				if in_thread and 'db' in locals():
+					db.cursor.close()
+					db.connection.close()
 		else:
 			with ThreadPoolExecutor(max_workers=workers) as executor:
 				futures = []
@@ -853,57 +858,59 @@ class FollowersFiller(GithubFiller):
 		if self.start_offset is not None:
 			login_list = [r for r in login_list if r[1]>=self.start_offset]
 		if workers == 1:
-			requester_gen = self.get_github_requester()
-			if in_thread:
-				db = self.db.copy()
-			else:
-				db = self.db
-			new_login = True
-			while len(login_list):
-				login_id,login,identity_type_id = login_list[0]
-
-				if new_login:
-					new_login = False
-					self.logger.info('Filling followers for login {}'.format(login))
-				requester = next(requester_gen)
-				try:
-					login_apiobj = requester.get_user('{}'.format(login))
-				except UnknownObjectException:
-					self.logger.info('No such login: {}'.format(login))
-					db.insert_update(identity_id=login_id,table='followers',success=False)
-					login_list.pop(0)
-					new_login = True
+			try:
+				if in_thread:
+					db = self.db.copy()
 				else:
+					db = self.db
+				requester_gen = self.get_github_requester()
+				new_login = True
+				while len(login_list):
+					login_id,login,identity_type_id = login_list[0]
 
-					if login_apiobj.followers == 0:
-						self.logger.info('No followers for login: {}'.format(login))
-						db.insert_update(identity_id=login_id,table='followers',success=True)
-						db.connection.commit()
+					if new_login:
+						new_login = False
+						self.logger.info('Filling followers for login {}'.format(login))
+					requester = next(requester_gen)
+					try:
+						login_apiobj = requester.get_user('{}'.format(login))
+					except UnknownObjectException:
+						self.logger.info('No such login: {}'.format(login))
+						db.insert_update(identity_id=login_id,table='followers',success=False)
 						login_list.pop(0)
 						new_login = True
-						break
+					else:
 
-					while requester.get_rate_limit().core.remaining > self.querymin_threshold:
-						nb_followers = db.count_followers(login_id=login_id)
-						db.connection.commit()
-
-						sg_list = list(login_apiobj.get_followers().get_page(int(nb_followers/self.per_page)))
-
-						if nb_followers < self.per_page*(int(nb_followers/self.per_page))+len(sg_list):
-							# if db.db_type == 'sqlite' and in_thread:
-							# 	time.sleep(1+random.random()) # to avoid database locked issues, and smooth a bit concurrency
-							self.insert_followers(db=db,followers_list=[{'login_id':login_id,'identity_type_id':identity_type_id,'login':login,'follower_login':sg.login} for sg in sg_list],commit=True)
-
-						else:
-							self.logger.info('Filled followers for login {}: {}'.format(login,nb_followers))
+						if login_apiobj.followers == 0:
+							self.logger.info('No followers for login: {}'.format(login))
 							db.insert_update(identity_id=login_id,table='followers',success=True)
 							db.connection.commit()
 							login_list.pop(0)
 							new_login = True
 							break
-			if in_thread:
-				db.cursor.close()
-				db.connection.close()
+
+						while requester.get_rate_limit().core.remaining > self.querymin_threshold:
+							nb_followers = db.count_followers(login_id=login_id)
+							db.connection.commit()
+
+							sg_list = list(login_apiobj.get_followers().get_page(int(nb_followers/self.per_page)))
+
+							if nb_followers < self.per_page*(int(nb_followers/self.per_page))+len(sg_list):
+								# if db.db_type == 'sqlite' and in_thread:
+								# 	time.sleep(1+random.random()) # to avoid database locked issues, and smooth a bit concurrency
+								self.insert_followers(db=db,followers_list=[{'login_id':login_id,'identity_type_id':identity_type_id,'login':login,'follower_login':sg.login} for sg in sg_list],commit=True)
+
+							else:
+								self.logger.info('Filled followers for login {}: {}'.format(login,nb_followers))
+								db.insert_update(identity_id=login_id,table='followers',success=True)
+								db.connection.commit()
+								login_list.pop(0)
+								new_login = True
+								break
+			finally:
+				if in_thread and 'db' in locals():
+					db.cursor.close()
+					db.connection.close()
 
 		else:
 			with ThreadPoolExecutor(max_workers=workers) as executor:
