@@ -1560,7 +1560,11 @@ class Database(object):
 		'''
 		Counts registered starring events of a repo
 		'''
-		repo_id = self.get_repo_id(name=repo,owner=owner,source=source)
+		if repo_id is None:
+			if owner is None or source is None or name is None:
+				raise SyntaxError('Invalid information for repo, source:{}, owner:{}, name:{}'.format(source,owner,name))
+			else:
+				repo_id = self.get_repo_id(name=repo,owner=owner,source=source)
 		if self.db_type == 'postgres':
 			self.cursor.execute('''SELECT COUNT(*) FROM stars WHERE repo_id=%s;''',(repo_id,))
 		else:
@@ -1571,11 +1575,15 @@ class Database(object):
 		else:
 			return ans
 
-	def count_forks(self,source,repo,owner):
+	def count_forks(self,source=None,repo=None,owner=None,repo_id=None):
 		'''
 		Counts registered forks of a repo
 		'''
-		repo_id = self.get_repo_id(name=repo,owner=owner,source=source)
+		if repo_id is None:
+			if owner is None or source is None or name is None:
+				raise SyntaxError('Invalid information for repo, source:{}, owner:{}, name:{}'.format(source,owner,name))
+			else:
+				repo_id = self.get_repo_id(name=repo,owner=owner,source=source)
 		if self.db_type == 'postgres':
 			self.cursor.execute('''SELECT COUNT(*) FROM forks WHERE forked_repo_id=%s;''',(repo_id,))
 		else:

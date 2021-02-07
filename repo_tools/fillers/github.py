@@ -76,6 +76,8 @@ class GithubFiller(fillers.Filler):
 		except KeyError:
 			pass
 
+		self.api_keys = [ak for ak in self.api_keys if ak!=''] # removing empty api keys, can come from e.g. trailing newlines at end of parsed file
+
 		if not len(self.api_keys):
 			self.logger.info('No API keys found for Github, using default anonymous (but limited) authentication.\nLooking for api_keys_file in db.data_folder, then in current folder, then in ~/.repo_tools/.\nAdding content of environment variable GITHUB_API_KEY.')
 
@@ -89,6 +91,13 @@ class GithubFiller(fillers.Filler):
 			else:
 				self.github_requesters.append(g)
 
+	def get_rate_limit(self,requester):
+		ans = requester.get_rate_limit().core.remaining
+		if not isinstance(ans,int):
+			raise ValueError('Github answer to rate limit query:{}'.format(ans))
+		else:
+			return ans
+
 	def get_github_requester(self,random_pick=True):
 		'''
 		Going through requesters respecting threshold of minimum remaining api queries
@@ -97,7 +106,7 @@ class GithubFiller(fillers.Filler):
 			self.set_github_requesters()
 		if random_pick:
 			while True:
-				active_requesters = [rq for rq in self.github_requesters if rq.get_rate_limit().core.remaining > self.querymin_threshold]
+				active_requesters = [rq for rq in self.github_requesters if self.get_rate_limit(rq) > self.querymin_threshold]
 				if len(active_requesters):
 					yield random.choice(active_requesters)
 				elif self.fail_on_wait:
@@ -110,11 +119,11 @@ class GithubFiller(fillers.Filler):
 		else:
 			while True:
 				for i,rq in enumerate(self.github_requesters):
-					self.logger.debug('Using github requester {}, {} queries remaining'.format(i,rq.get_rate_limit().core.remaining))
+					self.logger.debug('Using github requester {}, {} queries remaining'.format(i,self.get_rate_limit(rq)))
 					# time.sleep(0.5)
-					while rq.get_rate_limit().core.remaining > self.querymin_threshold:
+					while self.get_rate_limit(rq) > self.querymin_threshold:
 						yield rq
-				if any(((rq.get_rate_limit().core.remaining > self.querymin_threshold) for rq in self.github_requesters)):
+				if any(((self.get_rate_limit(rq) > self.querymin_threshold) for rq in self.github_requesters)):
 					continue
 				elif self.fail_on_wait:
 					raise IOError('All {} API keys are below the min remaining query threshold'.format(len(self.github_requesters)))
@@ -229,8 +238,9 @@ class StarsFiller(GithubFiller):
 							new_repo = True
 							break
 
-						while requester.get_rate_limit().core.remaining > self.querymin_threshold:
-							nb_stars = db.count_stars(source=source,repo=repo_name,owner=owner)
+						while self.get_rate_limit(requester) > self.querymin_threshold:
+							# nb_stars = db.count_stars(source=source,repo=repo_name,owner=owner)
+							nb_stars = db.count_stars(repo_id=repo_id)
 							db.connection.commit()
 							# sg_list = list(repo_apiobj.get_stargazers_with_dates()[nb_stars:nb_stars+per_page])
 							sg_list = list(repo_apiobj.get_stargazers_with_dates().get_page(int(nb_stars/self.per_page)))
@@ -564,23 +574,24 @@ class ForksFiller(GithubFiller):
 	"""
 	Fills in forks info for github repositories
 	"""
-	def __init__(self,force=False,repo_list=None,retry=False,**kwargs):
+	def __init__(self,force=False,repo_list=None,retry=False,incremental_update=True,**kwargs):
 		self.force = force
 		self.repo_list = repo_list
 		self.retry = retry
+		self.incremental_update = incremental_update
 		GithubFiller.__init__(self,**kwargs)
 
 
 
 	def apply(self):
-		self.fill_forks(repo_list=self.repo_list,force=self.force,retry=self.retry,workers=self.workers)
+		self.fill_forks(repo_list=self.repo_list,force=self.force,retry=self.retry,workers=self.workers,incremental_update=self.incremental_update)
 		self.fill_fork_ranks()
 		self.db.connection.commit()
 		self.db.batch_merge_repos()
 
 
 
-	def fill_forks(self,repo_list=None,force=False,workers=1,in_thread=False,retry=False):
+	def fill_forks(self,repo_list=None,force=False,workers=1,in_thread=False,retry=False,incremental_update=True):
 		'''
 		Retrieving fork information from github.
 		force: retry repos that were previously not retrievable
@@ -627,6 +638,11 @@ class ForksFiller(GithubFiller):
 					# repo_id = db.get_repo_id(owner=owner,source=source,name=repo_name)
 					source,owner,repo_name,repo_id = current_repo[:4]
 					if new_repo:
+						if incremental_update:
+							nb_forks = db.count_forks(repo_id=repo_id)
+							db.connection.commit()
+						else:
+							nb_forks = 0
 						new_repo = False
 						self.logger.info('Filling forks for repo {}/{}'.format(owner,repo_name))
 					requester = next(requester_gen)
@@ -669,9 +685,8 @@ class ForksFiller(GithubFiller):
 							new_repo = True
 							break
 
-						while requester.get_rate_limit().core.remaining > self.querymin_threshold:
-							nb_forks = db.count_forks(source=source,repo=repo_name,owner=owner)
-							db.connection.commit()
+						while self.get_rate_limit(requester) > self.querymin_threshold:
+							# nb_forks = db.count_forks(source=source,repo=repo_name,owner=owner)
 
 							# sg_list = list(repo_apiobj.get_stargazers_with_dates()[nb_stars:nb_stars+per_page])
 							sg_list = list(repo_apiobj.get_forks().get_page(int(nb_forks/self.per_page)))
@@ -699,6 +714,11 @@ class ForksFiller(GithubFiller):
 												,?,?,?)
 										;''',((s['source'],s['repo_fullname'],s['repo_id'],'github.com/'+s['repo_fullname'],s['created_at']) for s in forks_list))
 								#db.insert_forks(,commit=False)
+
+								# get returned rows
+								# should be equal to len sg list
+								nb_forks += len(sg_list)
+
 								db.connection.commit()
 							else:
 								if to_be_merged:
@@ -710,6 +730,10 @@ class ForksFiller(GithubFiller):
 								repo_list.pop(0)
 								new_repo = True
 								break
+			except Exception as e:
+				if in_thread:
+					self.logger.error(e)
+				raise
 			finally:
 				if in_thread and 'db' in locals():
 					db.cursor.close()
@@ -718,7 +742,7 @@ class ForksFiller(GithubFiller):
 			with ThreadPoolExecutor(max_workers=workers) as executor:
 				futures = []
 				for repo in repo_list:
-					futures.append(executor.submit(self.fill_forks,repo_list=[repo],workers=1,in_thread=True))
+					futures.append(executor.submit(self.fill_forks,repo_list=[repo],workers=1,in_thread=True,incremental_update=incremental_update))
 				# for future in concurrent.futures.as_completed(futures):
 				# 	pass
 				for future in futures:
@@ -889,7 +913,7 @@ class FollowersFiller(GithubFiller):
 							new_login = True
 							break
 
-						while requester.get_rate_limit().core.remaining > self.querymin_threshold:
+						while self.get_rate_limit(requester) > self.querymin_threshold:
 							nb_followers = db.count_followers(login_id=login_id)
 							db.connection.commit()
 
