@@ -138,19 +138,20 @@ class StarsFiller(GithubFiller):
 	"""
 	Fills in star information
 	"""
-	def __init__(self,force=False,retry=False,repo_list=None,**kwargs):
+	def __init__(self,force=False,retry=False,repo_list=None,incremental_update=True,**kwargs):
 		self.force = force
 		self.retry = retry
 		self.repo_list = repo_list
+		self.incremental_update = incremental_update
 		GithubFiller.__init__(self,**kwargs)
 
 
 	def apply(self):
-		self.fill_stars(force=self.force,retry=self.retry,repo_list=self.repo_list,workers=self.workers)
+		self.fill_stars(force=self.force,retry=self.retry,repo_list=self.repo_list,workers=self.workers,incremental_update=self.incremental_update)
 		self.db.connection.commit()
 		self.db.batch_merge_repos()
 
-	def fill_stars(self,force=False,retry=False,repo_list=None,workers=1,in_thread=False):
+	def fill_stars(self,force=False,retry=False,repo_list=None,workers=1,in_thread=False,incremental_update=True):
 		'''
 		Filling stars (only from github for the moment)
 		force can be True, or an integer representing an acceptable delay in seconds for age of last update
@@ -183,6 +184,7 @@ class StarsFiller(GithubFiller):
 			repo_list = [r for r in repo_list if r[1]>=self.start_offset]
 
 		if workers == 1:
+			source,owner,repo_name = None,None,None # init values for the exception
 			try:
 				if in_thread:
 					db = self.db.copy()
@@ -197,6 +199,11 @@ class StarsFiller(GithubFiller):
 					# repo_id = db.get_repo_id(owner=owner,source=source,name=repo_name)
 					source,owner,repo_name,repo_id = current_repo[:4]
 					if new_repo:
+						if incremental_update:
+							nb_stars = db.count_stars(repo_id=repo_id)
+							db.connection.commit()
+						else:
+							nb_stars = 0
 						new_repo = False
 						self.logger.info('Filling stars for repo {}/{}'.format(owner,repo_name))
 					requester = next(requester_gen)
@@ -240,7 +247,7 @@ class StarsFiller(GithubFiller):
 
 						while self.get_rate_limit(requester) > self.querymin_threshold:
 							# nb_stars = db.count_stars(source=source,repo=repo_name,owner=owner)
-							nb_stars = db.count_stars(repo_id=repo_id)
+							# nb_stars = db.count_stars(repo_id=repo_id)
 							db.connection.commit()
 							# sg_list = list(repo_apiobj.get_stargazers_with_dates()[nb_stars:nb_stars+per_page])
 							sg_list = list(repo_apiobj.get_stargazers_with_dates().get_page(int(nb_stars/self.per_page)))
@@ -251,6 +258,7 @@ class StarsFiller(GithubFiller):
 									#time.sleep(1+random.random()) # to avoid database locked issues, and smooth a bit concurrency
 								# db.insert_stars(stars_list=[{'repo_id':repo_id,'source':source,'repo':repo_name,'owner':owner,'starred_at':sg.starred_at,'login':sg.user.login} for sg in sg_list],commit=False)
 								self.insert_stars(db=db,stars_list=[{'repo_id':repo_id,'source':source,'repo':repo_name,'owner':owner,'starred_at':sg.starred_at,'login':sg.user.login} for sg in sg_list],commit=False)
+								nb_stars += len(sg_list)
 								db.connection.commit()
 							else:
 
@@ -263,6 +271,10 @@ class StarsFiller(GithubFiller):
 								repo_list.pop(0)
 								new_repo = True
 								break
+			except Exception as e:
+				if in_thread:
+					self.logger.error('Exception in stars {}/{}/{}: \n {}: {}'.format(source,owner,repo_name,e.__class__.__name__,e))
+				raise Exception('Exception in stars {}/{}/{}'.format(source,owner,repo_name)) from e
 			finally:
 				if in_thread and 'db' in locals():
 					db.cursor.close()
@@ -465,6 +477,7 @@ class GHLoginsFiller(GithubFiller):
 			info_list = [r for r in info_list if r[0]>=self.start_offset]
 
 		if workers == 1:
+			identity_id = None # init values for the exception
 			try:
 				if in_thread:
 					db = self.db.copy()
@@ -500,6 +513,11 @@ class GHLoginsFiller(GithubFiller):
 									self.logger.info('No login available for user id {}, uncompletable object error'.format(identity_id))
 									login = None
 							self.set_gh_login(db=db,identity_id=identity_id,login=login,reason='Email/login match through github API for commit {}'.format(commit_sha))
+
+			except Exception as e:
+				if in_thread:
+					self.logger.error('Exception in getting login {}: \n {}: {}'.format(identity_id,e.__class__.__name__,e))
+				raise Exception('Exception in getting login {}'.format(identity_id,name)) from e
 			finally:
 				if in_thread and 'db' in locals():
 					db.cursor.close()
@@ -624,11 +642,13 @@ class ForksFiller(GithubFiller):
 			repo_list = [r for r in repo_list if r[1]>=self.start_offset]
 
 		if workers == 1:
+			source,owner,repo_name = None,None,None # init values for the exception
 			try:
 				if in_thread:
 					db = self.db.copy()
 				else:
 					db = self.db
+
 				requester_gen = self.get_github_requester()
 				new_repo = True
 				while len(repo_list):
@@ -732,8 +752,8 @@ class ForksFiller(GithubFiller):
 								break
 			except Exception as e:
 				if in_thread:
-					self.logger.error(e)
-				raise
+					self.logger.error('Exception in forks {}/{}/{}: \n {}: {}'.format(source,owner,repo_name,e.__class__.__name__,e))
+				raise Exception('Exception in forks {}/{}/{}'.format(source,owner,repo_name)) from e
 			finally:
 				if in_thread and 'db' in locals():
 					db.cursor.close()
@@ -784,15 +804,16 @@ class FollowersFiller(GithubFiller):
 	Fills in follower information
 	"""
 
-	def __init__(self,force=False,retry=False,login_list=None,**kwargs):
+	def __init__(self,force=False,retry=False,login_list=None,incremental_update=True,**kwargs):
 		self.force = force
 		self.retry = retry
 		self.login_list = login_list
+		self.incremental_update = incremental_update
 		GithubFiller.__init__(self,**kwargs)
 
 
 	def apply(self):
-		self.fill_followers(retry=self.retry,login_list=self.login_list,workers=self.workers)
+		self.fill_followers(retry=self.retry,login_list=self.login_list,workers=self.workers,incremental_update=self.incremental_update)
 		self.db.connection.commit()
 
 
@@ -871,7 +892,7 @@ class FollowersFiller(GithubFiller):
 		self.db.connection.commit()
 
 
-	def fill_followers(self,retry=False,login_list=None,workers=1,in_thread=False):
+	def fill_followers(self,retry=False,login_list=None,workers=1,in_thread=False,incremental_update=True):
 		'''
 		Filling followers
 		Checking if an entry exists in table_updates with login_id and table_name followers
@@ -882,6 +903,7 @@ class FollowersFiller(GithubFiller):
 		if self.start_offset is not None:
 			login_list = [r for r in login_list if r[1]>=self.start_offset]
 		if workers == 1:
+			login_id,login,identity_type_id = None,None,None # init values for the exception
 			try:
 				if in_thread:
 					db = self.db.copy()
@@ -893,6 +915,11 @@ class FollowersFiller(GithubFiller):
 					login_id,login,identity_type_id = login_list[0]
 
 					if new_login:
+						if incremental_update:
+							nb_followers = db.count_followers(login_id=login_id)
+							db.connection.commit()
+						else:
+							nb_followers = 0
 						new_login = False
 						self.logger.info('Filling followers for login {}'.format(login))
 					requester = next(requester_gen)
@@ -914,7 +941,7 @@ class FollowersFiller(GithubFiller):
 							break
 
 						while self.get_rate_limit(requester) > self.querymin_threshold:
-							nb_followers = db.count_followers(login_id=login_id)
+							# nb_followers = db.count_followers(login_id=login_id)
 							db.connection.commit()
 
 							sg_list = list(login_apiobj.get_followers().get_page(int(nb_followers/self.per_page)))
@@ -923,7 +950,7 @@ class FollowersFiller(GithubFiller):
 								# if db.db_type == 'sqlite' and in_thread:
 								# 	time.sleep(1+random.random()) # to avoid database locked issues, and smooth a bit concurrency
 								self.insert_followers(db=db,followers_list=[{'login_id':login_id,'identity_type_id':identity_type_id,'login':login,'follower_login':sg.login} for sg in sg_list],commit=True)
-
+								nb_followers += len(sg_list)
 							else:
 								self.logger.info('Filled followers for login {}: {}'.format(login,nb_followers))
 								db.insert_update(identity_id=login_id,table='followers',success=True)
@@ -931,6 +958,10 @@ class FollowersFiller(GithubFiller):
 								login_list.pop(0)
 								new_login = True
 								break
+			except Exception as e:
+				if in_thread:
+					self.logger.error('Exception in followers {}: \n {}: {}'.format(login,e.__class__.__name__,e))
+				raise Exception('Exception in followers {}'.format(login)) from e
 			finally:
 				if in_thread and 'db' in locals():
 					db.cursor.close()
