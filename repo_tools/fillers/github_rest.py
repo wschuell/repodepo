@@ -151,7 +151,7 @@ class StarsFiller(GithubFiller):
 		self.db.connection.commit()
 		self.db.batch_merge_repos()
 
-	def fill_stars(self,force=False,retry=False,repo_list=None,workers=1,in_thread=False,incremental_update=True):
+	def fill_stars(self,force=False,retry=False,repo_list=None,workers=1,in_thread=False,incremental_update=True,repo_nb=None,total_repos=None):
 		'''
 		Filling stars (only from github for the moment)
 		force can be True, or an integer representing an acceptable delay in seconds for age of last update
@@ -183,6 +183,11 @@ class StarsFiller(GithubFiller):
 		if self.start_offset is not None:
 			repo_list = [r for r in repo_list if r[1]>=self.start_offset]
 
+		if total_repos is None:
+			total_repos = len(repo_list)
+		if repo_nb is None:
+			repo_nb = 0
+
 		if workers == 1:
 			source,owner,repo_name = None,None,None # init values for the exception
 			try:
@@ -205,6 +210,7 @@ class StarsFiller(GithubFiller):
 						else:
 							nb_stars = 0
 						new_repo = False
+						repo_nb += 1
 						self.logger.info('Filling stars for repo {}/{}'.format(owner,repo_name))
 					requester = next(requester_gen)
 					try:
@@ -238,7 +244,7 @@ class StarsFiller(GithubFiller):
 							if to_be_merged:
 								self.logger.info('No stars for repo {}/{} ({}/{})'.format(checked_repo_owner,checked_repo_name,owner,repo_name))
 							else:
-								self.logger.info('No stars for repo {}/{}'.format(owner,repo_name))
+								self.logger.info('No stars for repo {}/{} ({}/{})'.format(owner,repo_name,repo_nb,total_repos))
 							db.insert_update(repo_id=repo_id,table='stars',success=True)
 							db.connection.commit()
 							repo_list.pop(0)
@@ -265,7 +271,7 @@ class StarsFiller(GithubFiller):
 								if to_be_merged:
 									self.logger.info('Filled stars for repo {}/{} ({}/{}): {}'.format(checked_repo_owner,checked_repo_name,owner,repo_name,nb_stars))
 								else:
-									self.logger.info('Filled stars for repo {}/{}: {}'.format(owner,repo_name,nb_stars))
+									self.logger.info('Filled stars for repo {}/{}: {} ({}/{}})'.format(owner,repo_name,nb_stars,repo_nb,total_repos))
 								db.insert_update(repo_id=repo_id,table='stars',success=True)
 								db.connection.commit()
 								repo_list.pop(0)
@@ -274,6 +280,7 @@ class StarsFiller(GithubFiller):
 			except Exception as e:
 				if in_thread:
 					self.logger.error('Exception in stars {}/{}/{}: \n {}: {}'.format(source,owner,repo_name,e.__class__.__name__,e))
+					db.log_error('Exception in stars {}/{}/{}: \n {}: {}'.format(source,owner,repo_name,e.__class__.__name__,e))
 				raise Exception('Exception in stars {}/{}/{}'.format(source,owner,repo_name)) from e
 			finally:
 				if in_thread and 'db' in locals():
@@ -283,8 +290,8 @@ class StarsFiller(GithubFiller):
 		else:
 			with ThreadPoolExecutor(max_workers=workers) as executor:
 				futures = []
-				for repo in repo_list:
-					futures.append(executor.submit(self.fill_stars,repo_list=[repo],workers=1,in_thread=True))
+				for i,repo in enumerate(repo_list):
+					futures.append(executor.submit(self.fill_stars,repo_list=[repo],workers=1,in_thread=True,repo_nb=i,total_repos=total_repos))
 				# for future in concurrent.futures.as_completed(futures):
 				# 	pass
 				for future in futures:
@@ -462,7 +469,7 @@ class GHLoginsFiller(GithubFiller):
 			self.db.connection.commit()
 
 
-	def fill_gh_logins(self,info_list=None,workers=1,in_thread=False):
+	def fill_gh_logins(self,info_list=None,workers=1,in_thread=False,user_nb=None,total_users=None):
 		'''
 		Associating emails to github logins using GitHub API
 		force: retry emails that were previously not retrievable
@@ -476,6 +483,11 @@ class GHLoginsFiller(GithubFiller):
 		if self.start_offset is not None:
 			info_list = [r for r in info_list if r[0]>=self.start_offset]
 
+		if total_users is None:
+			total_users = len(info_list)
+		if user_nb is None:
+			user_nb = 1
+
 		if workers == 1:
 			identity_id = None # init values for the exception
 			try:
@@ -486,13 +498,13 @@ class GHLoginsFiller(GithubFiller):
 				requester_gen = self.get_github_requester()
 				for infos in info_list:
 					identity_id,repo_id,repo_owner,repo_name,commit_sha = infos
-					self.logger.info('Filling gh login for user id {}'.format(identity_id))
+					self.logger.info('Filling gh login for user id {} ({}/{})'.format(identity_id,user_nb,total_users))
 					requester = next(requester_gen)
 					try:
 						repo_apiobj = requester.get_repo('{}/{}'.format(repo_owner,repo_name))
 						try:
 							commit_apiobj = repo_apiobj.get_commit(commit_sha)
-						except UnknownObjectException:
+						except github.GithubException:
 							self.logger.info('No such commit: {}/{}/{}'.format(repo_owner,repo_name,commit_sha))
 							commit_apiobj = None
 					except UnknownObjectException:
@@ -504,20 +516,22 @@ class GHLoginsFiller(GithubFiller):
 						else:
 							if commit_apiobj.author is None:
 								login = None
-								self.logger.info('No login available for user id {}'.format(identity_id))
+								self.logger.info('No login available for user id {} ({}/{})'.format(identity_id,user_nb,total_users))
 							else:
 								try:
 									login = commit_apiobj.author.login
-									self.logger.info('Found login {} for user id {}'.format(login,identity_id))
+									self.logger.info('Found login {} for user id {} ({}/{})'.format(login,identity_id,user_nb,total_users))
 								except UnknownObjectException:
-									self.logger.info('No login available for user id {}, uncompletable object error'.format(identity_id))
+									self.logger.info('No login available for user id {} ({}/{}), uncompletable object error'.format(identity_id,user_nb,total_users))
 									login = None
 							self.set_gh_login(db=db,identity_id=identity_id,login=login,reason='Email/login match through github API for commit {}'.format(commit_sha))
+					user_nb += 1
 
 			except Exception as e:
 				if in_thread:
 					self.logger.error('Exception in getting login {}: \n {}: {}'.format(identity_id,e.__class__.__name__,e))
-				raise Exception('Exception in getting login {}'.format(identity_id,name)) from e
+					db.log_error('Exception in getting login {}: \n {}: {}'.format(identity_id,e.__class__.__name__,e))
+				raise Exception('Exception in getting login {}'.format(identity_id)) from e
 			finally:
 				if in_thread and 'db' in locals():
 					db.cursor.close()
@@ -525,8 +539,8 @@ class GHLoginsFiller(GithubFiller):
 		else:
 			with ThreadPoolExecutor(max_workers=workers) as executor:
 				futures = []
-				for infos in info_list:
-					futures.append(executor.submit(self.fill_gh_logins,info_list=[infos],workers=1,in_thread=True))
+				for i,infos in enumerate(info_list):
+					futures.append(executor.submit(self.fill_gh_logins,info_list=[infos],workers=1,in_thread=True,user_nb=i+1,total_users=total_users))
 				# for future in concurrent.futures.as_completed(futures):
 				# 	pass
 				for future in futures:
@@ -753,6 +767,7 @@ class ForksFiller(GithubFiller):
 			except Exception as e:
 				if in_thread:
 					self.logger.error('Exception in forks {}/{}/{}: \n {}: {}'.format(source,owner,repo_name,e.__class__.__name__,e))
+					db.log_error('Exception in forks {}/{}/{}: \n {}: {}'.format(source,owner,repo_name,e.__class__.__name__,e))
 				raise Exception('Exception in forks {}/{}/{}'.format(source,owner,repo_name)) from e
 			finally:
 				if in_thread and 'db' in locals():
@@ -961,6 +976,7 @@ class FollowersFiller(GithubFiller):
 			except Exception as e:
 				if in_thread:
 					self.logger.error('Exception in followers {}: \n {}: {}'.format(login,e.__class__.__name__,e))
+					db.log_error('Exception in followers {}: \n {}: {}'.format(login,e.__class__.__name__,e))
 				raise Exception('Exception in followers {}'.format(login)) from e
 			finally:
 				if in_thread and 'db' in locals():

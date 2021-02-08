@@ -531,115 +531,164 @@ class CommitsFiller(fillers.Filler):
 			- the root of the fork tree get the orig status
 		This is avoided with a run with only_null set to False.
 		'''
-		if only_null:
-			# update is_orig_repo to true for roots of fork trees
-			self.db.cursor.execute('''
-					UPDATE commit_repos SET is_orig_repo=true
-						WHERE is_orig_repo IS NULL
-							AND repo_id = (SELECT ccp.repo_id
-								FROM commit_repos ccp
-								INNER JOIN forks f
-								ON ccp.commit_id=commit_repos.commit_id AND f.forked_repo_id=ccp.repo_id
-								INNER JOIN commit_repos ccp2
-								ON ccp2.commit_id=commit_repos.commit_id AND f.forking_repo_id=ccp2.repo_id
-								ORDER BY f.fork_rank DESC
-								LIMIT 1
-								)
-					;''')
 
 
-
-			# update is_orig_repo to true for repos that are the only ones owning the commit
-
-			self.db.cursor.execute('''
-					UPDATE commit_repos SET is_orig_repo=true
-						WHERE is_orig_repo IS NULL
-							AND (SELECT COUNT(*) FROM commit_repos ccp
-								WHERE ccp.commit_id=commit_repos.commit_id) = 1
-					;''')
-
-
-			# update is_orig_repo to false for repos elsewhere in fork trees
-			self.db.cursor.execute('''
-					UPDATE commit_repos SET is_orig_repo=false
-						WHERE is_orig_repo IS NULL
-							AND repo_id IN (SELECT ccp2.repo_id
-								FROM commit_repos ccp
-								INNER JOIN forks f
-								ON ccp.commit_id=commit_repos.commit_id AND f.forked_repo_id=ccp.repo_id
-								INNER JOIN commit_repos ccp2
-								ON ccp2.commit_id=commit_repos.commit_id AND f.forking_repo_id=ccp2.repo_id
-								)
-					;''')
-
-
+		self.db.cursor.execute('''SELECT MAX(updated_at) FROM full_updates WHERE update_type='commits orig repos';''')
+		last_fu = self.db.cursor.fetchone()[0]
+		self.db.cursor.execute('''SELECT MAX(updated_at) FROM full_updates WHERE update_type='commits';''')
+		last_fu_commits = self.db.cursor.fetchone()[0]
+		if last_fu is not None and last_fu_commits>last_fu:
+			self.logger.info('Skipping commit origin repository attribution')
 		else:
+			if only_null:
+				# update is_orig_repo to true for roots of fork trees
+				self.db.cursor.execute('''
+						UPDATE commit_repos SET is_orig_repo=true
+							WHERE is_orig_repo IS NULL
+								AND repo_id = (SELECT ccp.repo_id
+									FROM commit_repos ccp
+									INNER JOIN forks f
+									ON ccp.commit_id=commit_repos.commit_id AND f.forked_repo_id=ccp.repo_id
+									INNER JOIN commit_repos ccp2
+									ON ccp2.commit_id=commit_repos.commit_id AND f.forking_repo_id=ccp2.repo_id
+									ORDER BY f.fork_rank DESC
+									LIMIT 1
+									)
+						;''')
 
 
-			# set all origs to NULL
+
+				# update is_orig_repo to true for repos that are the only ones owning the commit
+
+				self.db.cursor.execute('''
+						UPDATE commit_repos SET is_orig_repo=true
+							WHERE is_orig_repo IS NULL
+								AND (SELECT COUNT(*) FROM commit_repos ccp
+									WHERE ccp.commit_id=commit_repos.commit_id) = 1
+						;''')
+
+				# set to null where twice true for is_orig_repo
+				self.db.cursor.execute('''
+						UPDATE commit_repos SET is_orig_repo=NULL
+							WHERE commit_id IN (
+								SELECT cr.commit_id FROM commit_repos cr
+								WHERE cr.is_orig_repo
+								GROUP BY cr.commit_id
+								HAVING COUNT(*)>=2
+									)
+						;''')
+
+
+				#REDO STEP1 update is_orig_repo to true for roots of fork trees
+				self.db.cursor.execute('''
+						UPDATE commit_repos SET is_orig_repo=true
+							WHERE is_orig_repo IS NULL
+								AND repo_id = (SELECT ccp.repo_id
+									FROM commit_repos ccp
+									INNER JOIN forks f
+									ON ccp.commit_id=commit_repos.commit_id AND f.forked_repo_id=ccp.repo_id
+									INNER JOIN commit_repos ccp2
+									ON ccp2.commit_id=commit_repos.commit_id AND f.forking_repo_id=ccp2.repo_id
+									ORDER BY f.fork_rank DESC
+									LIMIT 1
+									)
+						;''')
+
+
+
+				#REDO STEP2 update is_orig_repo to true for repos that are the only ones owning the commit
+
+				self.db.cursor.execute('''
+						UPDATE commit_repos SET is_orig_repo=true
+							WHERE is_orig_repo IS NULL
+								AND (SELECT COUNT(*) FROM commit_repos ccp
+									WHERE ccp.commit_id=commit_repos.commit_id) = 1
+						;''')
+
+
+				# update is_orig_repo to false for repos elsewhere in fork trees
+				self.db.cursor.execute('''
+						UPDATE commit_repos SET is_orig_repo=false
+							WHERE is_orig_repo IS NULL
+								AND repo_id IN (SELECT ccp2.repo_id
+									FROM commit_repos ccp
+									INNER JOIN forks f
+									ON ccp.commit_id=commit_repos.commit_id AND f.forked_repo_id=ccp.repo_id
+									INNER JOIN commit_repos ccp2
+									ON ccp2.commit_id=commit_repos.commit_id AND f.forking_repo_id=ccp2.repo_id
+									)
+						;''')
+
+
+			else:
+
+
+				# set all origs to NULL
+				self.db.cursor.execute('''
+						UPDATE commit_repos SET is_orig_repo=NULL;''')
+
+				# update is_orig_repo to true for roots of fork trees
+				self.db.cursor.execute('''
+						UPDATE commit_repos SET is_orig_repo=true
+							WHERE repo_id = (SELECT ccp.repo_id
+									FROM commit_repos ccp
+									INNER JOIN forks f
+									ON ccp.commit_id=commit_repos.commit_id AND f.forked_repo_id=ccp.repo_id
+									INNER JOIN commit_repos ccp2
+									ON ccp2.commit_id=commit_repos.commit_id AND f.forking_repo_id=ccp2.repo_id
+									ORDER BY f.fork_rank DESC
+									LIMIT 1
+									)
+						;''')
+
+				# update is_orig_repo to true for repos that are the only ones owning the commit
+
+				self.db.cursor.execute('''
+						UPDATE commit_repos SET is_orig_repo=true
+							WHERE (SELECT COUNT(*) FROM commit_repos ccp
+									WHERE ccp.commit_id=commit_repos.commit_id) = 1
+						;''')
+
+				# update is_orig_repo to false for repos elsewhere in fork trees
+				self.db.cursor.execute('''
+						UPDATE commit_repos SET is_orig_repo=false
+							WHERE repo_id IN (SELECT ccp2.repo_id
+									FROM commit_repos ccp
+									INNER JOIN forks f
+									ON ccp.commit_id=commit_repos.commit_id AND f.forked_repo_id=ccp.repo_id
+									INNER JOIN commit_repos ccp2
+									ON ccp2.commit_id=commit_repos.commit_id AND f.forking_repo_id=ccp2.repo_id
+									)
+						;''')
+
+
 			self.db.cursor.execute('''
-					UPDATE commit_repos SET is_orig_repo=NULL;''')
+					SELECT r.owner,r.name,COUNT(*) FROM repositories r
+						INNER JOIN commit_repos cr2
+							ON r.id=cr2.repo_id AND cr2.is_orig_repo
+						INNER JOIN
+							(SELECT cr.commit_id,COUNT(DISTINCT cr.repo_id) AS cnt FROM commit_repos cr
+								WHERE cr.is_orig_repo
+								GROUP BY cr.commit_id
+								HAVING COUNT(DISTINCT cr.repo_id)>1) AS c
+							ON c.commit_id=cr2.commit_id
+						GROUP BY r.owner,r.name
+					;
+					''')
+			results = list(self.db.cursor.fetchall())
+			if len(results):
+				error_str = 'Several repos are considered origin repos of the same commits. Repos in this situation: {}, First ten: {}'.format(len(results),['{}/{}:{}'.format(*r) for r in results[:10]])
+				raise ValueError(error_str)
 
-			# update is_orig_repo to true for roots of fork trees
 			self.db.cursor.execute('''
-					UPDATE commit_repos SET is_orig_repo=true
-						WHERE repo_id = (SELECT ccp.repo_id
-								FROM commit_repos ccp
-								INNER JOIN forks f
-								ON ccp.commit_id=commit_repos.commit_id AND f.forked_repo_id=ccp.repo_id
-								INNER JOIN commit_repos ccp2
-								ON ccp2.commit_id=commit_repos.commit_id AND f.forking_repo_id=ccp2.repo_id
-								ORDER BY f.fork_rank DESC
-								LIMIT 1
-								)
-					;''')
+					UPDATE commits SET repo_id=(
+							SELECT cp.repo_id FROM commit_repos cp
+								WHERE cp.commit_id=commits.id
+								AND cp.is_orig_repo)
+					;
+					''')
 
-			# update is_orig_repo to true for repos that are the only ones owning the commit
+			self.db.cursor.execute('''INSERT INTO full_updates(update_type) VALUES('commits orig repos');''')
 
-			self.db.cursor.execute('''
-					UPDATE commit_repos SET is_orig_repo=true
-						WHERE (SELECT COUNT(*) FROM commit_repos ccp
-								WHERE ccp.commit_id=commit_repos.commit_id) = 1
-					;''')
-
-			# update is_orig_repo to false for repos elsewhere in fork trees
-			self.db.cursor.execute('''
-					UPDATE commit_repos SET is_orig_repo=false
-						WHERE repo_id IN (SELECT ccp2.repo_id
-								FROM commit_repos ccp
-								INNER JOIN forks f
-								ON ccp.commit_id=commit_repos.commit_id AND f.forked_repo_id=ccp.repo_id
-								INNER JOIN commit_repos ccp2
-								ON ccp2.commit_id=commit_repos.commit_id AND f.forking_repo_id=ccp2.repo_id
-								)
-					;''')
-
-
-		self.db.cursor.execute('''
-				SELECT r.owner,r.name,COUNT(*) FROM repositories r
-					INNER JOIN commit_repos cr2
-						ON r.id=cr2.repo_id AND cr2.is_orig_repo
-					INNER JOIN
-						(SELECT cr.commit_id,COUNT(DISTINCT cr.repo_id) AS cnt FROM commit_repos cr
-							WHERE cr.is_orig_repo
-							GROUP BY cr.commit_id
-							HAVING COUNT(DISTINCT cr.repo_id)>1) AS c
-						ON c.commit_id=cr2.commit_id
-					GROUP BY r.owner,r.name
-				;
-				''')
-		results = list(self.db.cursor.fetchall())
-		if len(results):
-			error_str = 'Several repos are considered origin repos of the same commits. Repos in this situation: {}, First ten: {}'.format(len(results),['{}/{}:{}'.format(*r) for r in results[:10]])
-			raise ValueError(error_str)
-
-		self.db.cursor.execute('''
-				UPDATE commits SET repo_id=(
-						SELECT cp.repo_id FROM commit_repos cp
-							WHERE cp.commit_id=commits.id
-							AND cp.is_orig_repo)
-				;
-				''')
-
-		if autocommit:
-			self.db.connection.commit()
+			if autocommit:
+				self.db.connection.commit()

@@ -113,6 +113,12 @@ class Database(object):
 				url_root TEXT
 				);
 
+				CREATE TABLE IF NOT EXISTS _error_logs(
+				id INTEGER PRIMARY KEY,
+				error TEXT,
+				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+				);
+
 				CREATE TABLE IF NOT EXISTS urls(
 				id INTEGER PRIMARY KEY,
 				source INTEGER REFERENCES sources(id) ON DELETE CASCADE,
@@ -332,6 +338,12 @@ class Database(object):
 				id BIGSERIAL PRIMARY KEY,
 				name TEXT NOT NULL UNIQUE,
 				url_root TEXT
+				);
+
+				CREATE TABLE IF NOT EXISTS _error_logs(
+				id BIGSERIAL PRIMARY KEY,
+				error TEXT,
+				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 				);
 
 				CREATE TABLE IF NOT EXISTS urls(
@@ -757,6 +769,28 @@ class Database(object):
 		if autocommit:
 			self.connection.commit()
 
+	def check_repo_id(self,repo_id):
+		'''
+		Checks if a repo id is still in the DB through query
+		'''
+		if self.db_type == 'postgres':
+			self.cursor.execute('''
+				SELECT id FROM repositories
+				WHERE id=%s
+				;''',(repo_id,))
+		else:
+			self.cursor.execute('''
+				SELECT id FROM repositories
+				WHERE id=%s
+				;''',(repo_id,))
+
+		ans = self.cursor.fetchone()
+		if ans is None:
+			return None
+		else:
+			return ans[0]
+
+
 	def get_repo_id(self,owner,name,source):
 		'''
 		Getting repo id, None if not in DB
@@ -990,7 +1024,7 @@ class Database(object):
 						LEFT OUTER JOIN table_updates tu
 						ON tu.repo_id=r.id AND tu.table_name='stars'
 						GROUP BY r.owner,r.name,r.id,s."name" ) AS t2
-				ON t1.updated=t2.updated
+				ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
 				ORDER BY t1.sname,t1.rowner,t1.rname
 				;''')
 			return list(self.cursor.fetchall())
@@ -1013,7 +1047,7 @@ class Database(object):
 						LEFT OUTER JOIN table_updates tu
 						ON tu.repo_id=r.id AND tu.table_name='forks'
 						GROUP BY r.owner,r.name,r.id,s."name" ) AS t2
-				ON t1.updated=t2.updated
+				ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
 				ORDER BY t1.sname,t1.rowner,t1.rname
 				;''')
 			return list(self.cursor.fetchall())
@@ -1842,7 +1876,19 @@ class Database(object):
 				obsolete_owner,
 				obsolete_name,
 				merging_reason_source,))
-			row_id = self.cursor.fetchone()[0]
+			try:
+				row_id = self.cursor.fetchone()[0]
+			except TypeError as e:
+				raise TypeError('{},{},{},{},{},{},{},{},{}: {}'.format(new_id,
+								new_source,
+								new_owner,
+								new_name,
+								obsolete_id,
+								obsolete_source,
+								obsolete_owner,
+								obsolete_name,
+								merging_reason_source,e)) from e
+
 		else:
 			self.cursor.execute('''
 				INSERT INTO merged_repositories(
@@ -1930,7 +1976,7 @@ class Database(object):
 				obsolete_name,
 				merging_reason_source) in self.cursor.fetchall() ]
 
-		self.logger.info('Batch merging {} repos'.format(len(merge_list)))
+		self.logger.info('Batch merging {} repos ({} unique)'.format(len(merge_list),len(set([tuple(d.items()) for d in merge_list]))))
 
 		for merge_dict in merge_list:
 			self.merge_repos(**merge_dict)
@@ -1948,7 +1994,7 @@ class Database(object):
 		new_owner=None,
 		new_name=None,
 		merging_reason_source='repository merge process',
-		fail_on_no_repo_id=True
+		fail_on_no_repo_id=False
 		):
 		'''
 		Merge process of two repositories, e.g. when a URL redirect is detected. All information attributed to the new repo.
@@ -1977,12 +2023,15 @@ class Database(object):
 
 		if new_id is None:
 			new_id = self.get_repo_id(source=new_source,owner=new_owner,name=new_name)
+		if obsolete_id is not None:
+			obsolete_id = self.check_repo_id(repo_id=obsolete_id)
 		if obsolete_id is None:
 			obsolete_id = self.get_repo_id(source=obsolete_source,owner=obsolete_owner,name=obsolete_name)
 			if obsolete_id is None:
 				if fail_on_no_repo_id:
 					raise ValueError('Repository to be merged {}/{}/{} not found in DB. Destination repo: {}/{}/{} ({})'.format(obsolete_source,obsolete_owner,obsolete_name,new_source,new_owner,new_name,new_id))
 				else:
+					self.logger.info('Repository to be merged {}/{}/{} not found in DB. Destination repo: {}/{}/{} ({})'.format(obsolete_source,obsolete_owner,obsolete_name,new_source,new_owner,new_name,new_id))
 					self.validate_merge_repos(merged_repo_table_id=merged_repo_table_id)
 					return
 
@@ -2311,3 +2360,22 @@ class Database(object):
 
 
 		self.validate_merge_repos(merged_repo_table_id=merged_repo_table_id)
+
+	def log_error(self,message):
+		'''
+		Logs errors in the DB, to keep track of errors directly while executing the multiple threads; and not having to wait for all concurrent.futures to yield results.
+		Alternative to use native python logging would be to add a logger with a uuid name (to not have the module level logger reused by all instances and report everything everywhere)
+		and a file handler in self.data_folder
+		WARNING: This commits the error, but also all previous elements of the transaction potentially waiting for commit. Solution would be to clone the connection temporarily.
+		'''
+		if self.db_type == 'postgres':
+			self.cursor.execute('''
+				INSERT INTO _error_logs(error)
+				VALUES (%s);
+				''',(message,))
+		else:
+			self.cursor.execute('''
+				INSERT INTO _error_logs(error)
+				VALUES (?);
+				''',(message,))
+		self.connection.commit()
