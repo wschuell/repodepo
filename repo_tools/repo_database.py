@@ -781,7 +781,7 @@ class Database(object):
 		else:
 			self.cursor.execute('''
 				SELECT id FROM repositories
-				WHERE id=%s
+				WHERE id=?
 				;''',(repo_id,))
 
 		ans = self.cursor.fetchone()
@@ -1577,11 +1577,16 @@ class Database(object):
 		else:
 			return ans
 
-	def get_last_star(self,source,repo,owner):
+	def get_last_star(self,source=None,repo=None,owner=None,repo_id=None):
 		'''
 		returns a dict with created_at, starred_at and login for the last registered star. All to None if does not exist
 		'''
-		repo_id = self.get_repo_id(name=repo,owner=owner,source=source)
+
+		if repo_id is None:
+			if owner is None or source is None or name is None:
+				raise SyntaxError('Invalid information for repo, source:{}, owner:{}, name:{}'.format(source,owner,name))
+			else:
+				repo_id = self.get_repo_id(name=repo,owner=owner,source=source)
 		if self.db_type == 'postgres':
 			self.cursor.execute('''SELECT created_at,starred_at,login FROM stars WHERE repo_id=%s
 									ORDER BY created_at DESC LIMIT 1;''',(repo_id,))
@@ -1594,7 +1599,7 @@ class Database(object):
 		else:
 			return {'created_at':ans[0],'starred_at':ans[1],'login':ans[2]}
 
-	def count_stars(self,source,repo,owner):
+	def count_stars(self,source=None,repo=None,owner=None,repo_id=None):
 		'''
 		Counts registered starring events of a repo
 		'''

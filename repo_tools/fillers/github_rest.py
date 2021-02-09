@@ -58,6 +58,9 @@ class GithubFiller(fillers.Filler):
 		Setting github requesters
 		api keys file syntax, per line: API#notes
 		'''
+		if self.data_folder is None:
+			self.data_folder = self.db.data_folder
+
 		api_keys_file = os.path.join(self.data_folder,self.api_keys_file)
 		if os.path.exists(api_keys_file):
 			with open(api_keys_file,'r') as f:
@@ -271,7 +274,7 @@ class StarsFiller(GithubFiller):
 								if to_be_merged:
 									self.logger.info('Filled stars for repo {}/{} ({}/{}): {}'.format(checked_repo_owner,checked_repo_name,owner,repo_name,nb_stars))
 								else:
-									self.logger.info('Filled stars for repo {}/{}: {} ({}/{}})'.format(owner,repo_name,nb_stars,repo_nb,total_repos))
+									self.logger.info('Filled stars for repo {}/{}: {} ({}/{})'.format(owner,repo_name,nb_stars,repo_nb,total_repos))
 								db.insert_update(repo_id=repo_id,table='stars',success=True)
 								db.connection.commit()
 								repo_list.pop(0)
@@ -280,7 +283,7 @@ class StarsFiller(GithubFiller):
 			except Exception as e:
 				if in_thread:
 					self.logger.error('Exception in stars {}/{}/{}: \n {}: {}'.format(source,owner,repo_name,e.__class__.__name__,e))
-					db.log_error('Exception in stars {}/{}/{}: \n {}: {}'.format(source,owner,repo_name,e.__class__.__name__,e))
+				db.log_error('Exception in stars {}/{}/{}: \n {}: {}'.format(source,owner,repo_name,e.__class__.__name__,e))
 				raise Exception('Exception in stars {}/{}/{}'.format(source,owner,repo_name)) from e
 			finally:
 				if in_thread and 'db' in locals():
@@ -291,7 +294,7 @@ class StarsFiller(GithubFiller):
 			with ThreadPoolExecutor(max_workers=workers) as executor:
 				futures = []
 				for i,repo in enumerate(repo_list):
-					futures.append(executor.submit(self.fill_stars,repo_list=[repo],workers=1,in_thread=True,repo_nb=i,total_repos=total_repos))
+					futures.append(executor.submit(self.fill_stars,repo_list=[repo],workers=1,in_thread=True,incremental_update=incremental_update,repo_nb=i,total_repos=total_repos))
 				# for future in concurrent.futures.as_completed(futures):
 				# 	pass
 				for future in futures:
@@ -530,7 +533,7 @@ class GHLoginsFiller(GithubFiller):
 			except Exception as e:
 				if in_thread:
 					self.logger.error('Exception in getting login {}: \n {}: {}'.format(identity_id,e.__class__.__name__,e))
-					db.log_error('Exception in getting login {}: \n {}: {}'.format(identity_id,e.__class__.__name__,e))
+				db.log_error('Exception in getting login {}: \n {}: {}'.format(identity_id,e.__class__.__name__,e))
 				raise Exception('Exception in getting login {}'.format(identity_id)) from e
 			finally:
 				if in_thread and 'db' in locals():
@@ -623,7 +626,7 @@ class ForksFiller(GithubFiller):
 
 
 
-	def fill_forks(self,repo_list=None,force=False,workers=1,in_thread=False,retry=False,incremental_update=True):
+	def fill_forks(self,repo_list=None,force=False,workers=1,in_thread=False,retry=False,incremental_update=True,repo_nb=None,total_repos=None):
 		'''
 		Retrieving fork information from github.
 		force: retry repos that were previously not retrievable
@@ -655,6 +658,11 @@ class ForksFiller(GithubFiller):
 		if self.start_offset is not None:
 			repo_list = [r for r in repo_list if r[1]>=self.start_offset]
 
+		if total_repos is None:
+			total_repos = len(repo_list)
+		if repo_nb is None:
+			repo_nb = 0
+
 		if workers == 1:
 			source,owner,repo_name = None,None,None # init values for the exception
 			try:
@@ -678,6 +686,7 @@ class ForksFiller(GithubFiller):
 						else:
 							nb_forks = 0
 						new_repo = False
+						repo_nb += 1
 						self.logger.info('Filling forks for repo {}/{}'.format(owner,repo_name))
 					requester = next(requester_gen)
 					try:
@@ -712,7 +721,7 @@ class ForksFiller(GithubFiller):
 							if to_be_merged:
 								self.logger.info('No forks for repo {}/{} ({}/{})'.format(checked_repo_owner,checked_repo_name,owner,repo_name))
 							else:
-								self.logger.info('No forks for repo {}/{}'.format(owner,repo_name))
+								self.logger.info('No forks for repo {}/{} ({}/{})'.format(owner,repo_name,repo_nb,total_repos))
 							db.insert_update(repo_id=repo_id,table='forks',success=True)
 							db.connection.commit()
 							repo_list.pop(0)
@@ -744,7 +753,7 @@ class ForksFiller(GithubFiller):
 										INSERT OR IGNORE INTO forks(forking_repo_id,forked_repo_id,forking_repo_url,forked_at)
 										VALUES((SELECT r.id FROM repositories r
 													INNER JOIN sources s
-													ON s.name=? AND s.id=r.source AND CONCAT(r.owner,'/',r.name)=?)
+													ON s.name=? AND s.id=r.source AND r.owner || '/' || r.name=?)
 												,?,?,?)
 										;''',((s['source'],s['repo_fullname'],s['repo_id'],'github.com/'+s['repo_fullname'],s['created_at']) for s in forks_list))
 								#db.insert_forks(,commit=False)
@@ -758,7 +767,7 @@ class ForksFiller(GithubFiller):
 								if to_be_merged:
 									self.logger.info('Filled forks for repo {}/{} ({}/{}): {}'.format(checked_repo_owner,checked_repo_name,owner,repo_name,nb_forks))
 								else:
-									self.logger.info('Filled forks for repo {}/{}: {}'.format(owner,repo_name,nb_forks))
+									self.logger.info('Filled forks for repo {}/{}: {} ({}/{})'.format(owner,repo_name,nb_stars,repo_nb,total_repos))
 								db.insert_update(repo_id=repo_id,table='forks',success=True)
 								db.connection.commit()
 								repo_list.pop(0)
@@ -767,7 +776,7 @@ class ForksFiller(GithubFiller):
 			except Exception as e:
 				if in_thread:
 					self.logger.error('Exception in forks {}/{}/{}: \n {}: {}'.format(source,owner,repo_name,e.__class__.__name__,e))
-					db.log_error('Exception in forks {}/{}/{}: \n {}: {}'.format(source,owner,repo_name,e.__class__.__name__,e))
+				db.log_error('Exception in forks {}/{}/{}: \n {}: {}'.format(source,owner,repo_name,e.__class__.__name__,e))
 				raise Exception('Exception in forks {}/{}/{}'.format(source,owner,repo_name)) from e
 			finally:
 				if in_thread and 'db' in locals():
@@ -776,8 +785,8 @@ class ForksFiller(GithubFiller):
 		else:
 			with ThreadPoolExecutor(max_workers=workers) as executor:
 				futures = []
-				for repo in repo_list:
-					futures.append(executor.submit(self.fill_forks,repo_list=[repo],workers=1,in_thread=True,incremental_update=incremental_update))
+				for i,repo in enumerate(repo_list):
+					futures.append(executor.submit(self.fill_forks,repo_list=[repo],workers=1,in_thread=True,incremental_update=incremental_update,repo_nb=i,total_repos=total_repos))
 				# for future in concurrent.futures.as_completed(futures):
 				# 	pass
 				for future in futures:
@@ -907,7 +916,7 @@ class FollowersFiller(GithubFiller):
 		self.db.connection.commit()
 
 
-	def fill_followers(self,retry=False,login_list=None,workers=1,in_thread=False,incremental_update=True):
+	def fill_followers(self,retry=False,login_list=None,workers=1,in_thread=False,incremental_update=True,user_nb=None,total_users=None):
 		'''
 		Filling followers
 		Checking if an entry exists in table_updates with login_id and table_name followers
@@ -917,6 +926,12 @@ class FollowersFiller(GithubFiller):
 
 		if self.start_offset is not None:
 			login_list = [r for r in login_list if r[1]>=self.start_offset]
+
+		if total_users is None:
+			total_users = len(login_list)
+		if user_nb is None:
+			user_nb = 0
+
 		if workers == 1:
 			login_id,login,identity_type_id = None,None,None # init values for the exception
 			try:
@@ -936,7 +951,7 @@ class FollowersFiller(GithubFiller):
 						else:
 							nb_followers = 0
 						new_login = False
-						self.logger.info('Filling followers for login {}'.format(login))
+						self.logger.info('Filling followers for login {} ({}/{})'.format(login,user_nb,total_users))
 					requester = next(requester_gen)
 					try:
 						login_apiobj = requester.get_user('{}'.format(login))
@@ -945,10 +960,11 @@ class FollowersFiller(GithubFiller):
 						db.insert_update(identity_id=login_id,table='followers',success=False)
 						login_list.pop(0)
 						new_login = True
+						user_nb += 1
 					else:
 
 						if login_apiobj.followers == 0:
-							self.logger.info('No followers for login: {}'.format(login))
+							self.logger.info('No followers for login: {} ({}/{})'.format(login,user_nb,total_users))
 							db.insert_update(identity_id=login_id,table='followers',success=True)
 							db.connection.commit()
 							login_list.pop(0)
@@ -967,7 +983,7 @@ class FollowersFiller(GithubFiller):
 								self.insert_followers(db=db,followers_list=[{'login_id':login_id,'identity_type_id':identity_type_id,'login':login,'follower_login':sg.login} for sg in sg_list],commit=True)
 								nb_followers += len(sg_list)
 							else:
-								self.logger.info('Filled followers for login {}: {}'.format(login,nb_followers))
+								self.logger.info('Filled followers for login {} ({}/{}): {}'.format(login,user_nb,total_users,nb_followers))
 								db.insert_update(identity_id=login_id,table='followers',success=True)
 								db.connection.commit()
 								login_list.pop(0)
@@ -976,7 +992,7 @@ class FollowersFiller(GithubFiller):
 			except Exception as e:
 				if in_thread:
 					self.logger.error('Exception in followers {}: \n {}: {}'.format(login,e.__class__.__name__,e))
-					db.log_error('Exception in followers {}: \n {}: {}'.format(login,e.__class__.__name__,e))
+				db.log_error('Exception in followers {}: \n {}: {}'.format(login,e.__class__.__name__,e))
 				raise Exception('Exception in followers {}'.format(login)) from e
 			finally:
 				if in_thread and 'db' in locals():
@@ -986,8 +1002,8 @@ class FollowersFiller(GithubFiller):
 		else:
 			with ThreadPoolExecutor(max_workers=workers) as executor:
 				futures = []
-				for login in login_list:
-					futures.append(executor.submit(self.fill_followers,login_list=[login],workers=1,in_thread=True))
+				for i,login in enumerate(login_list):
+					futures.append(executor.submit(self.fill_followers,login_list=[login],workers=1,incremental_update=incremental_update,in_thread=True,user_nb=i,total_users=total_users))
 				# for future in concurrent.futures.as_completed(futures):
 				# 	pass
 				for future in futures:
