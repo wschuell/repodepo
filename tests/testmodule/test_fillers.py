@@ -61,7 +61,7 @@ def test_clones_https(testdb):
 	testdb.add_filler(generic.SourcesFiller(source=['GitHub',],source_urlroot=['github.com',]))
 	testdb.add_filler(generic.PackageFiller(package_list_file='packages.csv',data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))
 	testdb.add_filler(generic.RepositoriesFiller())
-	testdb.add_filler(generic.ClonesFiller(data_folder='dummy_clones'))
+	testdb.add_filler(generic.ClonesFiller(data_folder='dummy_clones',update=True))
 	# testdb.add_filler(generic.ClonesFiller(data_folder='dummy_clones',rm_first=True))
 	testdb.fill_db()
 
@@ -100,7 +100,7 @@ def test_github(testdb):
 	testdb.add_filler(generic.PackageFiller(package_list_file='packages.csv',data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))
 	testdb.add_filler(generic.RepositoriesFiller())
 	testdb.add_filler(github_rest.ForksFiller(fail_on_wait=True,workers=workers))
-	testdb.add_filler(generic.ClonesFiller(data_folder='dummy_clones',update=True)) # Clones after forks to have up-to-date repo URLS (detect redirects)
+	testdb.add_filler(generic.ClonesFiller(data_folder='dummy_clones')) # Clones after forks to have up-to-date repo URLS (detect redirects)
 	testdb.add_filler(commit_info.CommitsFiller(data_folder='dummy_clones')) # Commits after forks because fork info needed for repo commit ownership
 	testdb.add_filler(github_rest.GHLoginsFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_rest.StarsFiller(fail_on_wait=True,workers=workers))
@@ -125,7 +125,7 @@ def test_reset_merged_identities(testdb):
 	testdb.fill_db()
 	assert testdb.count_users() == count
 
-@pytest.mark.timeout(100)
-def test_metafiller(testdb):
-	testdb.add_filler(meta_fillers.DummyMetaFiller(fail_on_wait=True))
-	testdb.fill_db()
+# @pytest.mark.timeout(100)
+# def test_metafiller(testdb):
+# 	testdb.add_filler(meta_fillers.DummyMetaFiller(fail_on_wait=True))
+# 	testdb.fill_db()
