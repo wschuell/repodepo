@@ -29,28 +29,34 @@ workers = 5
 
 #### Tests
 
+@pytest.mark.timeout(10)
 def test_packages(testdb):
 	testdb.add_filler(generic.PackageFiller(package_list_file='packages.csv',data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))
 	testdb.fill_db()
 
+@pytest.mark.timeout(10)
 def test_sources(testdb):
 	testdb.add_filler(generic.SourcesFiller(source='GitHub',source_urlroot='github.com'))
 	testdb.fill_db()
 
+@pytest.mark.timeout(10)
 def test_sources2(testdb):
 	testdb.add_filler(generic.SourcesFiller(source=['GitHub',],source_urlroot=['github.com',]))
 	testdb.fill_db()
 
+@pytest.mark.timeout(10)
 def test_sources3(testdb):
 	testdb.add_filler(generic.SourcesFiller(source=['GitHub','blah'],source_urlroot=['github.com',None]))
 	testdb.fill_db()
 
+@pytest.mark.timeout(30)
 def test_repositories(testdb):
 	testdb.add_filler(generic.SourcesFiller(source=['GitHub',],source_urlroot=['github.com',]))
 	testdb.add_filler(generic.PackageFiller(package_list_file='packages.csv',data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))
 	testdb.add_filler(generic.RepositoriesFiller())
 	testdb.fill_db()
 
+@pytest.mark.timeout(100)
 def test_clones_https(testdb):
 	testdb.add_filler(generic.SourcesFiller(source=['GitHub',],source_urlroot=['github.com',]))
 	testdb.add_filler(generic.PackageFiller(package_list_file='packages.csv',data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))
@@ -66,6 +72,7 @@ def test_clones_https(testdb):
 # 	testdb.add_filler(generic.ClonesFiller(data_folder='dummy_clones',rm_first=True,ssh_sources={'GitHub':os.path.join(os.environ['HOME'],'.ssh','github','id_rsa')}))
 # 	testdb.fill_db()
 
+@pytest.mark.timeout(100)
 def test_commits(testdb):
 	testdb.add_filler(generic.SourcesFiller(source=['GitHub',],source_urlroot=['github.com',]))
 	testdb.add_filler(generic.PackageFiller(package_list_file='packages.csv',data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))
@@ -74,6 +81,7 @@ def test_commits(testdb):
 	testdb.add_filler(commit_info.CommitsFiller(data_folder='dummy_clones'))
 	testdb.fill_db()
 
+@pytest.mark.timeout(100)
 def test_merge_repositories(testdb):
 	testdb.add_filler(generic.SourcesFiller(source=['GitHub',],source_urlroot=['github.com',]))
 	testdb.add_filler(generic.PackageFiller(package_list_file='packages.csv',data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))
@@ -86,6 +94,7 @@ def test_merge_repositories(testdb):
 	testdb.plan_repo_merge(new_id=None,new_owner='blah',new_name='blih',obsolete_id=2,obsolete_source='GitHub')
 	testdb.batch_merge_repos()
 
+@pytest.mark.timeout(100)
 def test_github(testdb):
 	testdb.add_filler(generic.SourcesFiller(source=['GitHub',],source_urlroot=['github.com',]))
 	testdb.add_filler(generic.PackageFiller(package_list_file='packages.csv',data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))
@@ -98,6 +107,7 @@ def test_github(testdb):
 	testdb.add_filler(github_rest.FollowersFiller(fail_on_wait=True,workers=workers))
 	testdb.fill_db()
 
+@pytest.mark.timeout(100)
 def test_reset_merged_identities(testdb):
 	testdb.add_filler(generic.SourcesFiller(source=['GitHub',],source_urlroot=['github.com',]))
 	testdb.add_filler(generic.PackageFiller(package_list_file='packages.csv',data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))
@@ -115,6 +125,7 @@ def test_reset_merged_identities(testdb):
 	testdb.fill_db()
 	assert testdb.count_users() == count
 
+@pytest.mark.timeout(100)
 def test_metafiller(testdb):
 	testdb.add_filler(meta_fillers.DummyMetaFiller(fail_on_wait=True))
 	testdb.fill_db()

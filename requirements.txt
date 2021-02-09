@@ -2,3 +2,4 @@ pygit2
 pygithub
 pandas
 psycopg2-binary
+pytest-timeout
