@@ -767,7 +767,7 @@ class ForksFiller(GithubFiller):
 								if to_be_merged:
 									self.logger.info('Filled forks for repo {}/{} ({}/{}): {}'.format(checked_repo_owner,checked_repo_name,owner,repo_name,nb_forks))
 								else:
-									self.logger.info('Filled forks for repo {}/{}: {} ({}/{})'.format(owner,repo_name,nb_stars,repo_nb,total_repos))
+									self.logger.info('Filled forks for repo {}/{}: {} ({}/{})'.format(owner,repo_name,nb_forks,repo_nb,total_repos))
 								db.insert_update(repo_id=repo_id,table='forks',success=True)
 								db.connection.commit()
 								repo_list.pop(0)
