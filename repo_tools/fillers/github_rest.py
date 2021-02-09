@@ -213,16 +213,16 @@ class StarsFiller(GithubFiller):
 						else:
 							nb_stars = 0
 						new_repo = False
-						repo_nb += 1
-						self.logger.info('Filling stars for repo {}/{}'.format(owner,repo_name))
+						self.logger.info('Filling stars for repo {}/{} ({}/{})'.format(owner,repo_name,repo_nb,total_repos))
 					requester = next(requester_gen)
 					try:
 						repo_apiobj = requester.get_repo('{}/{}'.format(owner,repo_name))
 					except UnknownObjectException:
-						self.logger.info('No such repository: {}/{}'.format(owner,repo_name))
+						self.logger.info('No such repository: {}/{} ({}/{})'.format(owner,repo_name,repo_nb,total_repos))
 						db.insert_update(repo_id=repo_id,table='stars',success=False)
 						repo_list.pop(0)
 						new_repo = True
+						repo_nb += 1
 					else:
 						checked_repo_owner,checked_repo_name = repo_apiobj.full_name.split('/')
 						to_be_merged = False
@@ -252,6 +252,7 @@ class StarsFiller(GithubFiller):
 							db.connection.commit()
 							repo_list.pop(0)
 							new_repo = True
+							repo_nb += 1
 							break
 
 						while self.get_rate_limit(requester) > self.querymin_threshold:
@@ -279,6 +280,7 @@ class StarsFiller(GithubFiller):
 								db.connection.commit()
 								repo_list.pop(0)
 								new_repo = True
+								repo_nb += 1
 								break
 			except Exception as e:
 				if in_thread:
@@ -294,7 +296,7 @@ class StarsFiller(GithubFiller):
 			with ThreadPoolExecutor(max_workers=workers) as executor:
 				futures = []
 				for i,repo in enumerate(repo_list):
-					futures.append(executor.submit(self.fill_stars,repo_list=[repo],workers=1,in_thread=True,incremental_update=incremental_update,repo_nb=i,total_repos=total_repos))
+					futures.append(executor.submit(self.fill_stars,repo_list=[repo],workers=1,in_thread=True,incremental_update=incremental_update,repo_nb=i+1,total_repos=total_repos))
 				# for future in concurrent.futures.as_completed(futures):
 				# 	pass
 				for future in futures:
@@ -686,16 +688,16 @@ class ForksFiller(GithubFiller):
 						else:
 							nb_forks = 0
 						new_repo = False
-						repo_nb += 1
-						self.logger.info('Filling forks for repo {}/{}'.format(owner,repo_name))
+						self.logger.info('Filling forks for repo {}/{} ({}/{})'.format(owner,repo_name,repo_nb,total_repos))
 					requester = next(requester_gen)
 					try:
 						repo_apiobj = requester.get_repo('{}/{}'.format(owner,repo_name))
 					except UnknownObjectException:
-						self.logger.info('No such repository: {}/{}'.format(owner,repo_name))
+						self.logger.info('No such repository: {}/{} ({}/{})'.format(owner,repo_name,repo_nb,total_repos))
 						db.insert_update(repo_id=repo_id,table='forks',success=False)
 						repo_list.pop(0)
 						new_repo = True
+						repo_nb += 1
 					else:
 						checked_repo_owner,checked_repo_name = repo_apiobj.full_name.split('/')
 						to_be_merged = False
@@ -726,6 +728,7 @@ class ForksFiller(GithubFiller):
 							db.connection.commit()
 							repo_list.pop(0)
 							new_repo = True
+							repo_nb += 1
 							break
 
 						while self.get_rate_limit(requester) > self.querymin_threshold:
@@ -772,6 +775,7 @@ class ForksFiller(GithubFiller):
 								db.connection.commit()
 								repo_list.pop(0)
 								new_repo = True
+								repo_nb += 1
 								break
 			except Exception as e:
 				if in_thread:
@@ -786,7 +790,7 @@ class ForksFiller(GithubFiller):
 			with ThreadPoolExecutor(max_workers=workers) as executor:
 				futures = []
 				for i,repo in enumerate(repo_list):
-					futures.append(executor.submit(self.fill_forks,repo_list=[repo],workers=1,in_thread=True,incremental_update=incremental_update,repo_nb=i,total_repos=total_repos))
+					futures.append(executor.submit(self.fill_forks,repo_list=[repo],workers=1,in_thread=True,incremental_update=incremental_update,repo_nb=i+1,total_repos=total_repos))
 				# for future in concurrent.futures.as_completed(futures):
 				# 	pass
 				for future in futures:
@@ -930,7 +934,7 @@ class FollowersFiller(GithubFiller):
 		if total_users is None:
 			total_users = len(login_list)
 		if user_nb is None:
-			user_nb = 0
+			user_nb = 1
 
 		if workers == 1:
 			login_id,login,identity_type_id = None,None,None # init values for the exception
@@ -956,7 +960,7 @@ class FollowersFiller(GithubFiller):
 					try:
 						login_apiobj = requester.get_user('{}'.format(login))
 					except UnknownObjectException:
-						self.logger.info('No such login: {}'.format(login))
+						self.logger.info('No such login: {} ({}/{})'.format(login,user_nb,total_users))
 						db.insert_update(identity_id=login_id,table='followers',success=False)
 						login_list.pop(0)
 						new_login = True
@@ -969,6 +973,7 @@ class FollowersFiller(GithubFiller):
 							db.connection.commit()
 							login_list.pop(0)
 							new_login = True
+							user_nb += 1
 							break
 
 						while self.get_rate_limit(requester) > self.querymin_threshold:
@@ -988,6 +993,7 @@ class FollowersFiller(GithubFiller):
 								db.connection.commit()
 								login_list.pop(0)
 								new_login = True
+								user_nb += 1
 								break
 			except Exception as e:
 				if in_thread:
@@ -1003,7 +1009,7 @@ class FollowersFiller(GithubFiller):
 			with ThreadPoolExecutor(max_workers=workers) as executor:
 				futures = []
 				for i,login in enumerate(login_list):
-					futures.append(executor.submit(self.fill_followers,login_list=[login],workers=1,incremental_update=incremental_update,in_thread=True,user_nb=i,total_users=total_users))
+					futures.append(executor.submit(self.fill_followers,login_list=[login],workers=1,incremental_update=incremental_update,in_thread=True,user_nb=i+1,total_users=total_users))
 				# for future in concurrent.futures.as_completed(futures):
 				# 	pass
 				for future in futures:

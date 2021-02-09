@@ -510,7 +510,7 @@ class CommitsFiller(fillers.Filler):
 		if autocommit:
 			self.db.connection.commit()
 
-	def fill_commit_orig_repo(self,only_null=True,autocommit=True):
+	def fill_commit_orig_repo(self,only_null=True,force=False,autocommit=True):
 		'''
 		Setting the repo_id field for commits table, using the forks table and supposing that it is updated.
 
@@ -537,7 +537,7 @@ class CommitsFiller(fillers.Filler):
 		last_fu = self.db.cursor.fetchone()[0]
 		self.db.cursor.execute('''SELECT MAX(updated_at) FROM full_updates WHERE update_type='commits';''')
 		last_fu_commits = self.db.cursor.fetchone()[0]
-		if last_fu is not None and last_fu_commits>last_fu:
+		if not force and last_fu is not None and last_fu_commits<=last_fu:
 			self.logger.info('Skipping commit origin repository attribution')
 		else:
 			if only_null:

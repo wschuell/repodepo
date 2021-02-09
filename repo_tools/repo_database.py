@@ -208,6 +208,7 @@ class Database(object):
 				);
 
 				CREATE INDEX IF NOT EXISTS commit_repo_idx_rc ON commit_repos(repo_id,commit_id);
+				CREATE INDEX IF NOT EXISTS commit_repo_isorig_idx ON commit_repos(is_orig_repo,commit_id);
 
 				CREATE TABLE IF NOT EXISTS commit_parents(
 				child_id INTEGER REFERENCES commits(id) ON DELETE CASCADE,
@@ -436,7 +437,7 @@ class Database(object):
 				);
 
 				CREATE INDEX IF NOT EXISTS commit_repo_idx_rc ON commit_repos(repo_id,commit_id);
-
+				CREATE INDEX IF NOT EXISTS commit_repo_isorig_idx ON commit_repos(is_orig_repo,commit_id);
 
 				CREATE TABLE IF NOT EXISTS commit_parents(
 				child_id BIGINT REFERENCES commits(id) ON DELETE CASCADE,
