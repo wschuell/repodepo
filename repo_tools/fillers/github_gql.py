@@ -104,7 +104,6 @@ class GHGQLFiller(github_rest.GithubFiller):
 		github_requesters = []
 		schema = None
 		for ak in self.api_keys:
-			self.logger.info('bip')
 			g = Requester(api_key=ak,schema=schema)
 			try:
 				g.get_rate_limit()
@@ -113,7 +112,6 @@ class GHGQLFiller(github_rest.GithubFiller):
 			else:
 				github_requesters.append(g)
 			schema = g.client.schema
-			self.logger.info('bop')
 		if in_thread:
 			return github_requesters
 		else:
