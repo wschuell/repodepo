@@ -540,8 +540,10 @@ class CommitsFiller(fillers.Filler):
 		if not force and last_fu is not None and last_fu_commits<=last_fu:
 			self.logger.info('Skipping commit origin repository attribution')
 		else:
+			self.logger.info('Filling commit origin repository attribution')
 			if only_null:
 				# update is_orig_repo to true for roots of fork trees
+				self.logger.info('Filling commit origin repository attribution: update is_orig_repo to true for roots of fork trees')
 				self.db.cursor.execute('''
 						UPDATE commit_repos SET is_orig_repo=true
 							WHERE is_orig_repo IS NULL
@@ -560,6 +562,7 @@ class CommitsFiller(fillers.Filler):
 
 				# update is_orig_repo to true for repos that are the only ones owning the commit
 
+				self.logger.info('Filling commit origin repository attribution: update is_orig_repo to true for repos that are the only ones owning the commit')
 				self.db.cursor.execute('''
 						UPDATE commit_repos SET is_orig_repo=true
 							WHERE is_orig_repo IS NULL
@@ -568,6 +571,7 @@ class CommitsFiller(fillers.Filler):
 						;''')
 
 				# set to null where twice true for is_orig_repo
+				self.logger.info('Filling commit origin repository attribution: set to null where twice true for is_orig_repo')
 				self.db.cursor.execute('''
 						UPDATE commit_repos SET is_orig_repo=NULL
 							WHERE commit_id IN (
@@ -580,6 +584,7 @@ class CommitsFiller(fillers.Filler):
 
 
 				#REDO STEP1 update is_orig_repo to true for roots of fork trees
+				self.logger.info('Filling commit origin repository attribution: REDO update is_orig_repo to true for roots of fork trees')
 				self.db.cursor.execute('''
 						UPDATE commit_repos SET is_orig_repo=true
 							WHERE is_orig_repo IS NULL
@@ -598,6 +603,7 @@ class CommitsFiller(fillers.Filler):
 
 				#REDO STEP2 update is_orig_repo to true for repos that are the only ones owning the commit
 
+				self.logger.info('Filling commit origin repository attribution: REDO update is_orig_repo to true for repos that are the only ones owning the commit')
 				self.db.cursor.execute('''
 						UPDATE commit_repos SET is_orig_repo=true
 							WHERE is_orig_repo IS NULL
@@ -607,6 +613,7 @@ class CommitsFiller(fillers.Filler):
 
 
 				# update is_orig_repo to false for repos elsewhere in fork trees
+				self.logger.info('Filling commit origin repository attribution: update is_orig_repo to false for repos elsewhere in fork trees')
 				self.db.cursor.execute('''
 						UPDATE commit_repos SET is_orig_repo=false
 							WHERE is_orig_repo IS NULL
@@ -624,10 +631,12 @@ class CommitsFiller(fillers.Filler):
 
 
 				# set all origs to NULL
+				self.logger.info('Filling commit origin repository attribution: setting everything to null')
 				self.db.cursor.execute('''
 						UPDATE commit_repos SET is_orig_repo=NULL;''')
 
 				# update is_orig_repo to true for roots of fork trees
+				self.logger.info('Filling commit origin repository attribution: update is_orig_repo to true for roots of fork trees')
 				self.db.cursor.execute('''
 						UPDATE commit_repos SET is_orig_repo=true
 							WHERE repo_id = (SELECT ccp.repo_id
@@ -643,6 +652,7 @@ class CommitsFiller(fillers.Filler):
 
 				# update is_orig_repo to true for repos that are the only ones owning the commit
 
+				self.logger.info('Filling commit origin repository attribution: update is_orig_repo to true for repos that are the only ones owning the commit')
 				self.db.cursor.execute('''
 						UPDATE commit_repos SET is_orig_repo=true
 							WHERE (SELECT COUNT(*) FROM commit_repos ccp
@@ -650,6 +660,7 @@ class CommitsFiller(fillers.Filler):
 						;''')
 
 				# update is_orig_repo to false for repos elsewhere in fork trees
+				self.logger.info('Filling commit origin repository attribution: update is_orig_repo to false for repos elsewhere in fork trees')
 				self.db.cursor.execute('''
 						UPDATE commit_repos SET is_orig_repo=false
 							WHERE repo_id IN (SELECT ccp2.repo_id
@@ -662,24 +673,26 @@ class CommitsFiller(fillers.Filler):
 						;''')
 
 
-			self.db.cursor.execute('''
-					SELECT r.owner,r.name,COUNT(*) FROM repositories r
-						INNER JOIN commit_repos cr2
-							ON r.id=cr2.repo_id AND cr2.is_orig_repo
-						INNER JOIN
-							(SELECT cr.commit_id,COUNT(DISTINCT cr.repo_id) AS cnt FROM commit_repos cr
-								WHERE cr.is_orig_repo
-								GROUP BY cr.commit_id
-								HAVING COUNT(DISTINCT cr.repo_id)>1) AS c
-							ON c.commit_id=cr2.commit_id
-						GROUP BY r.owner,r.name
-					;
-					''')
-			results = list(self.db.cursor.fetchall())
-			if len(results):
-				error_str = 'Several repos are considered origin repos of the same commits. Repos in this situation: {}, First ten: {}'.format(len(results),['{}/{}:{}'.format(*r) for r in results[:10]])
-				raise ValueError(error_str)
+			# self.logger.info('Filling commit origin repository attribution: checking that no commit has 2 orig repos')
+			# self.db.cursor.execute('''
+			# 		SELECT r.owner,r.name,COUNT(*) FROM repositories r
+			# 			INNER JOIN commit_repos cr2
+			# 				ON r.id=cr2.repo_id AND cr2.is_orig_repo
+			# 			INNER JOIN
+			# 				(SELECT cr.commit_id,COUNT(*) AS cnt FROM commit_repos cr
+			# 					WHERE cr.is_orig_repo
+			# 					GROUP BY cr.commit_id
+			# 					HAVING COUNT(*)>1) AS c
+			# 				ON c.commit_id=cr2.commit_id
+			# 			GROUP BY r.owner,r.name
+			# 		;
+			# 		''')
+			# results = list(self.db.cursor.fetchall())
+			# if len(results):
+			# 	error_str = 'Several repos are considered origin repos of the same commits. Repos in this situation: {}, First ten: {}'.format(len(results),['{}/{}:{}'.format(*r) for r in results[:10]])
+			# 	raise ValueError(error_str)
 
+			self.logger.info('Filling commit origin repository attribution: upating commits table')
 			self.db.cursor.execute('''
 					UPDATE commits SET repo_id=(
 							SELECT cp.repo_id FROM commit_repos cp

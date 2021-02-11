@@ -23,7 +23,7 @@ from repo_tools import fillers
 from repo_tools.fillers import generic
 import repo_tools as rp
 
-from github.GithubException import UnknownObjectException,RateLimitExceededException
+from github.GithubException import UnknownObjectException,RateLimitExceededException,IncompletableObject
 
 class GithubFiller(fillers.Filler):
 	"""
@@ -526,7 +526,7 @@ class GHLoginsFiller(GithubFiller):
 								try:
 									login = commit_apiobj.author.login
 									self.logger.info('Found login {} for user id {} ({}/{})'.format(login,identity_id,user_nb,total_users))
-								except UnknownObjectException:
+								except (UnknownObjectException,IncompletableObject):
 									self.logger.info('No login available for user id {} ({}/{}), uncompletable object error'.format(identity_id,user_nb,total_users))
 									login = None
 							self.set_gh_login(db=db,identity_id=identity_id,login=login,reason='Email/login match through github API for commit {}'.format(commit_sha))

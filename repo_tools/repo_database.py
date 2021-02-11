@@ -4,6 +4,7 @@ import logging
 import sqlite3
 import glob
 import shutil
+import uuid
 
 import csv
 import copy
@@ -39,9 +40,10 @@ class Database(object):
 	To fill it, fillers are used (see Filler class).
 	The object uses a specific data folder and a list of files used for the fillers, with name, keyword, and potential download link. (move to filler class?)
 
+	A 'computation_db' can be associated to it (always SQLite, can be in memory) to store temporary measures on repositories and users.
 	'''
 
-	def __init__(self,db_type='sqlite',db_name='repo_tools',db_folder='.',db_user='postgres',port='5432',host='localhost',data_folder='./datafolder',password=None,clean_first=False,do_init=False,timeout=5):
+	def __init__(self,db_type='sqlite',db_name='repo_tools',db_folder='.',db_user='postgres',port='5432',host='localhost',data_folder='./datafolder',password=None,clean_first=False,do_init=False,timeout=5,computation_db_name='repo_tools_computation.db'):
 		self.db_type = db_type
 		self.logger = logger
 		if db_type == 'sqlite':
@@ -83,6 +85,10 @@ class Database(object):
 		if not os.path.exists(self.data_folder):
 			os.makedirs(self.data_folder)
 
+		if computation_db_name.startswith(':') or os.path.isabs(computation_db_name):
+			self.computation_db_name = computation_db_name
+		else:
+			self.computation_db_name = os.path.join(self.data_folder,computation_db_name)
 		#storing info to be able to copy the db and have independent cursor/connection
 		self.db_conninfo = {
 				'db_type':db_type,
@@ -93,6 +99,12 @@ class Database(object):
 				'host':host,
 				'password':password,
 		}
+
+	def get_computation_db(self):
+		if not hasattr(self,'computation_db'):
+			self.computation_db = ComputationDB(db=self)
+		return self.computation_db
+
 
 	def copy(self,timeout=30):
 		'''
@@ -107,6 +119,11 @@ class Database(object):
 		logger.info('Creating database ({}) table and indexes'.format(self.db_type))
 		if self.db_type == 'sqlite':
 			self.DB_INIT = '''
+				CREATE TABLE IF NOT EXISTS _dbinfo(
+				info_type TEXT PRIMARY KEY,
+				info_content TEXT
+				);
+
 				CREATE TABLE IF NOT EXISTS sources(
 				id INTEGER PRIMARY KEY,
 				name TEXT NOT NULL UNIQUE,
@@ -203,11 +220,12 @@ class Database(object):
 				CREATE TABLE IF NOT EXISTS commit_repos(
 				commit_id INTEGER REFERENCES commits(id) ON DELETE CASCADE,
 				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
-				is_orig_repo BOOLEAN,
+				is_orig_repo BOOLEAN DEFAULT NULL,
 				PRIMARY KEY(commit_id,repo_id)
 				);
 
 				CREATE INDEX IF NOT EXISTS commit_repo_idx_rc ON commit_repos(repo_id,commit_id);
+				CREATE INDEX IF NOT EXISTS commit_repo_idx_isorigrc ON commit_repos(repo_id,is_orig_repo);
 				CREATE INDEX IF NOT EXISTS commit_repo_isorig_idx ON commit_repos(is_orig_repo,commit_id);
 
 				CREATE TABLE IF NOT EXISTS commit_parents(
@@ -332,9 +350,17 @@ class Database(object):
 		'''
 			for q in self.DB_INIT.split(';')[:-1]:
 				self.cursor.execute(q)
-			self.connection.commit()
+
+			self.cursor.execute('''INSERT OR IGNORE INTO _dbinfo(info_type,info_content) VALUES('uuid',?) ;''',(str(uuid.uuid1()),))
+			self.cursor.execute('''INSERT OR IGNORE INTO _dbinfo(info_type,info_content) VALUES('DB_INIT',?) ;''',(self.DB_INIT,))
+
 		elif self.db_type == 'postgres':
 			self.DB_INIT = '''
+				CREATE TABLE IF NOT EXISTS _dbinfo(
+				info_type TEXT PRIMARY KEY,
+				info_content TEXT
+				);
+
 				CREATE TABLE IF NOT EXISTS sources(
 				id BIGSERIAL PRIMARY KEY,
 				name TEXT NOT NULL UNIQUE,
@@ -432,11 +458,12 @@ class Database(object):
 				CREATE TABLE IF NOT EXISTS commit_repos(
 				commit_id BIGINT REFERENCES commits(id) ON DELETE CASCADE,
 				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
-				is_orig_repo BOOLEAN,
+				is_orig_repo BOOLEAN DEFAULT NULL,
 				PRIMARY KEY(commit_id,repo_id)
 				);
 
 				CREATE INDEX IF NOT EXISTS commit_repo_idx_rc ON commit_repos(repo_id,commit_id);
+				CREATE INDEX IF NOT EXISTS commit_repo_idx_isorigrc ON commit_repos(repo_id,is_orig_repo);
 				CREATE INDEX IF NOT EXISTS commit_repo_isorig_idx ON commit_repos(is_orig_repo,commit_id);
 
 				CREATE TABLE IF NOT EXISTS commit_parents(
@@ -563,8 +590,11 @@ class Database(object):
 				'''
 
 			self.cursor.execute(self.DB_INIT)
+			self.cursor.execute('''INSERT INTO _dbinfo(info_type,info_content) VALUES('uuid',%s) ON CONFLICT (info_type) DO NOTHING ;''',(str(uuid.uuid1()),))
+			# self.cursor.execute('''INSERT INTO _dbinfo(info_type,info_content) VALUES('DB_INIT',%s) ON CONFLICT (info_type) DO UPDATE SET info_content=EXCLUDED.info_content;''',(self.DB_INIT,))
+			self.cursor.execute('''INSERT INTO _dbinfo(info_type,info_content) VALUES('DB_INIT',%s) ON CONFLICT DO NOTHING;''',(self.DB_INIT,))
 
-			self.connection.commit()
+		self.connection.commit()
 
 	def clean_db(self,sqlite_del=True):
 		'''
@@ -579,6 +609,7 @@ class Database(object):
 			self.connection = sqlite3.connect(self.db_path,timeout=self.timeout, detect_types=sqlite3.PARSE_DECLTYPES)
 			self.cursor = self.connection.cursor()
 		else:
+			self.cursor.execute('DROP TABLE IF EXISTS _dbinfo;')
 			self.cursor.execute('DROP TABLE IF EXISTS sponsor_users;')
 			self.cursor.execute('DROP TABLE IF EXISTS sponsor_repos;')
 			self.cursor.execute('DROP TABLE IF EXISTS packages;')
@@ -1884,7 +1915,7 @@ class Database(object):
 				merging_reason_source,))
 			try:
 				row_id = self.cursor.fetchone()[0]
-			except TypeError as e:
+			except (TypeError,psycopg2.ProgrammingError) as e:
 				raise TypeError('{},{},{},{},{},{},{},{},{}: {}'.format(new_id,
 								new_source,
 								new_owner,
@@ -2385,3 +2416,176 @@ class Database(object):
 				VALUES (?);
 				''',(message,))
 		self.connection.commit()
+
+
+
+
+
+
+class ComputationDB(object):
+	'''
+	ADDITIONAL COMPUTATION DB: to store computed results.
+	This is intentionally separated from the main DB, so that computation can be done and stored also when the main DB is not writeable.
+	'''
+	def __init__(self,db):
+		self.orig_db = db
+		self.connection = sqlite3.connect(self.orig_db.computation_db_name)
+		self.cursor = self.connection.cursor()
+		self.orig_db.cursor.execute('''SELECT info_content FROM _dbinfo WHERE info_type='uuid';''')
+		self.db_id = self.orig_db.cursor.fetchone()[0]
+		CP_DBINIT = '''
+				CREATE TABLE IF NOT EXISTS measures(
+				id INTEGER PRIMARY KEY,
+				name TEXT NOT NULL,
+				db_id TEXT NOT NULL,
+				params TEXT NOT NULL,
+				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				completed_at TIMESTAMP DEFAULT NULL,
+				UNIQUE(db_id,name,params)
+				);
+
+				CREATE TABLE IF NOT EXISTS data_repositories(
+				measure INTEGER REFERENCES measures(id) ON DELETE CASCADE,
+				obj_id INTEGER NOT NULL,
+				measured_at DATE NOT NULL,
+				value REAL,
+				PRIMARY KEY(measure,obj_id,measured_at)
+				);
+
+				CREATE INDEX IF NOT EXISTS repo_idx2 ON data_repositories(measure,measured_at,obj_id);
+
+				CREATE TABLE IF NOT EXISTS data_users(
+				measure INTEGER REFERENCES measures(id) ON DELETE CASCADE,
+				obj_id INTEGER NOT NULL,
+				measured_at DATE NOT NULL,
+				value REAL,
+				PRIMARY KEY(measure,obj_id,measured_at)
+				);
+
+				CREATE INDEX IF NOT EXISTS user_idx2 ON data_users(measure,measured_at,obj_id);
+
+				'''
+		for q in CP_DBINIT.split(';')[:-1]:
+			self.cursor.execute(q)
+		self.connection.commit()
+
+
+	def get_measure_id(self,measure=None,params=None,check=False,create_if_absent=True):
+		if isinstance(measure,int):
+			if check:
+				self.cursor.execute('SELECT id FROM measures WHERE id=? AND db_id=?;',(measure,self.db_id))
+				ans = self.cursor.fetchone()
+				if ans is None:
+					raise ValueError('(db_id {}) No such measure id in computation_db: {}'.format(self.db_id,measure))
+			return measure
+		else:
+			params = self.format_params(params)
+			self.cursor.execute('SELECT id FROM measures WHERE name=? AND params=? AND db_id=?;',(measure,params,self.db_id))
+			ans = self.cursor.fetchone()
+			if ans is None:
+				if not create_if_absent:
+					raise ValueError('(db_id {}) No such measure in computation_db: {}, {}'.format(self.db_id,measure,params))
+				else:
+					self.cursor.execute('INSERT INTO measures(name,params,db_id) VALUES(?,?,?);',(measure,params,self.db_id))
+					row_id = self.cursor.lastrowid
+					return row_id
+			else:
+				return ans[0]
+
+	def format_params(self,params):
+		if params is None:
+			params = {}
+		if isinstance(params,dict):
+			return json.dumps(params, sort_keys=True,indent=2)
+		elif isinstance(params,str):
+			return self.format_params(json.loads(params))
+		else:
+			raise ValueError('Unparseable params: {}'.format(params))
+
+	def format_times(self,start_time,end_time):
+		if start_time is None:
+			start_time = datetime.datetime(2013,1,1)
+			# start_time = self.get_start_time()
+		if end_time is None:
+			end_time = datetime.datetime.now()
+			# end_time = self.get_end_time()
+
+		if isinstance(start_time,str):
+			try:
+				start_time = datetime.datetime.strptime(start_time,'%Y-%m-%d')
+			except ValueError:
+				start_time = datetime.datetime.strptime(start_time,'%Y-%m-%d %H:%M:%S')
+
+		if isinstance(end_time,str):
+			try:
+				end_time = datetime.datetime.strptime(end_time,'%Y-%m-%d')
+			except ValueError:
+				end_time = datetime.datetime.strptime(end_time,'%Y-%m-%d %H:%M:%S')
+
+		return start_time,end_time
+
+	def read(self,measure,table_name,params=None,start_time=None,end_time=None,obj_id=None):
+		'''
+		Syntax for output:
+		[(<user/project>_id,datetime.datetime,value),...]
+		'''
+		measure_id = self.get_measure_id(measure=measure,params=params)
+		start_time,end_time = self.format_times(start_time=start_time,end_time=end_time)
+		if table_name not in ['repositories','users']:
+			raise ValueError('table_name not recognized: {}'.format(table_name))
+		else:
+			if obj_id is None:
+				self.cursor.execute('''
+					SELECT obj_id,measured_at,value FROM data_{}
+					WHERE measure=?
+					AND date(datetime(?))<=measured_at AND measured_at<=date(datetime(?))
+					ORDER BY obj_id,measured_at;
+					'''.format(table_name)
+					,(measure_id,start_time,end_time))
+			else:
+				self.cursor.execute('''
+					SELECT obj_id,measured_at,value FROM data_{}
+					WHERE measure=?
+					AND date(datetime(?))<=measured_at AND measured_at<=date(datetime(?))
+					AND obj_id=?
+					ORDER BY obj_id,measured_at;
+					'''.format(table_name)
+					,(measure_id,start_time,end_time,obj_id))
+
+			return self.cursor.fetchall()
+
+
+	def batch_write(self,table_name,measure,params=None,data=None,autocommit=True):
+		'''
+		Syntax for data:
+		[(<user/project>_id,datetime.datetime,value),...]
+		'''
+		measure_id = self.get_measure_id(measure=measure,params=params)
+		if table_name not in ['repositories','users']:
+			raise ValueError('table_name not recognized: {}'.format(table_name))
+		else:
+			self.cursor.executemany('''
+				INSERT OR IGNORE INTO data_{} (measure,obj_id,measured_at,value)
+				VALUES(?,?,?,?);
+				'''.format(table_name)
+				,( (measure_id,oid,measured_at,val) for (oid,measured_at,val) in data))
+			if self.cursor.rowcount > 0:
+				self.cursor.execute('''
+					UPDATE measures SET completed_at=CURRENT_TIMESTAMP
+					WHERE id=?
+					;''',(measure_id,))
+
+			if autocommit:
+				self.connection.commit()
+
+	def is_completed(self,measure=None,params=None):
+		if isinstance(measure,int):
+			self.cursor.execute('SELECT completed_at FROM measures WHERE id=? AND completed_at IS NOT NULL;',(measure,))
+		else:
+			params = self.format_params(params)
+			self.cursor.execute('SELECT completed_at FROM measures WHERE name=? AND params=? AND db_id=? AND completed_at IS NOT NULL;',(measure,params,self.db_id))
+		ans = self.cursor.fetchone()
+		if ans is None:
+			return False
+		else:
+			return True

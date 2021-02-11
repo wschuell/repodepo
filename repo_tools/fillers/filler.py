@@ -69,14 +69,17 @@ class Filler(object):
 
 
 
-	def download(self,url,destination,wget=False):
-		self.logger.info('Downloading {}'.format(url))
-		if not wget:
-			r = requests.get(url, allow_redirects=True)
-			with open(destination, 'wb') as f:
-				f.write(r.content)
+	def download(self,url,destination,wget=False,force=False):
+		if not force and os.path.exists(destination):
+			self.logger.info('Skipping download {}'.format(url))
 		else:
-			subprocess.check_call('wget -O {} {}'.format(destination,url).split(' '))
+			self.logger.info('Downloading {}'.format(url))
+			if not wget:
+				r = requests.get(url, allow_redirects=True)
+				with open(destination, 'wb') as f:
+					f.write(r.content)
+			else:
+				subprocess.check_call('wget -O {} {}'.format(destination,url).split(' '))
 
 	def unzip(self,orig_file,destination,clean_zip=False):
 		self.logger.info('Unzipping {}'.format(orig_file))
