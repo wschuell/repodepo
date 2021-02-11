@@ -30,6 +30,7 @@ class GithubFiller(fillers.Filler):
 	class to be inherited from, contains github credentials management
 	"""
 	def __init__(self,querymin_threshold=50,per_page=100,workers=1,api_keys_file='github_api_keys.txt',api_keys=None,fail_on_wait=False,start_offset=None,**kwargs):
+		fillers.Filler.__init__(self,**kwargs)
 		self.querymin_threshold = querymin_threshold
 		self.per_page = per_page
 		self.workers = workers
@@ -39,12 +40,12 @@ class GithubFiller(fillers.Filler):
 		self.api_keys = copy.deepcopy(api_keys)
 		self.fail_on_wait = fail_on_wait
 		self.start_offset = start_offset
-		fillers.Filler.__init__(self,**kwargs)
 
 	def prepare(self):
 		if self.data_folder is None:
 			self.data_folder = self.db.data_folder
 
+		self.set_api_keys()
 		self.set_github_requesters()
 
 		if self.db.db_type == 'postgres':
@@ -53,7 +54,7 @@ class GithubFiller(fillers.Filler):
 			self.db.cursor.execute(''' INSERT OR IGNORE INTO identity_types(name) VALUES('github_login');''')
 		self.db.connection.commit()
 
-	def set_github_requesters(self):
+	def set_api_keys(self,reset=False):
 		'''
 		Setting github requesters
 		api keys file syntax, per line: API#notes
@@ -78,11 +79,16 @@ class GithubFiller(fillers.Filler):
 			self.api_keys.append(os.environ['GITHUB_API_KEY'])
 		except KeyError:
 			pass
-
 		self.api_keys = [ak for ak in self.api_keys if ak!=''] # removing empty api keys, can come from e.g. trailing newlines at end of parsed file
-
 		if not len(self.api_keys):
-			self.logger.info('No API keys found for Github, using default anonymous (but limited) authentication.\nLooking for api_keys_file in db.data_folder, then in current folder, then in ~/.repo_tools/.\nAdding content of environment variable GITHUB_API_KEY.')
+			self.logger.info('No API keys found for Github, using default anonymous (but limited and only REST, no GQL) authentication.\nLooking for api_keys_file in db.data_folder, then in current folder, then in ~/.repo_tools/.\nAdding content of environment variable GITHUB_API_KEY.')
+
+
+	def set_github_requesters(self):
+		'''
+		Setting github requesters
+		api keys file syntax, per line: API#notes
+		'''
 
 		self.github_requesters = [github.Github(per_page=self.per_page)]
 		for ak in set(self.api_keys):
@@ -101,6 +107,9 @@ class GithubFiller(fillers.Filler):
 		else:
 			return ans
 
+	def get_reset_at(self,requester):
+		return calendar.timegm(requester.get_rate_limit().core.reset.timetuple())
+
 	def get_github_requester(self,random_pick=True):
 		'''
 		Going through requesters respecting threshold of minimum remaining api queries
@@ -115,7 +124,7 @@ class GithubFiller(fillers.Filler):
 				elif self.fail_on_wait:
 					raise IOError('All {} API keys are below the min remaining query threshold'.format(len(self.github_requesters)))
 				else:
-					earliest_reset = min([calendar.timegm(rq.get_rate_limit().core.reset.timetuple()) for rq in self.github_requesters])
+					earliest_reset = min([self.get_reset_at(rq) for rq in self.github_requesters])
 					time_to_reset =  earliest_reset - calendar.timegm(time.gmtime())
 					self.logger.info('Waiting for reset of at least one github requester, sleeping {} seconds'.format(time_to_reset+1))
 					time.sleep(time_to_reset+1)
@@ -131,7 +140,7 @@ class GithubFiller(fillers.Filler):
 				elif self.fail_on_wait:
 					raise IOError('All {} API keys are below the min remaining query threshold'.format(len(self.github_requesters)))
 				else:
-					earliest_reset = min([calendar.timegm(rq.get_rate_limit().core.reset.timetuple()) for rq in self.github_requesters])
+					earliest_reset = min([self.get_reset_at(rq) for rq in self.github_requesters])
 					time_to_reset =  earliest_reset - calendar.timegm(time.gmtime())
 					self.logger.info('Waiting for reset of at least one github requester, sleeping {} seconds'.format(time_to_reset+1))
 					time.sleep(time_to_reset+1)
