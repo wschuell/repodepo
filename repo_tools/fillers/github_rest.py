@@ -29,11 +29,14 @@ class GithubFiller(fillers.Filler):
 	"""
 	class to be inherited from, contains github credentials management
 	"""
-	def __init__(self,querymin_threshold=50,per_page=100,workers=1,api_keys_file='github_api_keys.txt',api_keys=None,fail_on_wait=False,start_offset=None,**kwargs):
+	def __init__(self,querymin_threshold=50,per_page=100,workers=1,api_keys_file='github_api_keys.txt',api_keys=None,fail_on_wait=False,start_offset=None,retry=False,force=False,incremental_update=True,**kwargs):
 		fillers.Filler.__init__(self,**kwargs)
 		self.querymin_threshold = querymin_threshold
+		self.incremental_update = incremental_update
 		self.per_page = per_page
 		self.workers = workers
+		self.force = force
+		self.retry = retry
 		self.api_keys_file = api_keys_file
 		if api_keys is None:
 			api_keys = []
@@ -80,6 +83,11 @@ class GithubFiller(fillers.Filler):
 		except KeyError:
 			pass
 		self.api_keys = [ak for ak in self.api_keys if ak!=''] # removing empty api keys, can come from e.g. trailing newlines at end of parsed file
+		api_keys = []
+		for ak in self.api_keys:
+			if ak not in api_keys:
+				api_keys.append(ak)
+		self.api_keys = api_keys
 		if not len(self.api_keys):
 			self.logger.info('No API keys found for Github, using default anonymous (but limited and only REST, no GQL) authentication.\nLooking for api_keys_file in db.data_folder, then in current folder, then in ~/.repo_tools/.\nAdding content of environment variable GITHUB_API_KEY.')
 
@@ -110,37 +118,39 @@ class GithubFiller(fillers.Filler):
 	def get_reset_at(self,requester):
 		return calendar.timegm(requester.get_rate_limit().core.reset.timetuple())
 
-	def get_github_requester(self,random_pick=True):
+	def get_github_requester(self,random_pick=True,requesters=None):
 		'''
 		Going through requesters respecting threshold of minimum remaining api queries
 		'''
+		if requesters is None:
+			requesters = self.github_requesters
 		if not hasattr(self,'github_requesters'):
 			self.set_github_requesters()
 		if random_pick:
 			while True:
-				active_requesters = [rq for rq in self.github_requesters if self.get_rate_limit(rq) > self.querymin_threshold]
+				active_requesters = [rq for rq in requesters if self.get_rate_limit(rq) > self.querymin_threshold]
 				if len(active_requesters):
 					yield random.choice(active_requesters)
 				elif self.fail_on_wait:
-					raise IOError('All {} API keys are below the min remaining query threshold'.format(len(self.github_requesters)))
+					raise IOError('All {} API keys are below the min remaining query threshold'.format(len(requesters)))
 				else:
-					earliest_reset = min([self.get_reset_at(rq) for rq in self.github_requesters])
+					earliest_reset = min([self.get_reset_at(rq) for rq in requesters])
 					time_to_reset =  earliest_reset - calendar.timegm(time.gmtime())
 					self.logger.info('Waiting for reset of at least one github requester, sleeping {} seconds'.format(time_to_reset+1))
 					time.sleep(time_to_reset+1)
 		else:
 			while True:
-				for i,rq in enumerate(self.github_requesters):
+				for i,rq in enumerate(requesters):
 					self.logger.debug('Using github requester {}, {} queries remaining'.format(i,self.get_rate_limit(rq)))
 					# time.sleep(0.5)
 					while self.get_rate_limit(rq) > self.querymin_threshold:
 						yield rq
-				if any(((self.get_rate_limit(rq) > self.querymin_threshold) for rq in self.github_requesters)):
+				if any(((self.get_rate_limit(rq) > self.querymin_threshold) for rq in requesters)):
 					continue
 				elif self.fail_on_wait:
-					raise IOError('All {} API keys are below the min remaining query threshold'.format(len(self.github_requesters)))
+					raise IOError('All {} API keys are below the min remaining query threshold'.format(len(requesters)))
 				else:
-					earliest_reset = min([self.get_reset_at(rq) for rq in self.github_requesters])
+					earliest_reset = min([self.get_reset_at(rq) for rq in requesters])
 					time_to_reset =  earliest_reset - calendar.timegm(time.gmtime())
 					self.logger.info('Waiting for reset of at least one github requester, sleeping {} seconds'.format(time_to_reset+1))
 					time.sleep(time_to_reset+1)
@@ -150,11 +160,8 @@ class StarsFiller(GithubFiller):
 	"""
 	Fills in star information
 	"""
-	def __init__(self,force=False,retry=False,repo_list=None,incremental_update=True,**kwargs):
-		self.force = force
-		self.retry = retry
+	def __init__(self,repo_list=None,**kwargs):
 		self.repo_list = repo_list
-		self.incremental_update = incremental_update
 		GithubFiller.__init__(self,**kwargs)
 
 
@@ -348,8 +355,7 @@ class GHLoginsFiller(GithubFiller):
 	"""
 	Fills in github login information
 	"""
-	def __init__(self,force=False,info_list=None,**kwargs):
-		self.force = force
+	def __init__(self,info_list=None,**kwargs):
 		self.info_list = info_list
 		GithubFiller.__init__(self,**kwargs)
 
@@ -620,11 +626,8 @@ class ForksFiller(GithubFiller):
 	"""
 	Fills in forks info for github repositories
 	"""
-	def __init__(self,force=False,repo_list=None,retry=False,incremental_update=True,**kwargs):
-		self.force = force
+	def __init__(self,repo_list=None,**kwargs):
 		self.repo_list = repo_list
-		self.retry = retry
-		self.incremental_update = incremental_update
 		GithubFiller.__init__(self,**kwargs)
 
 
@@ -841,11 +844,8 @@ class FollowersFiller(GithubFiller):
 	Fills in follower information
 	"""
 
-	def __init__(self,force=False,retry=False,login_list=None,incremental_update=True,**kwargs):
-		self.force = force
-		self.retry = retry
+	def __init__(self,login_list=None,**kwargs):
 		self.login_list = login_list
-		self.incremental_update = incremental_update
 		GithubFiller.__init__(self,**kwargs)
 
 

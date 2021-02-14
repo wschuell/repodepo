@@ -254,12 +254,14 @@ class Database(object):
 				table_name TEXT,
 				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 				success BOOLEAN DEFAULT 1,
-				latest_commit_time TIMESTAMP DEFAULT NULL
+				latest_commit_time TIMESTAMP DEFAULT NULL,
+				info TEXT
 				);
 
 				CREATE INDEX IF NOT EXISTS table_updates_idx ON table_updates(repo_id,table_name,updated_at);
 				CREATE INDEX IF NOT EXISTS table_updates_idx2 ON table_updates(table_name,success,updated_at);
 				CREATE INDEX IF NOT EXISTS table_updates_idx3 ON table_updates(table_name,updated_at);
+				CREATE INDEX IF NOT EXISTS table_updates_idx4 ON table_updates(table_name,success,repo_id,identity_id);
 				CREATE INDEX IF NOT EXISTS table_updates_identity_idx ON table_updates(identity_id,table_name,updated_at);
 
 				CREATE TABLE IF NOT EXISTS full_updates(
@@ -323,6 +325,7 @@ class Database(object):
 				obsolete_name TEXT,
 				merging_reason_source TEXT
 				);
+				CREATE INDEX IF NOT EXISTS mergerepo_idx ON merged_repositories(merged_at);
 
 				CREATE TABLE IF NOT EXISTS sponsor_repos(
 				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
@@ -492,12 +495,14 @@ class Database(object):
 				table_name TEXT,
 				success BOOLEAN DEFAULT true,
 				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-				latest_commit_time TIMESTAMP DEFAULT NULL
+				latest_commit_time TIMESTAMP DEFAULT NULL,
+				info JSONB
 				);
 
 				CREATE INDEX IF NOT EXISTS table_updates_idx ON table_updates(repo_id,table_name,updated_at);
 				CREATE INDEX IF NOT EXISTS table_updates_idx2 ON table_updates(table_name,success,updated_at);
 				CREATE INDEX IF NOT EXISTS table_updates_idx3 ON table_updates(table_name,updated_at);
+				CREATE INDEX IF NOT EXISTS table_updates_idx4 ON table_updates(table_name,success,repo_id,identity_id);
 				CREATE INDEX IF NOT EXISTS table_updates_identity_idx ON table_updates(identity_id,table_name,updated_at);
 
 				CREATE TABLE IF NOT EXISTS full_updates(
@@ -563,6 +568,7 @@ class Database(object):
 				obsolete_name TEXT,
 				merging_reason_source TEXT
 				);
+				CREATE INDEX IF NOT EXISTS mergerepo_idx ON merged_repositories(merged_at);
 
 				CREATE TABLE IF NOT EXISTS sponsor_repos(
 				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
@@ -1742,19 +1748,39 @@ class Database(object):
 			self.connection.commit()
 
 
-	def insert_update(self,table,repo_id=None,identity_id=None,success=True):
+	def insert_update(self,table,repo_id=None,identity_id=None,success=True,info=None,autocommit=True):
 		'''
 		Inserting an update in table_updates
 		'''
+		if isinstance(info,dict):
+			info = json.dumps(info)
 		if self.db_type == 'postgres':
-			self.cursor.execute('''INSERT INTO table_updates(repo_id,identity_id,table_name,success)
-				VALUES(%s,%s,%s,%s)
-				;''', (repo_id,identity_id,table,success))
+			self.cursor.execute('''INSERT INTO table_updates(repo_id,identity_id,table_name,success,info)
+				VALUES(%s,%s,%s,%s,%s)
+				;''', (repo_id,identity_id,table,success,info))
 		else:
-			self.cursor.execute('''INSERT INTO table_updates(repo_id,identity_id,table_name,success)
-				VALUES(?,?,?,?)
-				;''', (repo_id,identity_id,table,success))
-		self.connection.commit()
+			self.cursor.execute('''INSERT INTO table_updates(repo_id,identity_id,table_name,success,info)
+				VALUES(?,?,?,?,?)
+				;''', (repo_id,identity_id,table,success,info))
+		if autocommit:
+			self.connection.commit()
+
+	def clean_null_updates(self,table,repo_id=None,identity_id=None,autocommit=True):
+		'''
+		Removing rows in table_updates with success=NULL, potentially corresponding to identity and / or repo
+		'''
+		if self.db_type == 'postgres':
+			self.cursor.execute('''DELETE FROM table_updates
+				WHERE success IS NULL
+				AND repo_id=%s AND identity_id=%s AND table_name=%s
+				;''', (repo_id,identity_id,table))
+		else:
+			self.cursor.execute('''DELETE FROM table_updates
+				WHERE success IS NULL
+				AND repo_id=? AND identity_id=? AND table_name=?
+				;''', (repo_id,identity_id,table))
+		if autocommit:
+			self.connection.commit()
 
 	def set_cloned(self,repo_id,autocommit=True):
 		'''
