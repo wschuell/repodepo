@@ -327,29 +327,35 @@ class Database(object):
 				);
 				CREATE INDEX IF NOT EXISTS mergerepo_idx ON merged_repositories(merged_at);
 
-				CREATE TABLE IF NOT EXISTS sponsor_repos(
+				CREATE TABLE IF NOT EXISTS sponsors_repo(
+				id INTEGER PRIMARY KEY,
 				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
 				sponsor_identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
 				sponsor_login TEXT,
 				sponsor_id INTEGER REFERENCES identities(id) ON DELETE CASCADE,
 				created_at TIMESTAMP NOT NULL,
 				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-				PRIMARY KEY(repo_id,created_at,sponsor_identity_type_id,sponsor_login,sponsor_id)
+				external_id TEXT UNIQUE,
+				tier TEXT
 				);
 
-				CREATE INDEX IF NOT EXISTS sponsor_repos_idx ON sponsor_repos(sponsor_id,created_at);
+				CREATE INDEX IF NOT EXISTS sponsors_repo_idx ON sponsors_repo(repo_id,created_at,sponsor_login,sponsor_id);
+				CREATE INDEX IF NOT EXISTS sponsors_repo_idx2 ON sponsors_repo(sponsor_id,created_at);
 
-				CREATE TABLE IF NOT EXISTS sponsor_users(
+				CREATE TABLE IF NOT EXISTS sponsors_user(
+				id INTEGER PRIMARY KEY,
 				sponsored_id INTEGER REFERENCES identities(id) ON DELETE CASCADE,
 				sponsor_identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
 				sponsor_id INTEGER REFERENCES identities(id) ON DELETE CASCADE,
 				sponsor_login TEXT,
 				created_at TIMESTAMP NOT NULL,
 				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-				PRIMARY KEY(sponsored_id,created_at,sponsor_identity_type_id,sponsor_login,sponsor_id)
+				external_id TEXT UNIQUE,
+				tier TEXT
 				);
 
-				CREATE INDEX IF NOT EXISTS sponsor_users_idx ON sponsor_users(sponsor_id,created_at);
+				CREATE INDEX IF NOT EXISTS sponsors_user_idx ON sponsors_user(sponsored_id,created_at,sponsor_login,sponsor_id);
+				CREATE INDEX IF NOT EXISTS sponsors_user_idx2 ON sponsors_user(sponsor_id,created_at);
 		'''
 			for q in self.DB_INIT.split(';')[:-1]:
 				self.cursor.execute(q)
@@ -570,29 +576,35 @@ class Database(object):
 				);
 				CREATE INDEX IF NOT EXISTS mergerepo_idx ON merged_repositories(merged_at);
 
-				CREATE TABLE IF NOT EXISTS sponsor_repos(
+				CREATE TABLE IF NOT EXISTS sponsors_repo(
+				id BIGSERIAL PRIMARY KEY, -- using a generated primary key because external_id or sponsor_login could be NULL depending on how sponsorship data is retrieved
 				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
 				sponsor_identity_type_id BIGINT REFERENCES identity_types(id) ON DELETE CASCADE,
 				sponsor_login TEXT,
 				sponsor_id BIGINT REFERENCES identities(id) ON DELETE CASCADE,
 				created_at TIMESTAMP NOT NULL,
 				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-				PRIMARY KEY(repo_id,created_at,sponsor_identity_type_id,sponsor_login,sponsor_id)
+				external_id TEXT UNIQUE,
+				tier JSONB
 				);
 
-				CREATE INDEX IF NOT EXISTS sponsor_repos_idx ON sponsor_repos(sponsor_id,created_at);
+				CREATE INDEX IF NOT EXISTS sponsors_repo_idx ON sponsors_repo(repo_id,created_at,sponsor_login,sponsor_id);
+				CREATE INDEX IF NOT EXISTS sponsors_repo_idx2 ON sponsors_repo(sponsor_id,created_at);
 
-				CREATE TABLE IF NOT EXISTS sponsor_users(
+				CREATE TABLE IF NOT EXISTS sponsors_user(
+				id BIGSERIAL PRIMARY KEY,
 				sponsored_id BIGINT REFERENCES identities(id) ON DELETE CASCADE,
 				sponsor_identity_type_id BIGINT REFERENCES identity_types(id) ON DELETE CASCADE,
 				sponsor_id BIGINT REFERENCES identities(id) ON DELETE CASCADE,
 				sponsor_login TEXT,
 				created_at TIMESTAMP NOT NULL,
 				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-				PRIMARY KEY(sponsored_id,created_at,sponsor_identity_type_id,sponsor_login,sponsor_id)
+				external_id TEXT UNIQUE,
+				tier JSONB
 				);
 
-				CREATE INDEX IF NOT EXISTS sponsor_users_idx ON sponsor_users(sponsor_id,created_at);
+				CREATE INDEX IF NOT EXISTS sponsors_user_idx ON sponsors_user(sponsored_id,created_at,sponsor_login,sponsor_id);
+				CREATE INDEX IF NOT EXISTS sponsors_user_idx2 ON sponsors_user(sponsor_id,created_at);
 				'''
 
 			self.cursor.execute(self.DB_INIT)
@@ -616,8 +628,8 @@ class Database(object):
 			self.cursor = self.connection.cursor()
 		else:
 			self.cursor.execute('DROP TABLE IF EXISTS _dbinfo;')
-			self.cursor.execute('DROP TABLE IF EXISTS sponsor_users;')
-			self.cursor.execute('DROP TABLE IF EXISTS sponsor_repos;')
+			self.cursor.execute('DROP TABLE IF EXISTS sponsors_user;')
+			self.cursor.execute('DROP TABLE IF EXISTS sponsors_repo;')
 			self.cursor.execute('DROP TABLE IF EXISTS packages;')
 			self.cursor.execute('DROP TABLE IF EXISTS followers;')
 			self.cursor.execute('DROP TABLE IF EXISTS stars;')

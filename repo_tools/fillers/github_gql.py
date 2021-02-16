@@ -9,7 +9,7 @@ import sqlite3
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
 import json
-
+import logging
 
 from repo_tools import fillers
 from repo_tools.fillers import generic
@@ -20,6 +20,13 @@ import gql
 from gql import gql, Client
 from gql.transport.aiohttp import AIOHTTPTransport
 
+logger = logging.getLogger(__name__)
+ch = logging.StreamHandler()
+ch.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+ch.setFormatter(formatter)
+logger.addHandler(ch)
+logger.setLevel(logging.INFO)
 
 
 class Requester(object):
@@ -28,6 +35,7 @@ class Requester(object):
 	Caching rate limit information, updating at each query, or requerying after <refresh_time in sec> without update
 	'''
 	def __init__(self,api_key,refresh_time=120,schema=None,fetch_schema=False):
+		self.logger = logger
 		self.api_key = api_key
 		self.remaining = 0
 		self.reset_at = datetime.datetime.now() # Like on the API, reset time is last reset time, not future reset time
@@ -87,7 +95,7 @@ class Requester(object):
 				if result is None:
 					raise
 				else:
-					self.logger.info('Exception catched, {} :{}'.format(e.__class__,e))
+					self.logger.info('Exception catched, {} :{}, result: {}'.format(e.__class__,e,result))
 			else:
 				raise
 		self.remaining = result['rateLimit']['remaining']
@@ -111,11 +119,19 @@ class Requester(object):
 		while has_next_page:
 			result = self.query(gql_query=gql_query,params=params)
 			page_info = result
-			for elt in pageinfo_path:
-				page_info = page_info[elt]
-			has_next_page = page_info['hasNextPage']
-			end_cursor = page_info['endCursor']
-			params[EC_var] = ', after:"{}"'.format(end_cursor)
+			try:
+				for elt in pageinfo_path:
+					page_info = page_info[elt]
+			except (KeyError,TypeError):
+				has_next_page = False
+				end_cursor = None
+			else:
+				has_next_page = page_info['hasNextPage']
+				end_cursor = page_info['endCursor']
+			if end_cursor is None:
+				params[EC_var] = ''
+			else:
+				params[EC_var] = ', after:"{}"'.format(end_cursor)
 			yield copy.deepcopy(result),copy.deepcopy(page_info) # copying so that any usage of results fields in the generator cannot be corrupted between 2 yields
 
 
@@ -226,11 +242,8 @@ class GHGQLFiller(github_rest.GithubFiller):
 		elt_list = copy.deepcopy(elt_list)
 
 		if workers == 1:
-			elt_name = None # init values for the exception
-			if self.queried_obj == 'repo':
-				source,owner,repo_name,end_cursor = None,None,None,None # init values for the exception
-			else:
-				source,login,end_cursor = None,None,None # init values for the exception
+			elt_name,owner,repo_name,end_cursor,login = None,None,None,None,None # init values for the exception
+
 			try:
 				if in_thread:
 					db = self.db.copy()
@@ -243,9 +256,10 @@ class GHGQLFiller(github_rest.GithubFiller):
 					if self.queried_obj == 'repo':
 						source,owner,repo_name,repo_id,end_cursor_orig = current_elt
 						identity_id = None
+						identity_type_id = None
 						elt_name = '{}/{}'.format(owner,repo_name)
 					else:
-						source,login,identity_id,end_cursor_orig = current_elt
+						identity_type_id,login,identity_id,end_cursor_orig = current_elt # source is here identity_type_id
 						repo_id = None
 						elt_name = login
 					if new_elt:
@@ -259,7 +273,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 						end_cursor = pageinfo['endCursor']
 					requester = next(requester_gen)
 
-					params = {'repo_owner':owner,'repo_name':repo_name,'after_end_cursor':end_cursor}
+					params = {'repo_owner':owner,'repo_name':repo_name,'user_login':login,'after_end_cursor':end_cursor}
 
 					# first request (with endcursor)
 					paginated_query = requester.paginated_query(gql_query=self.query_string(),params=params,pageinfo_path=self.pageinfo_path)
@@ -294,10 +308,14 @@ class GHGQLFiller(github_rest.GithubFiller):
 							to_be_merged = False
 
 					# detect 0 elts
-					parsed_result = self.parse_query_result(result,repo_id=repo_id,identity_id=identity_id)
+					parsed_result = self.parse_query_result(result,repo_id=repo_id,identity_id=identity_id,identity_type_id=identity_type_id)
 					if len(parsed_result) == 0:
 						self.logger.info('No new {} for {} {} ({}/{})'.format(self.items_name,self.queried_obj,elt_name,elt_nb,total_elt))
-						db.insert_update(identity_id=identity_id,repo_id=repo_id,table=self.items_name,success=True)
+						if end_cursor is None:
+							end_cursor_json = None
+						else:
+							end_cursor_json = json.dumps({'end_cursor':end_cursor})
+						db.insert_update(identity_id=identity_id,repo_id=repo_id,table=self.items_name,success=True,info=end_cursor_json)
 						elt_list.pop(0)
 						new_elt = True
 						elt_nb += 1
@@ -308,12 +326,16 @@ class GHGQLFiller(github_rest.GithubFiller):
 						# insert results
 						self.insert_items(items_list=parsed_result,commit=False,db=db)
 						end_cursor = pageinfo['endCursor']
+						if end_cursor is None:
+							end_cursor_json = None
+						else:
+							end_cursor_json = json.dumps({'end_cursor':end_cursor})
 						# detect loop end
 						if not pageinfo['hasNextPage']:
 							# insert update success True (+ end cursor)
-							db.insert_update(identity_id=identity_id,repo_id=repo_id,table=self.items_name,success=True,info=json.dumps({'end_cursor':end_cursor}),autocommit=False)
+							db.insert_update(identity_id=identity_id,repo_id=repo_id,table=self.items_name,success=True,info=end_cursor_json,autocommit=True)
 							# clean partial updates with NULL success (?)
-							db.clean_null_updates(identity_id=identity_id,repo_id=repo_id,table=self.items_name)
+							# db.clean_null_updates(identity_id=identity_id,repo_id=repo_id,table=self.items_name,autocommit=True)
 							# message with total count from result
 							nb_items = self.get_nb_items(result)
 							if nb_items is not None:
@@ -327,11 +349,11 @@ class GHGQLFiller(github_rest.GithubFiller):
 							break
 						else:
 							# insert partial update with endcursor value and success NULL (?)
-							db.insert_update(identity_id=identity_id,repo_id=repo_id,table=self.items_name,success=None,info=json.dumps({'end_cursor':end_cursor}))
+							db.insert_update(identity_id=identity_id,repo_id=repo_id,table=self.items_name,success=None,info=end_cursor_json)
 							db.connection.commit()
 							# continue query
 							result,pageinfo = next(paginated_query)
-							parsed_result = self.parse_query_result(result,repo_id=repo_id,identity_id=identity_id)
+							parsed_result = self.parse_query_result(result,repo_id=repo_id,identity_id=identity_id,identity_type_id=identity_type_id)
 
 			except Exception as e:
 				if in_thread:
@@ -386,7 +408,7 @@ class StarsGQLFiller(GHGQLFiller):
 					}}
 				}}'''
 
-	def parse_query_result(self,query_result,repo_id,identity_id,repo_owner=None,repo_name=None):
+	def parse_query_result(self,query_result,repo_id,identity_id,repo_owner=None,repo_name=None,**kwargs):
 		'''
 		In subclasses this has to be implemented
 		output: [ {'repo_id':r_id,'repo_owner':r_ow,'repo_name':r_na,'starrer_login':s_lo,'starred_at':st_at} , ...]
@@ -462,7 +484,7 @@ class StarsGQLFiller(GHGQLFiller):
 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
 								FROM repositories r
 								INNER JOIN sources s
-								ON s.id=r.source
+								ON s.id=r.source AND s.name='GitHub'
 								LEFT OUTER JOIN table_updates tu
 								ON tu.repo_id=r.id AND tu.table_name='stars'
 								ORDER BY r.owner,r.name,tu.updated_at ) as t1
@@ -470,7 +492,7 @@ class StarsGQLFiller(GHGQLFiller):
 								(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
 								FROM repositories r
 								INNER JOIN sources s
-								ON s.id=r.source
+								ON s.id=r.source AND s.name='GitHub'
 								LEFT OUTER JOIN table_updates tu
 								ON tu.repo_id=r.id AND tu.table_name='stars'
 								GROUP BY r.owner,r.name,r.id,s.id ) AS t2
@@ -483,7 +505,7 @@ class StarsGQLFiller(GHGQLFiller):
 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
 								FROM repositories r
 								INNER JOIN sources s
-								ON s.id=r.source
+								ON s.id=r.source AND s.name='GitHub'
 								LEFT OUTER JOIN table_updates tu
 								ON tu.repo_id=r.id AND tu.table_name='stars'
 								ORDER BY r.owner,r.name,tu.updated_at ) as t1
@@ -491,7 +513,7 @@ class StarsGQLFiller(GHGQLFiller):
 								(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
 								FROM repositories r
 								INNER JOIN sources s
-								ON s.id=r.source
+								ON s.id=r.source AND s.name='GitHub'
 								LEFT OUTER JOIN table_updates tu
 								ON tu.repo_id=r.id AND tu.table_name='stars'
 								GROUP BY r.owner,r.name,r.id,s.id ) AS t2
@@ -505,7 +527,7 @@ class StarsGQLFiller(GHGQLFiller):
 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
 								FROM repositories r
 								INNER JOIN sources s
-								ON s.id=r.source
+								ON s.id=r.source AND s.name='GitHub'
 								LEFT OUTER JOIN table_updates tu
 								ON tu.repo_id=r.id AND tu.table_name='stars'
 								ORDER BY r.owner,r.name,tu.updated_at ) as t1
@@ -513,7 +535,7 @@ class StarsGQLFiller(GHGQLFiller):
 								(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
 								FROM repositories r
 								INNER JOIN sources s
-								ON s.id=r.source
+								ON s.id=r.source AND s.name='GitHub'
 								LEFT OUTER JOIN table_updates tu
 								ON tu.repo_id=r.id AND tu.table_name='stars'
 								GROUP BY r.owner,r.name,r.id,s.id ) AS t2
@@ -531,7 +553,7 @@ class StarsGQLFiller(GHGQLFiller):
 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
 								FROM repositories r
 								INNER JOIN sources s
-								ON s.id=r.source
+								ON s.id=r.source AND s.name='GitHub'
 								LEFT OUTER JOIN table_updates tu
 								ON tu.repo_id=r.id AND tu.table_name='stars'
 								ORDER BY r.owner,r.name,tu.updated_at ) as t1
@@ -539,7 +561,7 @@ class StarsGQLFiller(GHGQLFiller):
 								(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
 								FROM repositories r
 								INNER JOIN sources s
-								ON s.id=r.source
+								ON s.id=r.source AND s.name='GitHub'
 								LEFT OUTER JOIN table_updates tu
 								ON tu.repo_id=r.id AND tu.table_name='stars'
 								GROUP BY r.owner,r.name,r.id,s.id ) AS t2
@@ -552,7 +574,7 @@ class StarsGQLFiller(GHGQLFiller):
 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
 								FROM repositories r
 								INNER JOIN sources s
-								ON s.id=r.source
+								ON s.id=r.source AND s.name='GitHub'
 								LEFT OUTER JOIN table_updates tu
 								ON tu.repo_id=r.id AND tu.table_name='stars'
 								ORDER BY r.owner,r.name,tu.updated_at ) as t1
@@ -560,7 +582,7 @@ class StarsGQLFiller(GHGQLFiller):
 								(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
 								FROM repositories r
 								INNER JOIN sources s
-								ON s.id=r.source
+								ON s.id=r.source AND s.name='GitHub'
 								LEFT OUTER JOIN table_updates tu
 								ON tu.repo_id=r.id AND tu.table_name='stars'
 								GROUP BY r.owner,r.name,r.id,s.id ) AS t2
@@ -574,7 +596,7 @@ class StarsGQLFiller(GHGQLFiller):
 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
 								FROM repositories r
 								INNER JOIN sources s
-								ON s.id=r.source
+								ON s.id=r.source AND s.name='GitHub'
 								LEFT OUTER JOIN table_updates tu
 								ON tu.repo_id=r.id AND tu.table_name='stars'
 								ORDER BY r.owner,r.name,tu.updated_at ) as t1
@@ -582,7 +604,7 @@ class StarsGQLFiller(GHGQLFiller):
 								(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
 								FROM repositories r
 								INNER JOIN sources s
-								ON s.id=r.source
+								ON s.id=r.source AND s.name='GitHub'
 								LEFT OUTER JOIN table_updates tu
 								ON tu.repo_id=r.id AND tu.table_name='stars'
 								GROUP BY r.owner,r.name,r.id,s.id ) AS t2
@@ -601,6 +623,530 @@ class StarsGQLFiller(GHGQLFiller):
 					self.elt_list.append((source,owner,name,repo_id,json.loads(end_cursor_info)['end_cursor']))
 				except:
 					self.elt_list.append((source,owner,name,repo_id,None))
+
+		if self.start_offset is not None:
+			self.elt_list = [r for r in self.elt_list if r[1]>=self.start_offset]
+
+
+class SponsorsUserFiller(GHGQLFiller):
+	'''
+	Querying sponsors of users through the GraphQL API
+	'''
+	def __init__(self,**kwargs):
+		self.items_name = 'sponsors_user'
+		self.queried_obj = 'user'
+		self.pageinfo_path = ['user','sponsorshipsAsMaintainer','pageInfo']
+		GHGQLFiller.__init__(self,**kwargs)
+
+	def query_string(self,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: python-formatable string representing the graphql query
+		'''
+		return '''query {{
+					user(login:"{user_login}") {{
+						login
+						sponsorshipsAsMaintainer (includePrivate:true, first:100{after_end_cursor} ){{
+							totalCount
+							pageInfo {{
+								endCursor
+								hasNextPage
+						 		}}
+						 	nodes {{
+								createdAt
+								privacyLevel
+								id
+								tier {{
+									updatedAt
+									name
+									description
+									monthlyPriceInCents
+									monthlyPriceInDollars
+									}}
+								sponsor {{
+									login
+								}}
+							}}
+						}}
+					}}
+				}}'''
+
+	def parse_query_result(self,query_result,identity_id,identity_type_id,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: [ {'repo_id':r_id,'repo_owner':r_ow,'repo_name':r_na,'starrer_login':s_lo,'starred_at':st_at} , ...]
+		'''
+		ans = []
+		user_login = query_result['user']['login']
+		for e in query_result['user']['sponsorshipsAsMaintainer']['nodes']:
+			d = {'sponsored_id':identity_id,'sponsored_login':user_login,'identity_type_id':identity_type_id}
+			try:
+				d['created_at'] = e['createdAt']
+				d['external_id'] = e['id']
+				if e['privacyLevel'] == 'PRIVATE' or e['sponsor'] is None:
+					d['sponsor_login'] = None
+				else:
+					d['sponsor_login'] = e['sponsor']['login']
+				if e['tier'] is None:
+					d['tier'] = None
+				else:
+					d['tier'] = json.dumps(e['tier'])
+			except KeyError as e:
+				self.logger.info('KeyError when parsing sponsors_user for {}: {}'.format(user_login,e))
+				continue
+			else:
+				ans.append(d)
+		return ans
+
+
+	def insert_items(self,items_list,commit=True,db=None):
+		'''
+		In subclasses this has to be implemented
+		inserts results in the DB
+		'''
+		if db is None:
+			db = self.db
+		if db.db_type == 'postgres':
+			extras.execute_batch(db.cursor,'''
+				INSERT INTO sponsors_user(sponsored_id,sponsor_identity_type_id,sponsor_id,sponsor_login,created_at,external_id,tier)
+				VALUES(%s,
+						%s,
+						(SELECT id FROM identities WHERE identity=%s AND identity_type_id=%s),
+						%s,
+						%s,
+						%s,
+						%s
+					)
+				ON CONFLICT DO NOTHING
+				;''',((f['sponsored_id'],f['identity_type_id'],f['sponsor_login'],f['identity_type_id'],f['sponsor_login'],f['created_at'],f['external_id'],f['tier']) for f in items_list))
+		else:
+			db.cursor.executemany('''
+				INSERT OR IGNORE INTO sponsors_user(sponsored_id,sponsor_identity_type_id,sponsor_id,sponsor_login,created_at,external_id,tier)
+				VALUES(?,
+						?,
+						(SELECT id FROM identities WHERE identity=? AND identity_type_id=?),
+						?,
+						?,
+						?,
+						?
+					)
+				;''',((f['sponsored_id'],f['identity_type_id'],f['sponsor_login'],f['identity_type_id'],f['sponsor_login'],f['created_at'],f['external_id'],f['tier']) for f in items_list))
+		if commit:
+			db.connection.commit()
+
+
+	def get_nb_items(self,query_result):
+		'''
+		In subclasses this has to be implemented
+		output: nb_items or None if not relevant
+		'''
+		return query_result['user']['sponsorshipsAsMaintainer']['totalCount']
+
+	def set_element_list(self):
+		'''
+		In subclasses this has to be implemented
+		sets self.elt_list to be used in self.fill_items
+		'''
+
+		#if force: all elts
+		#if retry: all without success false or null on last update
+		#else: all with success is null on lats update
+
+		if self.db.db_type == 'postgres':
+			if self.force:
+				self.db.cursor.execute('''
+						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
+							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
+								ORDER BY i.identity,tu.updated_at ) as t1
+							INNER JOIN
+								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
+								GROUP BY i.identity,i.id,it.id ) AS t2
+						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
+						ORDER BY t1.itid,t1.identity
+				;''')
+			elif self.retry:
+				self.db.cursor.execute('''
+						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
+							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
+								ORDER BY i.identity,tu.updated_at ) as t1
+							INNER JOIN
+								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
+								GROUP BY i.identity,i.id,it.id ) AS t2
+						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
+						AND ((NOT t1.success) OR t1.succ IS NULL)
+						ORDER BY t1.itid,t1.identity
+				;''')
+			else:
+				self.db.cursor.execute('''
+						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
+							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
+								ORDER BY i.identity,tu.updated_at ) as t1
+							INNER JOIN
+								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
+								GROUP BY i.identity,i.id,it.id ) AS t2
+						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
+						AND t1.succ IS NULL
+						ORDER BY t1.itid,t1.identity
+				;''')
+
+			self.elt_list = list(self.db.cursor.fetchall())
+
+		else:
+			if self.force:
+				self.db.cursor.execute('''
+						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
+							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
+								ORDER BY i.identity,tu.updated_at ) as t1
+							INNER JOIN
+								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
+								GROUP BY i.identity,i.id,it.id ) AS t2
+						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
+						ORDER BY t1.itid,t1.identity
+				;''')
+			elif self.retry:
+				self.db.cursor.execute('''
+						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
+							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
+								ORDER BY i.identity,tu.updated_at ) as t1
+							INNER JOIN
+								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
+								GROUP BY i.identity,i.id,it.id ) AS t2
+						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
+						AND ((NOT t1.success) OR t1.succ IS NULL)
+						ORDER BY t1.itid,t1.identity
+				;''')
+			else:
+				self.db.cursor.execute('''
+						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
+							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
+								ORDER BY i.identity,tu.updated_at ) as t1
+							INNER JOIN
+								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
+								GROUP BY i.identity,i.id,it.id ) AS t2
+						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
+						AND t1.succ IS NULL
+						ORDER BY t1.itid,t1.identity
+				;''')
+
+
+			elt_list = list(self.db.cursor.fetchall())
+
+			# specific to sqlite because no internal json parsing implemented in query
+			self.elt_list = []
+			for (identity_type_id,login,identity_id,end_cursor_info) in elt_list:
+				try:
+					self.elt_list.append((identity_type_id,login,identity_id,json.loads(end_cursor_info)['end_cursor']))
+				except:
+					self.elt_list.append((identity_type_id,login,identity_id,None))
+
+		if self.start_offset is not None:
+			self.elt_list = [r for r in self.elt_list if r[1]>=self.start_offset]
+
+class FollowersGQLFiller(GHGQLFiller):
+	'''
+	Querying followers through the GraphQL API
+	'''
+	def __init__(self,**kwargs):
+		self.items_name = 'followers'
+		self.queried_obj = 'user'
+		self.pageinfo_path = ['user','followers','pageInfo']
+		GHGQLFiller.__init__(self,**kwargs)
+
+	def query_string(self,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: python-formatable string representing the graphql query
+		'''
+		return '''query {{
+					user(login:"{user_login}") {{
+						login
+						followers (first:100 {after_end_cursor} ){{
+						 totalCount
+						 pageInfo {{
+							endCursor
+							hasNextPage
+						 }}
+						 edges {{
+							node {{
+								login
+							}}
+						 }}
+						}}
+					}}
+				}}'''
+
+	def parse_query_result(self,query_result,identity_id,identity_type_id,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: [ {'repo_id':r_id,'repo_owner':r_ow,'repo_name':r_na,'starrer_login':s_lo,'starred_at':st_at} , ...]
+		'''
+		ans = []
+		user_login = query_result['user']['login']
+		for e in query_result['user']['followers']['edges']:
+			d = {'identity_id':identity_id,'user_login':user_login,'identity_type_id':identity_type_id}
+			try:
+				d['follower_login'] = e['node']['login']
+			except KeyError as e:
+				self.logger.info('KeyError when parsing followers for {}: {}'.format(user_login,e))
+				continue
+			else:
+				ans.append(d)
+		return ans
+
+
+	def insert_items(self,items_list,commit=True,db=None):
+		'''
+		In subclasses this has to be implemented
+		inserts results in the DB
+		'''
+		if db is None:
+			db = self.db
+		if db.db_type == 'postgres':
+			extras.execute_batch(db.cursor,'''
+				INSERT INTO followers(follower_identity_type_id,follower_login,follower_id,followee_id)
+				VALUES(%s,
+						%s,
+						(SELECT id FROM identities WHERE identity=%s AND identity_type_id=%s),
+						%s
+					)
+				ON CONFLICT DO NOTHING
+				;''',((f['identity_type_id'],f['follower_login'],f['follower_login'],f['identity_type_id'],f['identity_id'],) for f in items_list))
+		else:
+			db.cursor.executemany('''
+				INSERT OR IGNORE INTO followers(follower_identity_type_id,follower_login,follower_id,followee_id)
+				VALUES(?,
+						?,
+						(SELECT id FROM identities WHERE identity=? AND identity_type_id=?),
+						?
+					)
+				;''',((f['identity_type_id'],f['follower_login'],f['follower_login'],f['identity_type_id'],f['identity_id'],) for f in items_list))
+		if commit:
+			db.connection.commit()
+
+
+	def get_nb_items(self,query_result):
+		'''
+		In subclasses this has to be implemented
+		output: nb_items or None if not relevant
+		'''
+		return query_result['user']['followers']['totalCount']
+
+	def set_element_list(self):
+		'''
+		In subclasses this has to be implemented
+		sets self.elt_list to be used in self.fill_items
+		'''
+
+		#if force: all elts
+		#if retry: all without success false or null on last update
+		#else: all with success is null on lats update
+
+		if self.db.db_type == 'postgres':
+			if self.force:
+				self.db.cursor.execute('''
+						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
+							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='followers'
+								ORDER BY i.identity,tu.updated_at ) as t1
+							INNER JOIN
+								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='followers'
+								GROUP BY i.identity,i.id,it.id ) AS t2
+						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
+						ORDER BY t1.itid,t1.identity
+				;''')
+			elif self.retry:
+				self.db.cursor.execute('''
+						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
+							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='followers'
+								ORDER BY i.identity,tu.updated_at ) as t1
+							INNER JOIN
+								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='followers'
+								GROUP BY i.identity,i.id,it.id ) AS t2
+						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
+						AND ((NOT t1.success) OR t1.succ IS NULL)
+						ORDER BY t1.itid,t1.identity
+				;''')
+			else:
+				self.db.cursor.execute('''
+						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
+							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='followers'
+								ORDER BY i.identity,tu.updated_at ) as t1
+							INNER JOIN
+								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='followers'
+								GROUP BY i.identity,i.id,it.id ) AS t2
+						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
+						AND t1.succ IS NULL
+						ORDER BY t1.itid,t1.identity
+				;''')
+
+			self.elt_list = list(self.db.cursor.fetchall())
+
+		else:
+			if self.force:
+				self.db.cursor.execute('''
+						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
+							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='followers'
+								ORDER BY i.identity,tu.updated_at ) as t1
+							INNER JOIN
+								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='followers'
+								GROUP BY i.identity,i.id,it.id ) AS t2
+						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
+						ORDER BY t1.itid,t1.identity
+				;''')
+			elif self.retry:
+				self.db.cursor.execute('''
+						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
+							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='followers'
+								ORDER BY i.identity,tu.updated_at ) as t1
+							INNER JOIN
+								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='followers'
+								GROUP BY i.identity,i.id,it.id ) AS t2
+						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
+						AND ((NOT t1.success) OR t1.succ IS NULL)
+						ORDER BY t1.itid,t1.identity
+				;''')
+			else:
+				self.db.cursor.execute('''
+						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
+							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='followers'
+								ORDER BY i.identity,tu.updated_at ) as t1
+							INNER JOIN
+								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='followers'
+								GROUP BY i.identity,i.id,it.id ) AS t2
+						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
+						AND t1.succ IS NULL
+						ORDER BY t1.itid,t1.identity
+				;''')
+
+
+			elt_list = list(self.db.cursor.fetchall())
+
+			# specific to sqlite because no internal json parsing implemented in query
+			self.elt_list = []
+			for (identity_type_id,login,identity_id,end_cursor_info) in elt_list:
+				try:
+					self.elt_list.append((identity_type_id,login,identity_id,json.loads(end_cursor_info)['end_cursor']))
+				except:
+					self.elt_list.append((identity_type_id,login,identity_id,None))
 
 		if self.start_offset is not None:
 			self.elt_list = [r for r in self.elt_list if r[1]>=self.start_offset]
