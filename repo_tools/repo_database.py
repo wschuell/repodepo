@@ -788,7 +788,7 @@ class Database(object):
 		self.connection.commit()
 
 
-	def register_packages(self,source,package_list,autocommit=True):
+	def register_packages(self,source,package_list,autocommit=True,update_urls=False):
 		'''
 		Registering packages from package list
 		URLs are supposed to be already filled
@@ -808,6 +808,16 @@ class Database(object):
 				%s,%s,%s,%s,(SELECT id FROM urls WHERE url=%s))
 				ON CONFLICT DO NOTHING
 				;''',((p[-1],source_id,*p) for p in package_list))
+			if update_urls:
+				extras.execute_batch(self.cursor,'''
+					UPDATE packages SET repo_id=
+						(SELECT r.id FROM urls u
+							INNER JOIN repositories r ON r.url_id=u.cleaned_url
+							AND u.url=%s),
+						url_id=(SELECT id FROM urls WHERE url=%s)
+					WHERE (url_id IS NULL OR repo_id IS NULL) AND insource_id=%s
+					;''',((p[-1],p[-1],p[0]) for p in package_list))
+
 		else:
 			self.cursor.executemany('''
 				INSERT OR IGNORE INTO packages(repo_id,source_id,insource_id,name,created_at,url_id)
@@ -816,6 +826,16 @@ class Database(object):
 						INNER JOIN repositories r ON r.url_id=u.cleaned_url
 						AND u.url=?),?,?,?,?,(SELECT id FROM urls WHERE url=?))
 				;''',((p[-1],source_id,*p) for p in package_list))
+			if update_urls:
+				self.cursor.executemany('''
+					UPDATE packages SET repo_id=
+						(SELECT r.id FROM urls u
+							INNER JOIN repositories r ON r.url_id=u.cleaned_url
+							AND u.url=?),
+						url_id=(SELECT id FROM urls WHERE url=?)
+					WHERE (url_id IS NULL or repo_id IS NULL) AND insource_id=?
+					;''',((p[-1],p[-1],p[0]) for p in package_list))
+
 		if autocommit:
 			self.connection.commit()
 

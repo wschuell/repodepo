@@ -100,6 +100,7 @@ class Requester(object):
 				raise
 		self.remaining = result['rateLimit']['remaining']
 		self.reset_at = datetime.datetime.strptime(result['rateLimit']['resetAt'], '%Y-%m-%dT%H:%M:%SZ')
+		self.reset_at = time.mktime(self.reset_at.timetuple()) # converting to seconds to epoch; to have same format as REST API
 		self.refreshed_at = datetime.datetime.now()
 
 		return result
@@ -286,6 +287,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 						elt_list.pop(0)
 						new_elt = True
 						elt_nb += 1
+						continue
 
 					# check repo fullname change and plan merge
 					if self.queried_obj == 'repo':
@@ -319,12 +321,12 @@ class GHGQLFiller(github_rest.GithubFiller):
 						elt_list.pop(0)
 						new_elt = True
 						elt_nb += 1
-						break
+						continue
 
 					# loop
 					while requester.get_rate_limit()>self.querymin_threshold:
 						# insert results
-						self.insert_items(items_list=parsed_result,commit=False,db=db)
+						self.insert_items(items_list=parsed_result,commit=True,db=db)
 						end_cursor = pageinfo['endCursor']
 						if end_cursor is None:
 							end_cursor_json = None
@@ -421,8 +423,8 @@ class StarsGQLFiller(GHGQLFiller):
 			try:
 				d['starred_at'] = e['starredAt']
 				d['starrer_login'] = e['node']['login']
-			except KeyError as e:
-				self.logger.info('KeyError when parsing stars for {}/{}: {}'.format(repo_owner,repo_name,e))
+			except (KeyError,TypeError) as err:
+				self.logger.info('Result triggering error: {} \nError when parsing stars for {}/{}: {}'.format(e,repo_owner,repo_name,err))
 				continue
 			else:
 				ans.append(d)
@@ -677,25 +679,26 @@ class SponsorsUserFiller(GHGQLFiller):
 		output: [ {'repo_id':r_id,'repo_owner':r_ow,'repo_name':r_na,'starrer_login':s_lo,'starred_at':st_at} , ...]
 		'''
 		ans = []
-		user_login = query_result['user']['login']
-		for e in query_result['user']['sponsorshipsAsMaintainer']['nodes']:
-			d = {'sponsored_id':identity_id,'sponsored_login':user_login,'identity_type_id':identity_type_id}
-			try:
-				d['created_at'] = e['createdAt']
-				d['external_id'] = e['id']
-				if e['privacyLevel'] == 'PRIVATE' or e['sponsor'] is None:
-					d['sponsor_login'] = None
+		if query_result['user'] is not None:
+			user_login = query_result['user']['login']
+			for e in query_result['user']['sponsorshipsAsMaintainer']['nodes']:
+				d = {'sponsored_id':identity_id,'sponsored_login':user_login,'identity_type_id':identity_type_id}
+				try:
+					d['created_at'] = e['createdAt']
+					d['external_id'] = e['id']
+					if e['privacyLevel'] == 'PRIVATE' or e['sponsor'] is None:
+						d['sponsor_login'] = None
+					else:
+						d['sponsor_login'] = e['sponsor']['login']
+					if e['tier'] is None:
+						d['tier'] = None
+					else:
+						d['tier'] = json.dumps(e['tier'])
+				except KeyError as e:
+					self.logger.info('KeyError when parsing sponsors_user for {}: {}'.format(user_login,e))
+					continue
 				else:
-					d['sponsor_login'] = e['sponsor']['login']
-				if e['tier'] is None:
-					d['tier'] = None
-				else:
-					d['tier'] = json.dumps(e['tier'])
-			except KeyError as e:
-				self.logger.info('KeyError when parsing sponsors_user for {}: {}'.format(user_login,e))
-				continue
-			else:
-				ans.append(d)
+					ans.append(d)
 		return ans
 
 

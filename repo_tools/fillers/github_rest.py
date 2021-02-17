@@ -136,6 +136,8 @@ class GithubFiller(fillers.Filler):
 				else:
 					earliest_reset = min([self.get_reset_at(rq) for rq in requesters])
 					time_to_reset =  earliest_reset - calendar.timegm(time.gmtime())
+					while time_to_reset <= 0:
+						time_to_reset += 3600 # hack to consider shifted reset_at time between REST and GQL APIs
 					self.logger.info('Waiting for reset of at least one github requester, sleeping {} seconds'.format(time_to_reset+1))
 					time.sleep(time_to_reset+1)
 		else:

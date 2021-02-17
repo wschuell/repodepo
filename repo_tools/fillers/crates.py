@@ -91,12 +91,8 @@ class CratesFiller(generic.PackageFiller):
 			limit_str = ''
 
 		cursor.execute('''
-			SELECT id,name,created_at,repository FROM crates {}
+			SELECT id,name,created_at,COALESCE(repository,homepage,documentation) FROM crates {}
 			;'''.format(limit_str))
 
 		return cursor.fetchall()
 
-
-	def apply(self):
-		self.fill_packages()
-		self.db.connection.commit()

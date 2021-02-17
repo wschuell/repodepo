@@ -41,4 +41,6 @@ def test_github_gql(testdb):
 	testdb.add_filler(github_gql.StarsGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.FollowersGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.SponsorsUserFiller(fail_on_wait=True,workers=workers))
+	testdb.add_filler(generic.RepoCommitOwnershipFiller()) # Clones after forks to have up-to-date repo URLS (detect redirects)
+
 	testdb.fill_db()

@@ -692,7 +692,7 @@ class CommitsFiller(fillers.Filler):
 			# 	error_str = 'Several repos are considered origin repos of the same commits. Repos in this situation: {}, First ten: {}'.format(len(results),['{}/{}:{}'.format(*r) for r in results[:10]])
 			# 	raise ValueError(error_str)
 
-			self.logger.info('Filling commit origin repository attribution: upating commits table')
+			self.logger.info('Filling commit origin repository attribution: updating commits table')
 			self.db.cursor.execute('''
 					UPDATE commits SET repo_id=(
 							SELECT cp.repo_id FROM commit_repos cp

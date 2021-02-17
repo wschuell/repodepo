@@ -29,9 +29,10 @@ class PackageFiller(fillers.Filler):
 	or
 	name,created_at,repository
 	"""
-	def __init__(self,package_list=None,package_list_file=None,**kwargs):
+	def __init__(self,package_list=None,package_list_file=None,force=False,**kwargs):
 		self.package_list = package_list
 		self.package_list_file = package_list_file
+		self.force = force
 		fillers.Filler.__init__(self,**kwargs)
 
 	def prepare(self):
@@ -60,7 +61,7 @@ got: {}'''.format(headers))
 
 
 	def apply(self):
-		self.fill_packages()
+		self.fill_packages(force=self.force)
 		self.db.connection.commit()
 
 	def fill_packages(self,package_list=None,source=None,force=False,clean_urls=True):
@@ -178,6 +179,7 @@ class RepositoriesFiller(fillers.Filler):
 		self.fill_source()
 		self.fill_cleaned_urls()
 		self.fill_repositories()
+		self.db.connection.commit()
 		self.logger.info('Filled repositories')
 
 	def fill_source(self):
@@ -438,7 +440,11 @@ class ClonesFiller(fillers.Filler):
 		'''
 		if self.db.get_last_dl(repo_id=repo_id,success=True) is None:
 			repo_obj = self.get_repo(source=source,owner=owner,name=repo)
-			last_commit_time = datetime.datetime.fromtimestamp(repo_obj.revparse_single('HEAD').commit_time)
+			try:
+				last_commit_time = datetime.datetime.fromtimestamp(repo_obj.revparse_single('HEAD').commit_time)
+			except KeyError:
+				self.logger.info('HEAD reference unavailable for repo {}/{}/{}'.format(source,owner,repo))
+				last_commit_time = None
 			self.db.submit_download_attempt(source=source,owner=owner,repo=repo,success=True,dl_time=last_commit_time)
 
 	def clone(self,source,name,owner,source_urlroot,replace=False,update=False,db=None):
@@ -523,3 +529,54 @@ class ClonesFiller(fillers.Filler):
 			raise ValueError('Repository {}/{}/{} not found in cloned_repos folder'.format(source,owner,name))
 		else:
 			return pygit2.Repository(os.path.join(repo_folder,'.git'))
+
+class RepoCommitOwnershipFiller(fillers.Filler):
+	'''
+	Based on repo creation date (or package creation date if NULL), attributing commit to oldest repo
+	As commit timestamps can be forged, this is not used.
+	USING ONLY PACKAGE DATE SO FAR -- repo creation date is CURRENT_TIMESTAMP  at row creation
+	'''
+
+	def __init__(self,force=False,**kwargs):
+		self.force = force
+		fillers.Filler.__init__(self)
+
+	def apply(self):
+		self.db.cursor.execute('''SELECT MAX(updated_at) FROM full_updates WHERE update_type='commits orig repos repo/package creation date';''')
+		last_fu = self.db.cursor.fetchone()[0]
+		self.db.cursor.execute('''SELECT MAX(updated_at) FROM full_updates WHERE update_type='commits';''')
+		last_fu_commits = self.db.cursor.fetchone()[0]
+		if not self.force and last_fu is not None and last_fu_commits<=last_fu:
+			self.logger.info('Skipping commit origin repository attribution using repo/package creation date')
+		else:
+			self.logger.info('Filling commit origin repository attribution using repo/package creation date')
+			self.db.cursor.execute('''
+						UPDATE commit_repos SET is_orig_repo=true
+							WHERE is_orig_repo IS NULL
+								AND repo_id = (SELECT ccp.repo_id
+									FROM commit_repos ccp
+									INNER JOIN repositories r
+									ON ccp.commit_id=commit_repos.commit_id AND r.id=ccp.repo_id
+									LEFT OUTER JOIN packages p
+									ON p.repo_id=r.id
+									AND p.created_at IS NOT NULL
+									ORDER BY p.created_at ASC
+									LIMIT 1
+									)
+						;''')
+
+			self.logger.info('Filled {} commit origin repository attributions'.format(self.db.cursor.rowcount))
+
+			self.logger.info('Filling commit origin repository attribution: updating commits table')
+			self.db.cursor.execute('''
+					UPDATE commits SET repo_id=(
+							SELECT cp.repo_id FROM commit_repos cp
+								WHERE cp.commit_id=commits.id
+								AND cp.is_orig_repo)
+					;
+					''')
+
+			self.db.cursor.execute('''INSERT INTO full_updates(update_type) VALUES('commits orig repos repo/package creation date');''')
+
+			self.db.connection.commit()
+
