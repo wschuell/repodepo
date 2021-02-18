@@ -5,4 +5,4 @@ Set of classes and methods to collect information from selected github repositor
 An example of usage can be found in the `repo_tools_example.py`.
 Two main objects:
  - RepoDatabase, an interface to manage a database (sqlite or postgres) of the collected info
- - RepoCrawler, an interface to crawl/collect the information, for example from github.
+ - Fillers, objects that can be used to fill the database.

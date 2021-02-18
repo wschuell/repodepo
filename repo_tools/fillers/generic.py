@@ -567,6 +567,38 @@ class RepoCommitOwnershipFiller(fillers.Filler):
 
 			self.logger.info('Filled {} commit origin repository attributions'.format(self.db.cursor.rowcount))
 
+			# set to null where twice true for is_orig_repo
+			self.logger.info('Filling commit origin repository attribution: set to null where twice true for is_orig_repo')
+			self.db.cursor.execute('''
+						UPDATE commit_repos SET is_orig_repo=NULL
+							WHERE commit_id IN (
+								SELECT cr.commit_id FROM commit_repos cr
+								WHERE cr.is_orig_repo
+								GROUP BY cr.commit_id
+								HAVING COUNT(*)>=2
+									)
+						;''')
+			self.logger.info('Detected {} commit origin conflicts'.format(self.db.cursor.rowcount))
+
+			if self.db.rowcount > 0:
+				self.logger.info('Filling commit origin repository attribution using repo/package creation date')
+				self.db.cursor.execute('''
+						UPDATE commit_repos SET is_orig_repo=true
+							WHERE is_orig_repo IS NULL
+								AND repo_id = (SELECT ccp.repo_id
+									FROM commit_repos ccp
+									INNER JOIN repositories r
+									ON ccp.commit_id=commit_repos.commit_id AND r.id=ccp.repo_id
+									LEFT OUTER JOIN packages p
+									ON p.repo_id=r.id
+									AND p.created_at IS NOT NULL
+									ORDER BY p.created_at ASC
+									LIMIT 1
+									)
+						;''')
+
+				self.logger.info('Filled {} commit origin repository attributions'.format(self.db.cursor.rowcount))
+
 			self.logger.info('Filling commit origin repository attribution: updating commits table')
 			self.db.cursor.execute('''
 					UPDATE commits SET repo_id=(

@@ -4,6 +4,8 @@ import psycopg2
 from psycopg2 import extras
 import pygit2
 import json
+import git
+import itertools
 
 from repo_tools import fillers
 from repo_tools.fillers import generic
@@ -19,8 +21,10 @@ class CommitsFiller(fillers.Filler):
 			only_null_commit_origs=True,
 			all_commits=False,
 			force=False,
+			allbranches=False,
 					**kwargs):
-		self.force=force
+		self.force = force
+		self.allbranches = allbranches
 		self.only_null_commit_origs = only_null_commit_origs
 		self.all_commits = all_commits
 		fillers.Filler.__init__(self,**kwargs)
@@ -125,7 +129,7 @@ class CommitsFiller(fillers.Filler):
 			for repo_info in self.get_repo_list(all_commits=all_commits,option='identities'):
 				self.logger.info('Filling identities info for {source}/{owner}/{name}'.format(**repo_info))
 				try:
-					self.fill_authors(self.list_commits(basic_info_only=True,**repo_info))
+					self.fill_authors(self.list_commits(basic_info_only=True,allbranches=self.allbranches,**repo_info))
 				except:
 					self.logger.error('Error with {}'.format(repo_info))
 					raise
@@ -134,7 +138,7 @@ class CommitsFiller(fillers.Filler):
 			for repo_info in self.get_repo_list(all_commits=all_commits,option='commits'):
 				self.logger.info('Filling commits info for {source}/{owner}/{name}'.format(**repo_info))
 				try:
-					self.fill_commits(self.list_commits(basic_info_only=False,**repo_info))
+					self.fill_commits(self.list_commits(basic_info_only=False,allbranches=self.allbranches,**repo_info))
 				except:
 					self.logger.error('Error with {}'.format(repo_info))
 					raise
@@ -145,7 +149,7 @@ class CommitsFiller(fillers.Filler):
 			for repo_info in self.get_repo_list(all_commits=all_commits,option='commit_repos'):
 				self.logger.info('Filling commit ownership info for {source}/{owner}/{name}'.format(**repo_info))
 				try:
-					self.fill_commit_repos(self.list_commits(basic_info_only=False,**repo_info))
+					self.fill_commit_repos(self.list_commits(basic_info_only=False,allbranches=self.allbranches,**repo_info))
 				except:
 					self.logger.error('Error with {}'.format(repo_info))
 					raise
@@ -155,7 +159,7 @@ class CommitsFiller(fillers.Filler):
 			for repo_info in self.get_repo_list(all_commits=all_commits,option='commit_parents'):
 				self.logger.info('Filling commit parenthood info for {source}/{owner}/{name}'.format(**repo_info))
 				try:
-					self.fill_commit_parents(self.list_commits(basic_info_only=True,**repo_info))
+					self.fill_commit_parents(self.list_commits(basic_info_only=True,allbranches=self.allbranches,**repo_info))
 				except:
 					self.logger.error('Error with {}'.format(repo_info))
 					raise
@@ -165,7 +169,7 @@ class CommitsFiller(fillers.Filler):
 		else:
 			self.logger.info('Skipping filling of commits info')
 
-	def list_commits(self,name,source,owner,basic_info_only=False,repo_id=None,after_time=None):
+	def list_commits(self,name,source,owner,basic_info_only=False,repo_id=None,after_time=None,allbranches=False):
 		'''
 		Listing the commits of a repository
 		if after time is set to an int (unix time def) or datetime.datetime instead of None, only commits strictly after given time. Commits are listed by default from most recent to least.
@@ -173,15 +177,29 @@ class CommitsFiller(fillers.Filler):
 		if isinstance(after_time,datetime.datetime):
 			after_time = datetime.datetime.timestamp(after_time)
 
-		repo_obj = self.get_repo(source=source,name=name,owner=owner)
+		repo_obj = self.get_repo(source=source,name=name,owner=owner,engine='pygit2')
 		if repo_id is None: # Letting the possibility to preset repo_id to avoid cursor recursive usage
 			repo_id = self.db.get_repo_id(source=source,name=name,owner=owner)
 		# repo_obj.walk(repo.head.target, pygit2.GIT_SORT_TOPOLOGICAL | pygit2.GIT_SORT_REVERSE)
 		# for commit in repo_obj.walk(repo_obj.head.target, pygit2.GIT_SORT_TIME | pygit2.GIT_SORT_REVERSE):
 
 		if not repo_obj.is_empty:
-			for commit in repo_obj.walk(repo_obj.head.target, pygit2.GIT_SORT_TIME):
-				if after_time is not None and commit.commit_time<after_time:
+			if allbranches:
+				# gitpython_repo = self.get_repo(source=source,name=name,owner=owner,engine='gitpython')
+				# walker = gitpython_repo.iter_commits('--all')
+				walker = itertools.chain()
+				for b in repo_obj.branches:
+					branch = repo_obj.lookup_branch(b)
+					if branch is None:
+						branch = repo_obj.lookup_branch(b,2) # parameter 2 is necessary for remotes; main interest in 'allbranches' case
+					if not str(branch.target).startswith('refs/'): # The remote branch set on HEAD is behaving differently and instead of commit sha returns a branch name
+						walker = itertools.chain(walker,repo_obj.walk(branch.target)) # This is suboptimal: common parts of branches are traversed several times
+						# Using gitpython could give the walk among all branches directly; but then the commit object parsing is different and insertions/deletions seem more complicated to compute
+
+			else:
+				walker = repo_obj.walk(repo_obj.head.target, pygit2.GIT_SORT_TIME)
+			for commit in walker:
+				if after_time is not None and (not allbranches) and commit.commit_time<after_time:
 					break
 				if basic_info_only:
 					yield {
@@ -216,7 +234,7 @@ class CommitsFiller(fillers.Filler):
 							'repo_id':repo_id,
 							}
 
-	def get_repo(self,name,source,owner):
+	def get_repo(self,name,source,owner,engine='pygit2'):
 		'''
 		Returns the pygit2 repository object
 		'''
@@ -224,8 +242,12 @@ class CommitsFiller(fillers.Filler):
 		if not os.path.exists(repo_folder):
 			raise ValueError('Repository {}/{}/{} not found in cloned_repos folder'.format(source,owner,name))
 		else:
-			return pygit2.Repository(os.path.join(repo_folder,'.git'))
-
+			if engine == 'gitpython':
+				return git.Repo(repo_folder)
+			elif engine == 'pygit2':
+				return pygit2.Repository(os.path.join(repo_folder,'.git'))
+			else:
+				raise ValueError('Engine not found for getting repo: {}\n Use gitpython or pygit2'.format(engine))
 
 	def fill_authors(self,commit_info_list,autocommit=True):
 		'''

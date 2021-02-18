@@ -1,43 +1,28 @@
+
 import repo_tools as rp
-import os
+from repo_tools.fillers import generic,commit_info,github_rest,meta_fillers
+import pytest
+import datetime
 import time
+import os
 
-rp_folder= 'repo_tools_example'
+testdb = rp.repo_database.Database(db_name='testdb_repotools',db_type='sqlite',data_folder='dummy_clones')
+testdb.init_db()
 
+print('Make sure you have a github API key (with permission read:user for GraphQL) in $HOME/.repo_tools/github_api_keys.txt. Continuing in 3s.')
+time.sleep(3)
 
-repo_list_test =  [
-	'https://github.com/serde-rs/serde',
-'https://github.com/rust-random/rand',
-'https://github.com/dtolnay/syn',
-'https://github.com/rust-lang/libc',
-'https://github.com/dtolnay/quote',
-'https://github.com/bitflags/bitflags',
-'https://github.com/rust-lang-nursery/lazy-static.rs',
-'https://github.com/rust-lang/log',
-'https://github.com/serde-rs/serde',
-'https://github.com/unicode-rs/unicode-xid',
-'https://github.com/rust-num/num-traits',
+workers = 3 # Number of parallel threads for querying the github APIs
 
-	]
-
-
-rc = rp.repo_crawler.RepoCrawler(folder=rp_folder,ssh_mode=False)
-#rc = rp.repo_crawler.RepoCrawler(folder=rb_folder,ssh_mode=True,ssh_key='{}/.ssh/github/id_rsa'.format(os.environ['HOME']))# if you have an SSH key to connect to github, may be faster for cloning
-rc.db.register_source(source='GitHub',source_urlroot='github.com')
-rc.add_all_from_folder() # checks if in the folder there are already cloned packages
-rc.add_list(repo_list_test,source='GitHub',source_urlroot='github.com')
-rc.clone_all()
-
-if os.path.exists('github_api_keys.txt'):
-	rc.set_github_requesters(api_keys_file='github_api_keys.txt') # create a file with this name with one API key per line
-else:
-	print("No API keys file found, using unauthenticated mode only. You can also put the API keys in a file called github_api_keys.txt, one per line. Look at where this message is in the code for more info. Will continue in 10s.")
-	time.sleep(10)
-	rc.set_github_requesters()
-
-
-rc.fill_commit_info()
-rc.fill_stars(workers=5)
-rc.fill_gh_logins(workers=5)
-rc.fill_followers(workers=5)
-
+testdb.add_filler(generic.SourcesFiller(source=['GitHub',],source_urlroot=['github.com',]))
+testdb.add_filler(generic.PackageFiller(package_list_file='packages.csv',data_folder=os.path.join(os.path.dirname(os.path.dirname(rp.__file__)),'tests','testmodule','dummy_data')))
+testdb.add_filler(generic.RepositoriesFiller()) # Parses the URLs of the packages to attribute them to the available sources (here only github.com)
+testdb.add_filler(github_rest.ForksFiller(fail_on_wait=True,workers=workers))
+testdb.add_filler(generic.ClonesFiller(data_folder='dummy_clones')) # Clones after forks to have up-to-date repo URLS (detect redirects)
+testdb.add_filler(commit_info.CommitsFiller(data_folder='dummy_clones')) # Commits after forks because fork info needed for repo commit ownership ran at the end.
+testdb.add_filler(generic.RepoCommitOwnershipFiller()) # associating repositories as owners of commits (for those who could not be disambiguated using forks) based on creation date of associated package
+testdb.add_filler(github_rest.GHLoginsFiller(fail_on_wait=True,workers=workers)) # Disambiguating emails by associating them to their GH logins.
+testdb.add_filler(github_gql.StarsGQLFiller(fail_on_wait=True,workers=workers))
+testdb.add_filler(github_gql.FollowersGQLFiller(fail_on_wait=True,workers=workers))
+testdb.add_filler(github_gql.SponsorsUserFiller(fail_on_wait=True,workers=workers))
+testdb.fill_db()

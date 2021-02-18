@@ -5,6 +5,7 @@ import sqlite3
 import glob
 import shutil
 import uuid
+import time
 
 import csv
 import copy
@@ -1937,7 +1938,8 @@ class Database(object):
 		new_owner=None,
 		new_name=None,
 		merging_reason_source='repository merge process',
-		autocommit=True
+		autocommit=True,
+		retry=4
 		):
 		'''
 		Setting the repo merging process in the table merged_repositories for later execution, returning the id of the row
@@ -1948,6 +1950,8 @@ class Database(object):
 			raise SyntaxError('Insufficent info provided for merging repositories (id,source,owner,name): \n new ({},{},{},{}) \n obsolete ({},{},{},{})'.format(new_id,new_source,new_owner,new_name,obsolete_id,obsolete_source,obsolete_owner,obsolete_name))
 
 		self.register_source(source=merging_reason_source)
+		if autocommit:
+			self.connection.commit()
 		if self.db_type == 'postgres':
 			self.cursor.execute('''
 				INSERT INTO merged_repositories(
@@ -1974,7 +1978,7 @@ class Database(object):
 			try:
 				row_id = self.cursor.fetchone()[0]
 			except (TypeError,psycopg2.ProgrammingError) as e:
-				raise TypeError('{},{},{},{},{},{},{},{},{}: {}'.format(new_id,
+				message = '{},{},{},{},{},{},{},{},{}: {} ({} retries left)'.format(new_id,
 								new_source,
 								new_owner,
 								new_name,
@@ -1982,7 +1986,25 @@ class Database(object):
 								obsolete_source,
 								obsolete_owner,
 								obsolete_name,
-								merging_reason_source,e)) from e
+								merging_reason_source,e,retry-1)
+				if retry > 0:
+					self.log_error(message=message)
+					time.sleep(0.1)
+					return self.plan_repo_merge(merged_repo_table_id=merged_repo_table_id,
+							obsolete_id=obsolete_id,
+							obsolete_source=obsolete_source,
+							obsolete_owner=obsolete_owner,
+							obsolete_name=obsolete_name,
+							new_id=new_id,
+							new_source=new_source,
+							new_owner=new_owner,
+							new_name=new_name,
+							merging_reason_source=merging_reason_source,
+							autocommit=autocommit,
+							retry=retry-1
+							)
+				else:
+					raise TypeError(message) from e
 
 		else:
 			self.cursor.execute('''
@@ -2274,8 +2296,9 @@ class Database(object):
 						if not os.path.exists(os.path.join(self.data_folder,'cloned_repos',new_source_name,new_owner)):
 							os.makedirs(os.path.join(self.data_folder,'cloned_repos',new_source_name,new_owner))
 						shutil.move(os.path.join(self.data_folder,'cloned_repos',obsolete_source_name,obsolete_owner,obsolete_name),os.path.join(self.data_folder,'cloned_repos',new_source_name,new_owner,new_name))
-						if not os.listdir(os.path.join(self.data_folder,'cloned_repos',new_source_name,new_owner)):
-							shutil.rmtree(os.path.join(self.data_folder,'cloned_repos',new_source_name,new_owner))
+						# if not os.listdir(os.path.join(self.data_folder,'cloned_repos',new_source_name,new_owner)):
+						# 	shutil.rmtree(os.path.join(self.data_folder,'cloned_repos',new_source_name,new_owner))
+						os.symlink(os.path.join(os.path.join(self.data_folder,'cloned_repos',new_source_name,new_owner,new_name),self.data_folder,'cloned_repos',obsolete_source_name,obsolete_owner,obsolete_name))
 			else:
 				if self.db_type == 'postgres':
 
