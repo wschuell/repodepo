@@ -29,7 +29,7 @@ class GithubFiller(fillers.Filler):
 	"""
 	class to be inherited from, contains github credentials management
 	"""
-	def __init__(self,querymin_threshold=50,per_page=100,workers=1,api_keys_file='github_api_keys.txt',api_keys=None,fail_on_wait=False,start_offset=None,retry=False,force=False,incremental_update=True,**kwargs):
+	def __init__(self,querymin_threshold=50,per_page=100,workers=1,no_unauth=False,api_keys_file='github_api_keys.txt',api_keys=None,fail_on_wait=False,start_offset=None,retry=False,force=False,incremental_update=True,**kwargs):
 		fillers.Filler.__init__(self,**kwargs)
 		self.querymin_threshold = querymin_threshold
 		self.incremental_update = incremental_update
@@ -37,6 +37,7 @@ class GithubFiller(fillers.Filler):
 		self.workers = workers
 		self.force = force
 		self.retry = retry
+		self.no_unauth = no_unauth
 		self.api_keys_file = api_keys_file
 		if api_keys is None:
 			api_keys = []
@@ -98,7 +99,10 @@ class GithubFiller(fillers.Filler):
 		api keys file syntax, per line: API#notes
 		'''
 
-		self.github_requesters = [github.Github(per_page=self.per_page)]
+		if self.no_unauth:
+			self.github_requesters = []
+		else:
+			self.github_requesters = [github.Github(per_page=self.per_page)]
 		for ak in set(self.api_keys):
 			g = github.Github(ak,per_page=self.per_page)
 			try:
