@@ -36,11 +36,6 @@ def test_github_gql(testdb):
 	testdb.add_filler(generic.PackageFiller(package_list_file='packages.csv',data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))
 	testdb.add_filler(generic.RepositoriesFiller())
 	testdb.add_filler(github_rest.ForksFiller(fail_on_wait=True,workers=workers))
-	try:
-		testdb.logger.info(subprocess.check_output('ls -al dummy_clones/cloned_repos/GitHub'))
-		testdb.logger.info(subprocess.check_output('ls -al dummy_clones/cloned_repos/GitHub/*'))
-	except FileNotFoundError as e:
-		testdb.logger.info(e)
 	testdb.add_filler(generic.ClonesFiller(data_folder='dummy_clones')) # Clones after forks to have up-to-date repo URLS (detect redirects)
 	testdb.add_filler(commit_info.CommitsFiller(data_folder='dummy_clones',force=True,allbranches=True)) # Commits after forks because fork info needed for repo commit ownership
 	testdb.add_filler(github_rest.GHLoginsFiller(fail_on_wait=True,workers=workers))

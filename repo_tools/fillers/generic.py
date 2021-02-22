@@ -479,6 +479,14 @@ class ClonesFiller(fillers.Filler):
 			# if (self.db.cursor.fetchone() is None) or force:
 			self.logger.info('Cloning repo {}/{}/{}'.format(source,owner,name))
 			try:
+				self.logger.info(subprocess.check_output('ls -al'))
+				self.logger.info(subprocess.check_output('ls -al dummy_clones'))
+				self.logger.info(subprocess.check_output('ls -al dummy_clones/cloned_repos'))
+				self.logger.info(subprocess.check_output('ls -al dummy_clones/cloned_repos/GitHub'))
+				self.logger.info(subprocess.check_output('ls -al dummy_clones/cloned_repos/GitHub/*'))
+			except FileNotFoundError as e:
+				self.logger.info(e)
+			try:
 				try:
 					callbacks = self.callbacks[source]
 					ssh_mode = True
