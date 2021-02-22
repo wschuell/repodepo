@@ -37,8 +37,8 @@ def test_github_gql(testdb):
 	testdb.add_filler(generic.RepositoriesFiller())
 	testdb.add_filler(github_rest.ForksFiller(fail_on_wait=True,workers=workers))
 	try:
-		subprocess.check_call('ls -al dummy_clones/cloned_repos/GitHub')
-		subprocess.check_call('ls -al dummy_clones/cloned_repos/GitHub/*')
+		print(subprocess.check_output('ls -al dummy_clones/cloned_repos/GitHub'))
+		print(subprocess.check_output('ls -al dummy_clones/cloned_repos/GitHub/*'))
 	except FileNotFoundError as e:
 		print(e)
 	testdb.add_filler(generic.ClonesFiller(data_folder='dummy_clones')) # Clones after forks to have up-to-date repo URLS (detect redirects)
