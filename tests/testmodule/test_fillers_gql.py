@@ -1,6 +1,6 @@
 
 import repo_tools
-from repo_tools.fillers import generic,commit_info,github_gql,meta_fillers,github_rest
+from repo_tools.fillers import generic,commit_info,github_gql,meta_fillers,github_rest,snowball
 import pytest
 import datetime
 import time
@@ -42,6 +42,8 @@ def test_github_gql(testdb):
 	testdb.add_filler(github_gql.StarsGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.FollowersGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.SponsorsUserFiller(fail_on_wait=True,workers=workers))
+	testdb.add_filler(github_gql.BackwardsSponsorsUserFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(generic.RepoCommitOwnershipFiller()) # Clones after forks to have up-to-date repo URLS (detect redirects)
+	testdb.add_filler(snowball.UserSnowballFiller())
 
 	testdb.fill_db()

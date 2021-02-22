@@ -42,13 +42,19 @@ class UserSnowballFiller(fillers.Filler):
 		everywhere where sponsor_id is NULL
 		'''
 		self.db.cursor.execute('''
-			SELECT sponsor_login, sponsor_identity_type_id
+			SELECT sponsor_identity_type_id, sponsor_login
+			FROM sponsors_user
 			WHERE sponsor_id IS NULL AND sponsor_login IS NOT NULL
-			GROUP BY sponsor_login, sponsor_identity_type_id;
+			GROUP BY sponsor_identity_type_id, sponsor_login
 			;''')
 		missing_logins = list(self.db.cursor.fetchall())
-		self.logger.info('Filling {} new identities from sponsors')
+		self.logger.info('Filling {} new identities from sponsors'.format(len(missing_logins)))
 		self.fill_newidentities(new_identities=missing_logins,table_name='sponsors')
+		self.db.cursor.execute('''
+			UPDATE sponsors_user SET sponsor_id=(SELECT id FROM identities WHERE identity=sponsors_user.sponsor_login AND identity_type_id=sponsors_user.sponsor_identity_type_id)
+				WHERE sponsor_id IS NULL
+			;''')
+		self.db.connection.commit()
 
 	def fill_newidentities(self,new_identities,table_name):
 		'''
@@ -65,16 +71,19 @@ class UserSnowballFiller(fillers.Filler):
 										WHERE identity_type_id=%s
 										AND identity=%s)
 				;''',((iid,itid,itid,iid) for (itid,iid) in new_identities))
+			nb_users = self.db.cursor.rowcount
 			extras.execute_batch(self.db.cursor,'''
 				INSERT INTO identities(
-						identity,
 						identity_type_id,
+						identity,
 						user_id)
 					VALUES(%s,
 							%s,
-							(SELECT id FROM users u WHERE WHERE u.creation_identity=%s AND u.creation_identity_type_id=%s))
+							(SELECT id FROM users u WHERE u.creation_identity=%s AND u.creation_identity_type_id=%s))
 					ON CONFLICT DO NOTHING
-				;''',((iid,itid,) for (itid,iid,iid,itid) in new_identities))
+				;''',((itid,iid,iid,itid) for (itid,iid,) in new_identities))
+			nb_identities = self.db.cursor.rowcount
+			nb_users = self.db.cursor.rowcount
 		else:
 			self.db.cursor.executemany('''
 				INSERT INTO users(
@@ -85,17 +94,19 @@ class UserSnowballFiller(fillers.Filler):
 										WHERE identity_type_id=?
 										AND identity=?)
 				;''',((iid,itid,itid,iid) for (itid,iid) in new_identities))
+			nb_users = self.db.cursor.rowcount
 
 			self.db.cursor.executemany('''
 				INSERT INTO identities(
-						identity,
 						identity_type_id,
+						identity,
 						user_id)
 					VALUES(?,
 							?,
-							(SELECT id FROM users u WHERE WHERE u.creation_identity=? AND u.creation_identity_type_id=?))
+							(SELECT id FROM users u WHERE u.creation_identity=? AND u.creation_identity_type_id=?))
 					ON CONFLICT DO NOTHING
-				;''',((iid,itid,) for (itid,iid,iid,itid) in new_identities))
+				;''',((itid,iid,iid,itid) for (itid,iid,) in new_identities))
+			nb_identities = self.db.cursor.rowcount
 
 		self.db.connection.commit()
-		self.logger('Filled {} new users and {} new identity associations from table {}'.format(nb_users,nb_identities,table_name))
+		self.logger.info('Filled {} new users and {} new identity associations from table {}'.format(nb_users,nb_identities,table_name))

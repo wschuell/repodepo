@@ -694,8 +694,8 @@ class SponsorsUserFiller(GHGQLFiller):
 						d['tier'] = None
 					else:
 						d['tier'] = json.dumps(e['tier'])
-				except KeyError as e:
-					self.logger.info('KeyError when parsing sponsors_user for {}: {}'.format(user_login,e))
+				except KeyError as err:
+					self.logger.info('KeyError when parsing sponsors_user for {}: {}'.format(user_login,err))
 					continue
 				else:
 					ans.append(d)
@@ -949,8 +949,8 @@ class FollowersGQLFiller(GHGQLFiller):
 			d = {'identity_id':identity_id,'user_login':user_login,'identity_type_id':identity_type_id}
 			try:
 				d['follower_login'] = e['node']['login']
-			except KeyError as e:
-				self.logger.info('KeyError when parsing followers for {}: {}'.format(user_login,e))
+			except KeyError as err:
+				self.logger.info('KeyError when parsing followers for {}: {}'.format(user_login,err))
 				continue
 			else:
 				ans.append(d)
@@ -1134,6 +1134,297 @@ class FollowersGQLFiller(GHGQLFiller):
 								ON it.id=i.identity_type_id AND it.name='github_login'
 								LEFT OUTER JOIN table_updates tu
 								ON tu.identity_id=i.id AND tu.table_name='followers'
+								GROUP BY i.identity,i.id,it.id ) AS t2
+						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
+						AND t1.succ IS NULL
+						ORDER BY t1.itid,t1.identity
+				;''')
+
+
+			elt_list = list(self.db.cursor.fetchall())
+
+			# specific to sqlite because no internal json parsing implemented in query
+			self.elt_list = []
+			for (identity_type_id,login,identity_id,end_cursor_info) in elt_list:
+				try:
+					self.elt_list.append((identity_type_id,login,identity_id,json.loads(end_cursor_info)['end_cursor']))
+				except:
+					self.elt_list.append((identity_type_id,login,identity_id,None))
+
+		if self.start_offset is not None:
+			self.elt_list = [r for r in self.elt_list if r[1]>=self.start_offset]
+
+
+
+class BackwardsSponsorsUserFiller(SponsorsUserFiller):
+	'''
+	Querying sponsored users by users in the DB through the GraphQL API
+	!!! This fills in the users and identities table, not the sponsors_user table. The SponsorsUserFiller has to be called afterwards
+	'''
+	def __init__(self,**kwargs):
+		self.items_name = 'sponsors_user_backwards'
+		self.queried_obj = 'user'
+		self.pageinfo_path = ['user','sponsorshipsAsSponsor','pageInfo']
+		GHGQLFiller.__init__(self,**kwargs)
+
+	def query_string(self,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: python-formatable string representing the graphql query
+		'''
+		return '''query {{
+					user(login:"{user_login}") {{
+						login
+						sponsorshipsAsSponsor (first:100{after_end_cursor} ){{
+							totalCount
+							pageInfo {{
+								endCursor
+								hasNextPage
+						 		}}
+						 	nodes {{
+								sponsorable {{
+									sponsorsListing {{
+									name
+									}}
+								}}
+							}}
+						}}
+					}}
+				}}'''
+
+	def parse_query_result(self,query_result,identity_id,identity_type_id,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: [ {'repo_id':r_id,'repo_owner':r_ow,'repo_name':r_na,'starrer_login':s_lo,'starred_at':st_at} , ...]
+		'''
+		ans = []
+		if query_result['user'] is not None:
+			user_login = query_result['user']['login']
+			for e in query_result['user']['sponsorshipsAsSponsor']['nodes']:
+				d = {'sponsor_id':identity_id,'sponsor_login':user_login,'identity_type_id':identity_type_id}
+				try:
+					sponsor_listing_name = e['sponsorable']['sponsorsListing']['name']
+					assert sponsor_listing_name.startswith('sponsors-')
+					d['sponsored_login'] = sponsor_listing_name[9:]
+				except KeyError as err:
+					self.logger.info('KeyError when parsing sponsors_user for {}: {}'.format(user_login,err))
+					continue
+				else:
+					ans.append(d)
+		return ans
+
+
+	def insert_items(self,items_list,commit=True,db=None):
+		'''
+		In subclasses this has to be implemented
+		inserts results in the DB
+		Using commits at each statement to avoid batch rollback when race condition on just one login
+		'''
+		if db is None:
+			db = self.db
+		if db.db_type == 'postgres':
+			extras.execute_batch(db.cursor,'''
+				INSERT INTO users(
+						creation_identity,
+						creation_identity_type_id)
+					SELECT %s,%s
+					WHERE NOT EXISTS (SELECT 1 FROM identities
+										WHERE identity_type_id=%s
+										AND identity=%s)
+				ON CONFLICT DO NOTHING
+				;
+				COMMIT;
+				''',((f['sponsored_login'],f['identity_type_id'],f['identity_type_id'],f['sponsored_login'],) for f in items_list))
+			extras.execute_batch(db.cursor,'''
+				INSERT INTO identities(
+						identity_type_id,
+						identity,
+						user_id)
+					VALUES(%s,
+							%s,
+							(SELECT id FROM users u WHERE u.creation_identity=%s AND u.creation_identity_type_id=%s))
+					ON CONFLICT DO NOTHING
+				;
+				COMMIT;
+				''',((f['identity_type_id'],f['sponsored_login'],f['sponsored_login'],f['identity_type_id'],) for f in items_list))
+		else:
+			for f in items_list:
+
+				db.cursor.execute('''
+					INSERT INTO users(
+							creation_identity,
+							creation_identity_type_id)
+						SELECT ?,?
+						WHERE NOT EXISTS (SELECT 1 FROM identities
+											WHERE identity_type_id=?
+											AND identity=?)
+					ON CONFLICT DO NOTHING
+					;
+					''',(f['sponsored_login'],f['identity_type_id'],f['identity_type_id'],f['sponsored_login'],))
+				db.connection.commit()
+				db.cursor.execute('''
+					INSERT INTO identities(
+							identity_type_id,
+							identity,
+							user_id)
+						VALUES(?,
+								?,
+								(SELECT id FROM users u WHERE u.creation_identity=? AND u.creation_identity_type_id=?))
+						ON CONFLICT DO NOTHING
+					;
+					''',(f['identity_type_id'],f['sponsored_login'],f['sponsored_login'],f['identity_type_id'],))
+				db.connection.commit()
+		if commit:
+			db.connection.commit()
+
+
+	def get_nb_items(self,query_result):
+		'''
+		In subclasses this has to be implemented
+		output: nb_items or None if not relevant
+		'''
+		return query_result['user']['sponsorshipsAsSponsor']['totalCount']
+
+	def set_element_list(self):
+		'''
+		In subclasses this has to be implemented
+		sets self.elt_list to be used in self.fill_items
+		'''
+
+		#if force: all elts
+		#if retry: all without success false or null on last update
+		#else: all with success is null on lats update
+
+		if self.db.db_type == 'postgres':
+			if self.force:
+				self.db.cursor.execute('''
+						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
+							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='sponsors_user_backwards'
+								ORDER BY i.identity,tu.updated_at ) as t1
+							INNER JOIN
+								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='sponsors_user_backwards'
+								GROUP BY i.identity,i.id,it.id ) AS t2
+						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
+						ORDER BY t1.itid,t1.identity
+				;''')
+			elif self.retry:
+				self.db.cursor.execute('''
+						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
+							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='sponsors_user_backwards'
+								ORDER BY i.identity,tu.updated_at ) as t1
+							INNER JOIN
+								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='sponsors_user_backwards'
+								GROUP BY i.identity,i.id,it.id ) AS t2
+						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
+						AND ((NOT t1.success) OR t1.succ IS NULL)
+						ORDER BY t1.itid,t1.identity
+				;''')
+			else:
+				self.db.cursor.execute('''
+						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
+							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='sponsors_user_backwards'
+								ORDER BY i.identity,tu.updated_at ) as t1
+							INNER JOIN
+								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='sponsors_user_backwards'
+								GROUP BY i.identity,i.id,it.id ) AS t2
+						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
+						AND t1.succ IS NULL
+						ORDER BY t1.itid,t1.identity
+				;''')
+
+			self.elt_list = list(self.db.cursor.fetchall())
+
+		else:
+			if self.force:
+				self.db.cursor.execute('''
+						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
+							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='sponsors_user_backwards'
+								ORDER BY i.identity,tu.updated_at ) as t1
+							INNER JOIN
+								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='sponsors_user_backwards'
+								GROUP BY i.identity,i.id,it.id ) AS t2
+						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
+						ORDER BY t1.itid,t1.identity
+				;''')
+			elif self.retry:
+				self.db.cursor.execute('''
+						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
+							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='sponsors_user_backwards'
+								ORDER BY i.identity,tu.updated_at ) as t1
+							INNER JOIN
+								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='sponsors_user_backwards'
+								GROUP BY i.identity,i.id,it.id ) AS t2
+						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
+						AND ((NOT t1.success) OR t1.succ IS NULL)
+						ORDER BY t1.itid,t1.identity
+				;''')
+			else:
+				self.db.cursor.execute('''
+						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
+							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='sponsors_user_backwards'
+								ORDER BY i.identity,tu.updated_at ) as t1
+							INNER JOIN
+								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='sponsors_user_backwards'
 								GROUP BY i.identity,i.id,it.id ) AS t2
 						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
 						AND t1.succ IS NULL
