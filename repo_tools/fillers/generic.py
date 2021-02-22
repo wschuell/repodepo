@@ -447,7 +447,7 @@ class ClonesFiller(fillers.Filler):
 				last_commit_time = None
 			self.db.submit_download_attempt(source=source,owner=owner,repo=repo,success=True,dl_time=last_commit_time)
 
-	def clone(self,source,name,owner,source_urlroot,replace=False,update=False,db=None):
+	def clone(self,source,name,owner,source_urlroot,replace=False,update=False,db=None,clean_symlinks=False):
 		'''
 		Cloning one repo.
 		Skipping if folder exists by default; not if replace=True in this case delete folder and restart
@@ -470,6 +470,11 @@ class ClonesFiller(fillers.Filler):
 				self.set_init_dl(repo_id=repo_id,source=source,repo=name,owner=owner)
 				self.db.set_cloned(repo_id=repo_id)
 		else:
+			if os.path.islink(repo_folder): # is symbolic link but broken
+				if clean_symlinks:
+					shutil.rmtree(repo_folder)
+				else:
+					raise OSError('Symlink broken: {} -> {}'.format(repo_folder,os.readlink(repo_folder)))
 			repo_id = self.db.get_repo_id(source=source,name=name,owner=owner)
 			# if self.db.db_type == 'postgres':
 			# 	self.db.cursor.execute('SELECT * FROM download_attempts WHERE repo_id=%s LIMIT 1;',(repo_id,))

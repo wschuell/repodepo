@@ -82,7 +82,7 @@ def test_merge_repositories(testdb):
 	testdb.add_filler(generic.ClonesFiller(data_folder='dummy_clones'))
 	testdb.add_filler(commit_info.CommitsFiller(data_folder='dummy_clones'))
 	testdb.fill_db()
-	testdb.plan_repo_merge(new_id=None,new_owner='blah',new_name='blih',obsolete_id=2,obsolete_source='GitHub')
+	testdb.plan_repo_merge(new_id=None,new_owner='blah',new_name='blih',obsolete_owner='wschuell',obsolete_name='experiment_manager',obsolete_source='GitHub')
 	testdb.batch_merge_repos()
 
 @pytest.mark.timeout(100)
