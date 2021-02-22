@@ -2298,7 +2298,7 @@ class Database(object):
 						shutil.move(os.path.join(self.data_folder,'cloned_repos',obsolete_source_name,obsolete_owner,obsolete_name),os.path.join(self.data_folder,'cloned_repos',new_source_name,new_owner,new_name))
 						# if not os.listdir(os.path.join(self.data_folder,'cloned_repos',new_source_name,new_owner)):
 						# 	shutil.rmtree(os.path.join(self.data_folder,'cloned_repos',new_source_name,new_owner))
-						os.symlink(os.path.join(os.path.join(self.data_folder,'cloned_repos',new_source_name,new_owner,new_name),self.data_folder,'cloned_repos',obsolete_source_name,obsolete_owner,obsolete_name))
+						os.symlink(os.path.join(self.data_folder,'cloned_repos',new_source_name,new_owner,new_name),os.path.join(self.data_folder,'cloned_repos',obsolete_source_name,obsolete_owner,obsolete_name))
 			else:
 				if self.db_type == 'postgres':
 
