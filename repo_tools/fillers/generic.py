@@ -479,19 +479,6 @@ class ClonesFiller(fillers.Filler):
 			# if (self.db.cursor.fetchone() is None) or force:
 			self.logger.info('Cloning repo {}/{}/{}'.format(source,owner,name))
 			try:
-				self.logger.info('ls -al')
-				self.logger.info(subprocess.check_output('ls -al'.split(' ')).decode("utf-8") )
-				self.logger.info('ls -al dummy_clones')
-				self.logger.info(subprocess.check_output('ls -al dummy_clones'.split(' ')).decode("utf-8") )
-				self.logger.info('ls -al dummy_clones/cloned_repos')
-				self.logger.info(subprocess.check_output('ls -al dummy_clones/cloned_repos'.split(' ')).decode("utf-8") )
-				self.logger.info('ls -al dummy_clones/cloned_repos/GitHub')
-				self.logger.info(subprocess.check_output('ls -al dummy_clones/cloned_repos/GitHub'.split(' ')).decode("utf-8") )
-				self.logger.info('ls -al dummy_clones/cloned_repos/GitHub/*')
-				self.logger.info(subprocess.check_output('ls -al dummy_clones/cloned_repos/GitHub/*'.split(' ')).decode("utf-8") )
-			except Exception as e:
-				self.logger.info('{}: {}'.format(e.__class__.__name__,e))
-			try:
 				try:
 					callbacks = self.callbacks[source]
 					ssh_mode = True
