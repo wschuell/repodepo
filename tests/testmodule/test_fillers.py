@@ -82,8 +82,6 @@ def test_merge_repositories(testdb):
 	testdb.add_filler(generic.ClonesFiller(data_folder='dummy_clones'))
 	testdb.add_filler(commit_info.CommitsFiller(data_folder='dummy_clones'))
 	testdb.fill_db()
-	testdb.plan_repo_merge(new_id=2,obsolete_id=1,obsolete_source='GitHub')
-	testdb.batch_merge_repos()
 	testdb.plan_repo_merge(new_id=None,new_owner='blah',new_name='blih',obsolete_id=2,obsolete_source='GitHub')
 	testdb.batch_merge_repos()
 
