@@ -60,8 +60,7 @@ class UserSnowballFiller(fillers.Filler):
 				INSERT INTO users(
 						creation_identity,
 						creation_identity_type_id)
-					VALUES(%s,
-							%s)
+					SELECT %s,%s
 					WHERE NOT EXISTS (SELECT 1 FROM identities
 										WHERE identity_type_id=%s
 										AND identity=%s)
@@ -81,8 +80,7 @@ class UserSnowballFiller(fillers.Filler):
 				INSERT INTO users(
 						creation_identity,
 						creation_identity_type_id)
-					VALUES(?,
-							?)
+					SELECT ?,?
 					WHERE NOT EXISTS (SELECT 1 FROM identities
 										WHERE identity_type_id=?
 										AND identity=?)

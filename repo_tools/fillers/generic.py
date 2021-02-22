@@ -580,7 +580,7 @@ class RepoCommitOwnershipFiller(fillers.Filler):
 						;''')
 			self.logger.info('Detected {} commit origin conflicts'.format(self.db.cursor.rowcount))
 
-			if self.db.rowcount > 0:
+			if self.db.cursor.rowcount > 0:
 				self.logger.info('Filling commit origin repository attribution using repo/package creation date')
 				self.db.cursor.execute('''
 						UPDATE commit_repos SET is_orig_repo=true

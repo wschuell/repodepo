@@ -297,8 +297,9 @@ class CommitsFiller(fillers.Filler):
 			extras.execute_batch(self.db.cursor,'''
 				INSERT INTO users(
 						creation_identity,
-						creation_identity_type_id) VALUES(%s,(SELECT id FROM identity_types WHERE name='email'))
-					WHERE NOT EXISTS (SELECT 1 FROM identitites i WHERE i.identity=%s AND i.identity_type_id=(SELECT id FROM identity_types WHERE name='email'))
+						creation_identity_type_id)
+							SELECT %s,id FROM identity_types WHERE name='email'
+					AND NOT EXISTS (SELECT 1 FROM identities i WHERE i.identity=%s AND i.identity_type_id=(SELECT id FROM identity_types WHERE name='email'))
 				ON CONFLICT DO NOTHING;
 				''',((c['author_email'],c['author_email'],) for c in tr_gen))
 
@@ -323,8 +324,9 @@ class CommitsFiller(fillers.Filler):
 			self.db.cursor.executemany('''
 				INSERT OR IGNORE INTO users(
 						creation_identity,
-						creation_identity_type_id) VALUES(?,(SELECT id FROM identity_types WHERE name='email'))
-					WHERE NOT EXISTS (SELECT 1 FROM identitites i WHERE i.identity=? AND i.identity_type_id=(SELECT id FROM identity_types WHERE name='email'))
+						creation_identity_type_id)
+							SELECT ?,id FROM identity_types WHERE name='email'
+					AND NOT EXISTS (SELECT 1 FROM identities i WHERE i.identity=? AND i.identity_type_id=(SELECT id FROM identity_types WHERE name='email'))
 				;
 				''',((c['author_email'],c['author_email'],) for c in tr_gen))
 
