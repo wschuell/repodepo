@@ -129,7 +129,7 @@ class CommitsFiller(fillers.Filler):
 			for repo_info in self.get_repo_list(all_commits=all_commits,option='identities'):
 				self.logger.info('Filling identities info for {source}/{owner}/{name}'.format(**repo_info))
 				try:
-					self.fill_authors(self.list_commits(basic_info_only=True,allbranches=self.allbranches,**repo_info))
+					self.fill_authors(self.list_commits(group_by='authors',basic_info_only=True,allbranches=self.allbranches,**repo_info))
 				except:
 					self.logger.error('Error with {}'.format(repo_info))
 					raise
@@ -169,7 +169,7 @@ class CommitsFiller(fillers.Filler):
 		else:
 			self.logger.info('Skipping filling of commits info')
 
-	def list_commits(self,name,source,owner,basic_info_only=False,repo_id=None,after_time=None,allbranches=False):
+	def list_commits(self,name,source,owner,basic_info_only=False,repo_id=None,after_time=None,allbranches=False,group_by='sha'):
 		'''
 		Listing the commits of a repository
 		if after time is set to an int (unix time def) or datetime.datetime instead of None, only commits strictly after given time. Commits are listed by default from most recent to least.
@@ -182,6 +182,8 @@ class CommitsFiller(fillers.Filler):
 			repo_id = self.db.get_repo_id(source=source,name=name,owner=owner)
 		# repo_obj.walk(repo.head.target, pygit2.GIT_SORT_TOPOLOGICAL | pygit2.GIT_SORT_REVERSE)
 		# for commit in repo_obj.walk(repo_obj.head.target, pygit2.GIT_SORT_TIME | pygit2.GIT_SORT_REVERSE):
+
+		tracked_args = set() # When
 
 		if not repo_obj.is_empty:
 			if allbranches:
@@ -201,6 +203,21 @@ class CommitsFiller(fillers.Filler):
 			for commit in walker:
 				if after_time is not None and (not allbranches) and commit.commit_time<after_time:
 					break
+				if group_by == 'authors':
+					if commit.author.email in tracked_args:
+						continue
+					else:
+						tracked_args.add(commit.author.email)
+				elif group_by == 'sha':
+					if commit.hex in tracked_args:
+						continue
+					else:
+						tracked_args.add(commit.hex)
+				elif group_by is None:
+					pass
+				else:
+					raise ValueError('Unrecognized group_by value: {}'.format(group_by))
+
 				if basic_info_only:
 					yield {
 							'author_email':commit.author.email,
@@ -281,8 +298,9 @@ class CommitsFiller(fillers.Filler):
 				INSERT INTO users(
 						creation_identity,
 						creation_identity_type_id) VALUES(%s,(SELECT id FROM identity_types WHERE name='email'))
+					WHERE NOT EXISTS (SELECT 1 FROM identitites i WHERE i.identity=%s AND i.identity_type_id=(SELECT id FROM identity_types WHERE name='email'))
 				ON CONFLICT DO NOTHING;
-				''',((c['author_email'],) for c in tr_gen))
+				''',((c['author_email'],c['author_email'],) for c in tr_gen))
 
 			extras.execute_batch(self.db.cursor,'''
 				INSERT INTO identities(
@@ -306,8 +324,9 @@ class CommitsFiller(fillers.Filler):
 				INSERT OR IGNORE INTO users(
 						creation_identity,
 						creation_identity_type_id) VALUES(?,(SELECT id FROM identity_types WHERE name='email'))
+					WHERE NOT EXISTS (SELECT 1 FROM identitites i WHERE i.identity=? AND i.identity_type_id=(SELECT id FROM identity_types WHERE name='email'))
 				;
-				''',((c['author_email'],) for c in tr_gen))
+				''',((c['author_email'],c['author_email'],) for c in tr_gen))
 
 			self.db.cursor.executemany('''
 				INSERT OR IGNORE INTO identities(
