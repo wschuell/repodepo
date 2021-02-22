@@ -29,7 +29,7 @@ workers = 5
 
 #### Tests
 
-@pytest.mark.timeout(100)
+@pytest.mark.timeout(200)
 def test_github_gql(testdb):
 	testdb.add_filler(generic.SourcesFiller(source=['GitHub',],source_urlroot=['github.com',]))
 	testdb.add_filler(generic.PackageFiller(package_list_file='packages.csv',data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))

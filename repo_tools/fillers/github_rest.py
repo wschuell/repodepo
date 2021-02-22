@@ -717,7 +717,7 @@ class ForksFiller(GithubFiller):
 						to_be_merged = False
 						if (checked_repo_owner,checked_repo_name) != (owner,repo_name):
 							to_be_merged = True
-							self.db.plan_repo_merge(
+							db.plan_repo_merge(
 								new_id=None,
 								new_source=None,
 								new_owner=checked_repo_owner,
