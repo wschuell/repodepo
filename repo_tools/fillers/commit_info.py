@@ -149,7 +149,7 @@ class CommitsFiller(fillers.Filler):
 			for repo_info in self.get_repo_list(all_commits=all_commits,option='commit_repos'):
 				self.logger.info('Filling commit ownership info for {source}/{owner}/{name}'.format(**repo_info))
 				try:
-					self.fill_commit_repos(self.list_commits(basic_info_only=False,allbranches=self.allbranches,**repo_info))
+					self.fill_commit_repos(self.list_commits(basic_info_only=True,allbranches=self.allbranches,**repo_info))
 				except:
 					self.logger.error('Error with {}'.format(repo_info))
 					raise
@@ -293,26 +293,31 @@ class CommitsFiller(fillers.Filler):
 				INSERT INTO identity_types(name) VALUES('email')
 				ON CONFLICT DO NOTHING
 				;''')
+			self.db.connection.commit()
 
 			extras.execute_batch(self.db.cursor,'''
 				INSERT INTO users(
 						creation_identity,
 						creation_identity_type_id)
 							SELECT %s,id FROM identity_types WHERE name='email'
-					AND NOT EXISTS (SELECT 1 FROM identities i WHERE i.identity=%s AND i.identity_type_id=(SELECT id FROM identity_types WHERE name='email'))
+					AND NOT EXISTS (SELECT 1 FROM identities i
+						INNER JOIN identity_types it
+						ON i.identity=%s AND i.identity_type_id=it.id AND it.name='email')
 				ON CONFLICT DO NOTHING;
 				''',((c['author_email'],c['author_email'],) for c in tr_gen))
-
+			self.db.connection.commit()
 			extras.execute_batch(self.db.cursor,'''
 				INSERT INTO identities(
 						attributes,
 						identity,
 						user_id,
-						identity_type_id) VALUES(%s,%s,
-						(SELECT id FROM users WHERE creation_identity=%s AND creation_identity_type_id=(SELECT id FROM identity_types WHERE name='email')),
-						(SELECT id FROM identity_types WHERE name='email'))
+						identity_type_id) SELECT %s,%s,u.id,it.id
+						FROM users u
+						INNER JOIN identity_types it
+						ON it.name='email' AND u.creation_identity=%s AND u.creation_identity_type_id=it.id
 				ON CONFLICT DO NOTHING;
 				''',((json.dumps({'name':c['author_name']}),c['author_email'],c['author_email']) for c in tr_gen))
+			self.db.connection.commit()
 
 
 
@@ -320,26 +325,32 @@ class CommitsFiller(fillers.Filler):
 			self.db.cursor.execute('''
 				INSERT OR IGNORE INTO identity_types(name) VALUES('email')
 				;''')
+			self.db.connection.commit()
 
 			self.db.cursor.executemany('''
 				INSERT OR IGNORE INTO users(
 						creation_identity,
 						creation_identity_type_id)
 							SELECT ?,id FROM identity_types WHERE name='email'
-					AND NOT EXISTS (SELECT 1 FROM identities i WHERE i.identity=? AND i.identity_type_id=(SELECT id FROM identity_types WHERE name='email'))
+					AND NOT EXISTS  (SELECT 1 FROM identities i
+						INNER JOIN identity_types it
+						ON i.identity=? AND i.identity_type_id=it.id AND it.name='email')
 				;
 				''',((c['author_email'],c['author_email'],) for c in tr_gen))
+			self.db.connection.commit()
 
 			self.db.cursor.executemany('''
 				INSERT OR IGNORE INTO identities(
 						attributes,
 						identity,
 						user_id,
-						identity_type_id) VALUES(?,?,
-						(SELECT id FROM users WHERE creation_identity=? AND creation_identity_type_id=(SELECT id FROM identity_types WHERE name='email')),
-						(SELECT id FROM identity_types WHERE name='email'))
+						identity_type_id) SELECT ?,?,u.id,it.id
+						FROM users u
+						INNER JOIN identity_types it
+						ON it.name='email' AND u.creation_identity=? AND u.creation_identity_type_id=it.id
 				;
 				''',((json.dumps({'name':c['author_name']}),c['author_email'],c['author_email']) for c in tr_gen))
+			self.db.connection.commit()
 
 		# self.complete_id_users()
 

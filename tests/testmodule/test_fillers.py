@@ -56,6 +56,21 @@ def test_repositories(testdb):
 	testdb.add_filler(generic.RepositoriesFiller())
 	testdb.fill_db()
 
+@pytest.mark.timeout(30)
+def test_identities(testdb):
+	testdb.add_filler(generic.IdentitiesFiller(identity_type='test_identities',identities_list_file='identities.csv',data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))
+	testdb.fill_db()
+
+@pytest.mark.timeout(30)
+def test_identities2(testdb):
+	testdb.add_filler(generic.IdentitiesFiller(identity_type='test_identities',identities_list_file='identities_2.csv',data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))
+	testdb.fill_db()
+
+@pytest.mark.timeout(30)
+def test_identities3(testdb):
+	testdb.add_filler(generic.IdentitiesFiller(identity_type='test_identities',identities_list=[('blah',{'name':'blih','age':25}),('bleh','{"name":"bloh","age":35}')],data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))
+	testdb.fill_db()
+
 @pytest.mark.timeout(100)
 def test_clones_https(testdb):
 	testdb.add_filler(generic.SourcesFiller(source=['GitHub',],source_urlroot=['github.com',]))

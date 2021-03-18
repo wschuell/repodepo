@@ -2670,3 +2670,22 @@ class ComputationDB(object):
 			return False
 		else:
 			return True
+
+	def clean_users(self,safe=True):
+		if safe:
+			self.cursor.execute('''
+				DELETE FROM users
+				WHERE
+					EXISTS (SELECT 1 FROM identities i
+						WHERE i.identity  = user.creation_identity AND user.creation_identity_type_id=i.identity_type_id )
+					AND NOT EXISTS (SELECT 1 FROM identities
+						WHERE identities.user_id  = user.id )
+				;''')
+		else:
+			self.cursor.execute('''
+				DELETE FROM users
+				WHERE NOT EXISTS (SELECT 1 FROM identities
+						WHERE identities.user_id  = user.id )
+				;''')
+
+		self.connection.commit()

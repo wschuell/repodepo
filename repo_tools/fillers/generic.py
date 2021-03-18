@@ -3,6 +3,7 @@ import hashlib
 import csv
 import copy
 import pygit2
+import json
 import shutil
 import datetime
 import subprocess
@@ -617,3 +618,139 @@ class RepoCommitOwnershipFiller(fillers.Filler):
 
 			self.db.connection.commit()
 
+
+class IdentitiesFiller(fillers.Filler):
+	"""
+	Fills in identities from a given list, stored in self.identities_list during the prepare phase
+	This wrapper takes a list as input or a filename, but can be inherited for more complicated identities_list construction
+
+	all identities in the list belong to the same identity type, provided as argument.
+
+	CSV file syntax is expected to be, with header:
+	identity(e.g. email or login);additional_info (json)
+	or
+	identity(e.g. email or login)
+	"""
+	def __init__(self,identity_type,identities_list=None,identities_list_file=None,clean_users=False,**kwargs):
+		self.identities_list = identities_list
+		self.identities_list_file = identities_list_file
+		self.clean_users = clean_users
+		self.identity_type = identity_type
+		fillers.Filler.__init__(self,**kwargs)
+
+	def prepare(self):
+		if self.data_folder is None:
+			self.data_folder = self.db.data_folder
+
+		if self.identities_list is None:
+			with open(os.path.join(self.data_folder,self.identities_list_file),"rb") as f:
+				filehash = hashlib.sha256(f.read()).hexdigest()
+			self.source = '{}_{}'.format(self.identities_list_file,filehash)
+			self.db.register_source(source=self.source)
+			with open(os.path.join(self.data_folder,self.identities_list_file),'r') as f:
+				reader = csv.reader(f,delimiter=';')
+				headers = next(reader) #remove header
+				if len(headers) == 2:
+					self.identities_list = [r for r in reader]
+				elif len(headers) == 1:
+					self.identities_list = [(r[0],None) for r in reader]
+				else:
+					raise ValueError('''Expected syntax:
+
+	identity(e.g. email or login),additional_info (json)
+	or
+	identity(e.g. email or login)
+
+got: {}'''.format(headers))
+
+
+	def apply(self):
+		self.fill_identities(clean_users=self.clean_users)
+		self.db.connection.commit()
+
+
+	def clean_id_list(self,identities_list):
+		ans = []
+		for identity,info in identities_list:
+			if info is not None and not isinstance(info,str):
+				ans.append((identity,json.dumps(info)))
+			else:
+				ans.append((identity,info))
+		return ans
+
+	def fill_identities(self,identities_list=None,identity_type=None,clean_users=True):
+
+		if identities_list is None:
+			identities_list = self.identities_list
+		if identity_type is None:
+			identity_type = self.identity_type
+
+		identities_list = self.clean_id_list(identities_list)
+
+		if self.db.db_type == 'postgres':
+
+			self.db.cursor.execute('''
+				INSERT INTO identity_types(name) VALUES(%s)
+				ON CONFLICT DO NOTHING
+				;''',(identity_type,))
+			self.db.connection.commit()
+
+			extras.execute_batch(self.db.cursor,'''
+				INSERT INTO users(
+						creation_identity,
+						creation_identity_type_id)
+							SELECT %s,id FROM identity_types WHERE name=%s
+					AND NOT EXISTS (SELECT 1 FROM identities i
+						INNER JOIN identity_types it
+						ON i.identity=%s AND i.identity_type_id=it.id AND it.name=%s)
+				ON CONFLICT DO NOTHING;
+				''',((c[0],identity_type,c[0],identity_type) for c in identities_list))
+			self.db.connection.commit()
+			extras.execute_batch(self.db.cursor,'''
+				INSERT INTO identities(
+						attributes,
+						identity,
+						user_id,
+						identity_type_id) SELECT %s,%s,u.id,it.id
+						FROM users u
+						INNER JOIN identity_types it
+						ON it.name=%s AND u.creation_identity=%s AND u.creation_identity_type_id=it.id
+				ON CONFLICT DO NOTHING;
+				''',((c[1],c[0],identity_type,c[0]) for c in identities_list))
+			self.db.connection.commit()
+
+
+
+		else:
+			self.db.cursor.execute('''
+				INSERT OR IGNORE INTO identity_types(name) VALUES(?)
+				;''',(identity_type,))
+			self.db.connection.commit()
+
+			self.db.cursor.executemany('''
+				INSERT OR IGNORE INTO users(
+						creation_identity,
+						creation_identity_type_id)
+							SELECT ?,id FROM identity_types WHERE name=?
+					AND NOT EXISTS  (SELECT 1 FROM identities i
+						INNER JOIN identity_types it
+						ON i.identity=? AND i.identity_type_id=it.id AND it.name=?)
+				;
+				''',((c[0],identity_type,c[0],identity_type) for c in identities_list))
+			self.db.connection.commit()
+
+			self.db.cursor.executemany('''
+				INSERT OR IGNORE INTO identities(
+						attributes,
+						identity,
+						user_id,
+						identity_type_id) SELECT ?,?,u.id,it.id
+						FROM users u
+						INNER JOIN identity_types it
+						ON it.name=? AND u.creation_identity=? AND u.creation_identity_type_id=it.id
+				;
+				''',((c[1],c[0],identity_type,c[0]) for c in identities_list))
+			self.db.connection.commit()
+
+		if self.clean_users:
+			self.db.clean_users()
