@@ -40,6 +40,12 @@ def test_sources(testdb):
 	testdb.fill_db()
 
 @pytest.mark.timeout(10)
+def test_packages(testdb):
+	testdb.add_filler(generic.SourcesFiller(source='GitHub',source_urlroot='github.com'))
+	testdb.add_filler(generic.URLFiller(url_list_file='urls.csv',data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))
+	testdb.fill_db()
+
+@pytest.mark.timeout(10)
 def test_sources2(testdb):
 	testdb.add_filler(generic.SourcesFiller(source=['GitHub',],source_urlroot=['github.com',]))
 	testdb.fill_db()

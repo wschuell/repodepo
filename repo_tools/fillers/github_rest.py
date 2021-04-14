@@ -29,7 +29,7 @@ class GithubFiller(fillers.Filler):
 	"""
 	class to be inherited from, contains github credentials management
 	"""
-	def __init__(self,querymin_threshold=50,per_page=100,workers=1,no_unauth=False,api_keys_file='github_api_keys.txt',api_keys=None,fail_on_wait=False,start_offset=None,retry=False,force=False,incremental_update=True,**kwargs):
+	def __init__(self,querymin_threshold=50,per_page=100,env_apikey='GITHUB_API_KEY',workers=1,identity_type='github_login',no_unauth=False,api_keys_file='github_api_keys.txt',api_keys=None,fail_on_wait=False,start_offset=None,retry=False,force=False,incremental_update=True,**kwargs):
 		fillers.Filler.__init__(self,**kwargs)
 		self.querymin_threshold = querymin_threshold
 		self.incremental_update = incremental_update
@@ -44,18 +44,20 @@ class GithubFiller(fillers.Filler):
 		self.api_keys = copy.deepcopy(api_keys)
 		self.fail_on_wait = fail_on_wait
 		self.start_offset = start_offset
+		self.identity_type = identity_type
+		self.env_apikey = env_apikey
 
 	def prepare(self):
 		if self.data_folder is None:
 			self.data_folder = self.db.data_folder
 
 		self.set_api_keys()
-		self.set_github_requesters()
+		self.set_requesters()
 
 		if self.db.db_type == 'postgres':
-			self.db.cursor.execute(''' INSERT INTO identity_types(name) VALUES('github_login') ON CONFLICT DO NOTHING;''')
+			self.db.cursor.execute(''' INSERT INTO identity_types(name) VALUES(%s) ON CONFLICT DO NOTHING;''',(self.identity_type,))
 		else:
-			self.db.cursor.execute(''' INSERT OR IGNORE INTO identity_types(name) VALUES('github_login');''')
+			self.db.cursor.execute(''' INSERT OR IGNORE INTO identity_types(name) VALUES(?);''',(self.identity_type,))
 		self.db.connection.commit()
 
 	def set_api_keys(self,reset=False):
@@ -76,11 +78,11 @@ class GithubFiller(fillers.Filler):
 		elif os.path.exists(os.path.join(os.environ['HOME'],'.repo_tools',self.api_keys_file)):
 			with open(os.path.join(os.environ['HOME'],'.repo_tools',self.api_keys_file),'r') as f:
 				self.api_keys += [l.split('#')[0] for l in f.read().split('\n')]
-		if os.path.exists(os.path.join(os.environ['HOME'],'.repo_tools','github_api_keys.txt')):
-			with open(os.path.join(os.environ['HOME'],'.repo_tools','github_api_keys.txt'),'r') as f:
-				self.api_keys += [l.split('#')[0] for l in f.read().split('\n')]
+		# if os.path.exists(os.path.join(os.environ['HOME'],'.repo_tools','github_api_keys.txt')):
+		# 	with open(os.path.join(os.environ['HOME'],'.repo_tools','github_api_keys.txt'),'r') as f:
+		# 		self.api_keys += [l.split('#')[0] for l in f.read().split('\n')]
 		try:
-			self.api_keys.append(os.environ['GITHUB_API_KEY'])
+			self.api_keys.append(os.environ[self.env_apikey])
 		except KeyError:
 			pass
 		self.api_keys = [ak for ak in self.api_keys if ak!=''] # removing empty api keys, can come from e.g. trailing newlines at end of parsed file
@@ -93,16 +95,16 @@ class GithubFiller(fillers.Filler):
 			self.logger.info('No API keys found for Github, using default anonymous (but limited and only REST, no GQL) authentication.\nLooking for api_keys_file in db.data_folder, then in current folder, then in ~/.repo_tools/.\nAdding content of environment variable GITHUB_API_KEY.')
 
 
-	def set_github_requesters(self):
+	def set_requesters(self):
 		'''
 		Setting github requesters
 		api keys file syntax, per line: API#notes
 		'''
 
 		if self.no_unauth:
-			self.github_requesters = []
+			self.requesters = []
 		else:
-			self.github_requesters = [github.Github(per_page=self.per_page)]
+			self.requesters = [github.Github(per_page=self.per_page)]
 		for ak in set(self.api_keys):
 			g = github.Github(ak,per_page=self.per_page)
 			try:
@@ -110,7 +112,7 @@ class GithubFiller(fillers.Filler):
 			except:
 				self.logger.info('API key starting with "{}" and of length {} not valid'.format(ak[:5],len(ak)))
 			else:
-				self.github_requesters.append(g)
+				self.requesters.append(g)
 
 	def get_rate_limit(self,requester):
 		ans = requester.get_rate_limit().core.remaining
@@ -122,14 +124,14 @@ class GithubFiller(fillers.Filler):
 	def get_reset_at(self,requester):
 		return calendar.timegm(requester.get_rate_limit().core.reset.timetuple())
 
-	def get_github_requester(self,random_pick=True,requesters=None):
+	def get_requester(self,random_pick=True,requesters=None):
 		'''
 		Going through requesters respecting threshold of minimum remaining api queries
 		'''
 		if requesters is None:
-			requesters = self.github_requesters
-		if not hasattr(self,'github_requesters'):
-			self.set_github_requesters()
+			requesters = self.requesters
+		if not hasattr(self,'requesters'):
+			self.set_requesters()
 		if random_pick:
 			while True:
 				active_requesters = [rq for rq in requesters if self.get_rate_limit(rq) > self.querymin_threshold]
@@ -220,7 +222,7 @@ class StarsFiller(GithubFiller):
 					db = self.db.copy()
 				else:
 					db = self.db
-				requester_gen = self.get_github_requester()
+				requester_gen = self.get_requester()
 				new_repo = True
 				while len(repo_list):
 					current_repo = repo_list[0]
@@ -521,7 +523,7 @@ class GHLoginsFiller(GithubFiller):
 					db = self.db.copy()
 				else:
 					db = self.db
-				requester_gen = self.get_github_requester()
+				requester_gen = self.get_requester()
 				for infos in info_list:
 					identity_id,repo_id,repo_owner,repo_name,commit_sha = infos
 					self.logger.info('Filling gh login for user id {} ({}/{})'.format(identity_id,user_nb,total_users))
@@ -691,7 +693,7 @@ class ForksFiller(GithubFiller):
 				else:
 					db = self.db
 
-				requester_gen = self.get_github_requester()
+				requester_gen = self.get_requester()
 				new_repo = True
 				while len(repo_list):
 					current_repo = repo_list[0]
@@ -871,7 +873,7 @@ class FollowersFiller(GithubFiller):
 	# 		login_list = self.db.get_user_list(option=option,time_delay=time_delay)
 
 	# 	if workers == 1:
-	# 		requester_gen = self.get_github_requester()
+	# 		requester_gen = self.get_requester()
 	# 		if in_thread:
 	# 			db = self.db.copy()
 	# 		else:
@@ -958,7 +960,7 @@ class FollowersFiller(GithubFiller):
 					db = self.db.copy()
 				else:
 					db = self.db
-				requester_gen = self.get_github_requester()
+				requester_gen = self.get_requester()
 				new_login = True
 				while len(login_list):
 					login_id,login,identity_type_id = login_list[0]

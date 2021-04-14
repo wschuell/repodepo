@@ -654,9 +654,13 @@ class Database(object):
 
 	def fill_db(self):
 		for f in self.fillers:
-			f.prepare()
-			f.apply()
-			self.logger.info('Filled with filler {}'.format(f.name))
+			if not f.executed:
+				f.prepare()
+				f.apply()
+				f.executed = True
+				self.logger.info('Filled with filler {}'.format(f.name))
+			else:
+				self.logger.info('Already filled with filler {}, skipping'.format(f.name))
 
 	def add_filler(self,f):
 		if f.name in [ff.name for ff in self.fillers if ff.unique]:
@@ -705,7 +709,6 @@ class Database(object):
 		'''
 		if len(url_list)>0 and isinstance(url_list[0],str):
 			url_list = [(url,None,None) for url in url_list]
-
 
 		if self.db_type == 'postgres':
 			extras.execute_batch(self.cursor,''' INSERT INTO urls(source,source_root,url)

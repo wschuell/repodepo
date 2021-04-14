@@ -27,6 +27,7 @@ class Filler(object):
 	"""
 
 	def __init__(self,db=None,name=None,data_folder=None,unique=False):#,file_info=None):
+		self.executed = False
 		if name is None:
 			name = self.__class__.__name__
 		self.name = name

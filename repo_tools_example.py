@@ -1,6 +1,6 @@
 
 import repo_tools as rp
-from repo_tools.fillers import generic,commit_info,github_rest,meta_fillers
+from repo_tools.fillers import generic,commit_info,github_rest,meta_fillers,github_gql
 import pytest
 import datetime
 import time

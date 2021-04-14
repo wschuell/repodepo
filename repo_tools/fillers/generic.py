@@ -102,6 +102,48 @@ got: {}'''.format(headers))
 			self.db.register_packages(source=source,package_list=package_list)
 			self.logger.info('Filled packages')
 
+class URLFiller(fillers.Filler):
+	'''
+	Similar to PackageFiller but only fills in URLs
+	'''
+
+	def __init__(self,url_list=None,url_list_file=None,force=False,**kwargs):
+		self.url_list = url_list
+		self.url_list_file = url_list_file
+		self.force = force
+		fillers.Filler.__init__(self,**kwargs)
+
+	def prepare(self):
+		if self.data_folder is None:
+			self.data_folder = self.db.data_folder
+
+		if self.url_list is None:
+			with open(os.path.join(self.data_folder,self.url_list_file),"rb") as f:
+				filehash = hashlib.sha256(f.read()).hexdigest()
+			self.source = '{}_{}'.format(self.url_list_file,filehash)
+			self.db.register_source(source=self.source)
+			with open(os.path.join(self.data_folder,self.url_list_file),'r') as f:
+				reader = csv.reader(f)
+				self.url_list = [r[0] for r in reader]
+
+
+	def apply(self):
+		self.fill_urls(force=self.force)
+		self.db.connection.commit()
+
+	def fill_urls(self,url_list=None,source=None,force=False,clean_urls=True):
+		'''
+		'''
+		if url_list is None:
+			url_list = self.url_list
+		if source is None:
+			source = self.source
+		self.db.register_source(source)
+		self.db.register_urls(source=source,url_list=url_list)
+		self.logger.info('Filled URLs')
+
+
+
 class SourcesFiller(fillers.Filler):
 	'''
 	Register given sources in the database
@@ -671,7 +713,11 @@ got: {}'''.format(headers))
 
 	def clean_id_list(self,identities_list):
 		ans = []
-		for identity,info in identities_list:
+		for elt in identities_list:
+			if isinstance(elt,str):
+				identity,info = elt,None
+			else:
+				identity,info = elt
 			if info is not None and not isinstance(info,str):
 				ans.append((identity,json.dumps(info)))
 			else:

@@ -34,14 +34,17 @@ class Requester(object):
 	Class implementing the Request
 	Caching rate limit information, updating at each query, or requerying after <refresh_time in sec> without update
 	'''
-	def __init__(self,api_key,refresh_time=120,schema=None,fetch_schema=False):
+	def __init__(self,api_key,refresh_time=120,schema=None,fetch_schema=False,url="https://api.github.com/graphql",auth_header_prefix='token '):
 		self.logger = logger
 		self.api_key = api_key
 		self.remaining = 0
 		self.reset_at = datetime.datetime.now() # Like on the API, reset time is last reset time, not future reset time
 		self.refresh_time = refresh_time
 		self.refreshed_at = None
-		self.transport = AIOHTTPTransport(url="https://api.github.com/graphql",headers={'Accept-Encoding':'gzip','Authorization':'token {}'.format(self.api_key)})
+		self.url = url
+		self.auth_header_prefix = auth_header_prefix
+		self.transport = AIOHTTPTransport(url=self.url,headers={'Accept-Encoding':'gzip','Authorization':'{}{}'.format(self.auth_header_prefix,self.api_key)})
+
 		if schema is not None:
 			self.client = Client(transport=self.transport, schema=schema)
 			self.schema = schema
@@ -145,6 +148,13 @@ class GHGQLFiller(github_rest.GithubFiller):
 	class to be inherited from, contains github credentials management
 	"""
 
+	def __init__(self,requester_class=None,**kwargs):
+		if requester_class is None:
+			self.Requester = Requester
+		else:
+			self.Requester = requester_class
+		github_rest.GithubFiller.__init__(self,**kwargs)
+
 	def apply(self):
 		self.fill_items(elt_list=self.elt_list,workers=self.workers,incremental_update=self.incremental_update)
 		self.db.connection.commit()
@@ -160,35 +170,35 @@ class GHGQLFiller(github_rest.GithubFiller):
 	def get_reset_at(self,requester):
 		return requester.reset_at
 
-	def set_github_requesters(self,fetch_schema=False):
+	def set_requesters(self,fetch_schema=False):
 		'''
-		Setting github requesters
+		Setting requesters
 		api keys file syntax, per line: API#notes
 		'''
-		github_requesters = []
+		requesters = []
 		schema = None
 		for ak in self.api_keys:
-			g = Requester(api_key=ak,schema=schema,fetch_schema=fetch_schema)
+			g = self.Requester(api_key=ak,schema=schema,fetch_schema=fetch_schema)
 			try:
 				g.get_rate_limit()
 			except:
 				self.logger.info('API key starting with "{}" and of length {} not valid'.format(ak[:5],len(ak)))
 			else:
-				github_requesters.append(g)
+				requesters.append(g)
 			schema = g.client.schema
-		if len(github_requesters) == 0:
+		if len(requesters) == 0:
 			raise ValueError('No valid API key provided')
-		self.github_requesters = github_requesters
+		self.requesters = requesters
 
-	def get_github_requester(self,random_pick=True,in_thread=False,requesters=None):
+	def get_requester(self,random_pick=True,in_thread=False,requesters=None):
 		'''
 		Going through requesters respecting threshold of minimum remaining api queries
 		'''
 		if requesters is None:
-			requesters = self.github_requesters
+			requesters = self.requesters
 		if in_thread:
 			requesters = [rq.clone() for rq in requesters]
-		return github_rest.GithubFiller.get_github_requester(self,random_pick=random_pick,requesters=requesters)
+		return github_rest.GithubFiller.get_requester(self,random_pick=random_pick,requesters=requesters)
 
 	def query_string(self,**kwargs):
 		'''
@@ -250,7 +260,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 					db = self.db.copy()
 				else:
 					db = self.db
-				requester_gen = self.get_github_requester(in_thread=in_thread)
+				requester_gen = self.get_requester(in_thread=in_thread)
 				new_elt = True
 				while len(elt_list):
 					current_elt = elt_list[0]
