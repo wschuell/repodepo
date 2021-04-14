@@ -136,9 +136,6 @@ class URLFiller(fillers.Filler):
 		'''
 		if url_list is None:
 			url_list = self.url_list
-		if source is None:
-			source = self.source
-		self.db.register_source(source)
 		self.db.register_urls(source=source,url_list=url_list)
 		self.logger.info('Filled URLs')
 
