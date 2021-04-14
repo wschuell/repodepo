@@ -357,6 +357,15 @@ class Database(object):
 
 				CREATE INDEX IF NOT EXISTS sponsors_user_idx ON sponsors_user(sponsored_id,created_at,sponsor_login,sponsor_id);
 				CREATE INDEX IF NOT EXISTS sponsors_user_idx2 ON sponsors_user(sponsor_id,created_at);
+
+				CREATE TABLE IF NOT EXISTS releases(
+				id INTEGER PRIMARY KEY,
+				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
+				name TEXT,
+				tag_name TEXT,
+				created_at TIMESTAMP DEFAULT NULL,
+				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+				);
 		'''
 			for q in self.DB_INIT.split(';')[:-1]:
 				self.cursor.execute(q)
@@ -606,6 +615,15 @@ class Database(object):
 
 				CREATE INDEX IF NOT EXISTS sponsors_user_idx ON sponsors_user(sponsored_id,created_at,sponsor_login,sponsor_id);
 				CREATE INDEX IF NOT EXISTS sponsors_user_idx2 ON sponsors_user(sponsor_id,created_at);
+
+				CREATE TABLE IF NOT EXISTS releases(
+				id BIGSERIAL PRIMARY KEY,
+				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
+				name TEXT,
+				tag_name TEXT,
+				created_at TIMESTAMP DEFAULT NULL,
+				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+				);
 				'''
 
 			self.cursor.execute(self.DB_INIT)
@@ -629,6 +647,7 @@ class Database(object):
 			self.cursor = self.connection.cursor()
 		else:
 			self.cursor.execute('DROP TABLE IF EXISTS _dbinfo;')
+			self.cursor.execute('DROP TABLE IF EXISTS releases;')
 			self.cursor.execute('DROP TABLE IF EXISTS sponsors_user;')
 			self.cursor.execute('DROP TABLE IF EXISTS sponsors_repo;')
 			self.cursor.execute('DROP TABLE IF EXISTS packages;')

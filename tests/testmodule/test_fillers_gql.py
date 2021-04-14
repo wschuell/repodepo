@@ -40,6 +40,7 @@ def test_github_gql(testdb):
 	testdb.add_filler(commit_info.CommitsFiller(data_folder='dummy_clones',force=True,allbranches=True)) # Commits after forks because fork info needed for repo commit ownership
 	testdb.add_filler(github_rest.GHLoginsFiller(fail_on_wait=True,workers=workers,no_unauth=True))
 	testdb.add_filler(github_gql.StarsGQLFiller(fail_on_wait=True,workers=workers))
+	testdb.add_filler(github_gql.ReleasesGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.FollowersGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.SponsorsUserFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.BackwardsSponsorsUserFiller(fail_on_wait=True,workers=workers))
