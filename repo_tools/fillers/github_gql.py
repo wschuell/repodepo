@@ -148,11 +148,12 @@ class GHGQLFiller(github_rest.GithubFiller):
 	class to be inherited from, contains github credentials management
 	"""
 
-	def __init__(self,requester_class=None,**kwargs):
+	def __init__(self,requester_class=None,source_name='GitHub',**kwargs):
 		if requester_class is None:
 			self.Requester = Requester
 		else:
 			self.Requester = requester_class
+		self.source_name = source_name
 		github_rest.GithubFiller.__init__(self,**kwargs)
 
 	def apply(self):
@@ -310,7 +311,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 								new_owner=checked_repo_owner,
 								new_name=checked_repo_name,
 								obsolete_id=repo_id,
-								obsolete_source=source,
+								obsolete_source=self.source_name,
 								obsolete_owner=owner,
 								obsolete_name=repo_name,
 								merging_reason_source='Repo redirect detected on github GraphQL API when processing {}'.format(self.items_name)
