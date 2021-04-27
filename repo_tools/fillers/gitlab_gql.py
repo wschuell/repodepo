@@ -1,0 +1,182 @@
+import datetime
+import os
+import psycopg2
+from psycopg2 import extras
+import copy
+import calendar
+import time
+import sqlite3
+import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor
+import json
+import logging
+
+from repo_tools import fillers
+from repo_tools.fillers import generic
+from repo_tools.fillers import github_rest,github_gql
+import repo_tools as rp
+
+import gql
+from gql import gql, Client
+from gql.transport.aiohttp import AIOHTTPTransport
+
+logger = logging.getLogger(__name__)
+ch = logging.StreamHandler()
+ch.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+ch.setFormatter(formatter)
+logger.addHandler(ch)
+logger.setLevel(logging.INFO)
+
+
+class RequesterGitlab(github_gql.Requester):
+	'''
+	Class implementing the Request
+	Caching rate limit information, updating at each query, or requerying after <refresh_time in sec> without update
+	'''
+	def __init__(self,url_root='gitlab.com',auth_header_prefix='Bearer ',**kwargs):
+		url = 'https://{}/api/graphql'.format(url_root)
+		github_gql.Requester.__init__(self,url=url,auth_header_prefix=auth_header_prefix,**kwargs)
+
+
+
+	def get_rate_limit(self,refresh=False):
+		# if refresh or self.refreshed_at is None or self.refreshed_at + datetime.timedelta(seconds=self.refresh_time)<= datetime.datetime.now():
+		# 	self.query('''
+		# 		query {
+		# 			rateLimit {
+		# 				cost
+		# 				remaining
+		# 				resetAt
+		# 			}
+		# 		}
+		# 		''')
+		self.remaining = 2000
+		return self.remaining
+
+	def query(self,gql_query,params=None):
+		if params is not None:
+			gql_query = gql_query.format(**params)
+		# RL_query = '''
+		# 		rateLimit {
+		# 			cost
+		# 			remaining
+		# 			resetAt
+		# 		}
+		# '''
+		# if 'rateLimit' not in gql_query:
+		# 	splitted_string = gql_query.split('}')
+		# 	gql_query = '}'.join(splitted_string[:-1])+RL_query+'}'+splitted_string[-1]
+
+		try:
+			result = self.client.execute(gql(gql_query))
+		except Exception as e:
+			if hasattr(e,'data'):
+				result = e.data
+				if result is None:
+					raise
+				else:
+					self.logger.info('Exception catched, {} :{}, result: {}'.format(e.__class__,e,result))
+			else:
+				raise
+		self.remaining = 2000
+		# self.remaining = result['rateLimit']['remaining']
+		# self.reset_at = datetime.datetime.strptime(result['rateLimit']['resetAt'], '%Y-%m-%dT%H:%M:%SZ')
+		# self.reset_at = time.mktime(self.reset_at.timetuple()) # converting to seconds to epoch; to have same format as REST API
+		# self.refreshed_at = datetime.datetime.now()
+
+		return result
+
+
+
+
+
+class GitlabGQLFiller(github_gql.GHGQLFiller):
+	"""
+	class to be inherited from, contains credentials management
+	"""
+
+	def __init__(self,env_apikey='GITLAB_API_KEY',source_name='Gitlab',identity_type='gitlab_login',api_keys_file='gitlab_api_keys.txt',**kwargs):
+		github_gql.GHGQLFiller.__init__(self,requester_class=RequesterGitlab,source_name=source_name,env_apikey=env_apikey,identity_type=identity_type,api_keys_file=api_keys_file,**kwargs)
+
+
+
+
+class LoginsFiller(GitlabGQLFiller):
+	'''
+	Querying logins through the GraphQL API using commits
+	'''
+	def __init__(self,target_identity_type='gitlab_login',**kwargs):
+		self.items_name = 'login'
+		self.queried_obj = 'email'
+		self.pageinfo_path = None
+		self.target_identity_type = target_identity_type
+		GitlabGQLFiller.__init__(self,**kwargs)
+
+	def query_string(self,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: python-formatable string representing the graphql query
+		'''
+		return ''' query {{
+						repository:project(fullPath:"{repo_owner}/{repo_name}" ) {{
+							fullPath
+    						repository{{
+      							tree(ref:"{commit_sha}"){{
+      								lastCommit{{
+        								id
+        								author{{
+        									username
+        									}}
+    									}}
+    								}}
+    							}}
+    						}}
+    					}}
+		'''
+	def parse_query_result(self,query_result,identity_id,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: [{'commit_sha':sha,'login':lo,'created_at':cr_at,'repo_owner':rpo,'repo_name':rpn,'email_id':eid}]
+		'''
+		ans = dict()
+		ans['email_id'] = identity_id
+		if query_result['repository'] is None:
+			ans['login'] = None
+			ans['repo_owner'] = None
+			ans['repo_name'] = None
+			ans['created_at'] = None
+			ans['commit_sha'] = None
+		elif query_result['repository']['repository']['tree'] is None:
+			ans['login'] = None
+			ans['repo_owner'] = query_result['repository']['fullPath'].split('/')[1]
+			ans['repo_name'] = query_result['repository']['fullPath'].split('/')[0]
+			ans['created_at'] = None
+			ans['commit_sha'] = None
+		else:
+			ans['repo_owner'] = query_result['repository']['fullPath'].split('/')[1]
+			ans['repo_name'] = query_result['repository']['fullPath'].split('/')[0]
+			if query_result['repository']['repository']['tree']['lastCommit']['author'] is None:
+				ans['login'] = None
+				ans['created_at'] = None
+			elif query_result['repository']['repository']['tree']['lastCommit']['author']['username'] is None:
+				ans['login'] = None
+				ans['created_at'] = None
+			else:
+				ans['login'] = query_result['repository']['repository']['tree']['lastCommit']['author']['username']
+				ans['created_at'] = None
+			ans['commit_sha'] = query_result['repository']['repository']['tree']['lastCommit']['id']
+
+
+		return [ans]
+
+
+	def insert_items(self,items_list,commit=True,db=None):
+		github_gql.LoginsGQLFiller.insert_items(self,items_list=items_list,commit=commit,db=db)
+
+	def get_nb_items(self,query_result):
+		return 1
+
+	def set_element_list(self):
+		github_gql.LoginsGQLFiller.set_element_list(self)
+

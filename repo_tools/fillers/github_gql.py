@@ -122,16 +122,21 @@ class Requester(object):
 		has_next_page = True
 		while has_next_page:
 			result = self.query(gql_query=gql_query,params=params)
-			page_info = result
-			try:
-				for elt in pageinfo_path:
-					page_info = page_info[elt]
-			except (KeyError,TypeError):
+			if pageinfo_path is None:
+				page_info = {'hasNextPage':False,'endCursor':None}
 				has_next_page = False
 				end_cursor = None
 			else:
-				has_next_page = page_info['hasNextPage']
-				end_cursor = page_info['endCursor']
+				page_info = result
+				try:
+					for elt in pageinfo_path:
+						page_info = page_info[elt]
+				except (KeyError,TypeError):
+					has_next_page = False
+					end_cursor = None
+				else:
+					has_next_page = page_info['hasNextPage']
+					end_cursor = page_info['endCursor']
 			if end_cursor is None:
 				params[EC_var] = ''
 			else:
@@ -269,10 +274,18 @@ class GHGQLFiller(github_rest.GithubFiller):
 						source,owner,repo_name,repo_id,end_cursor_orig = current_elt
 						identity_id = None
 						identity_type_id = None
+						email = None
+						commit_sha = None
 						elt_name = '{}/{}'.format(owner,repo_name)
+					elif self.queried_obj == 'email':
+						source,owner,repo_name,repo_id,commit_sha,email,identity_id,identity_type_id = current_elt
+						elt_name = email
+						end_cursor_orig = None
 					else:
 						identity_type_id,login,identity_id,end_cursor_orig = current_elt # source is here identity_type_id
 						repo_id = None
+						email = None
+						commit_sha = None
 						elt_name = login
 					if new_elt:
 						if incremental_update:
@@ -285,7 +298,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 						end_cursor = pageinfo['endCursor']
 					requester = next(requester_gen)
 
-					params = {'repo_owner':owner,'repo_name':repo_name,'user_login':login,'after_end_cursor':end_cursor}
+					params = {'repo_owner':owner,'repo_name':repo_name,'user_login':login,'commit_sha':commit_sha,'after_end_cursor':end_cursor}
 
 					# first request (with endcursor)
 					paginated_query = requester.paginated_query(gql_query=self.query_string(),params=params,pageinfo_path=self.pageinfo_path)
@@ -329,6 +342,21 @@ class GHGQLFiller(github_rest.GithubFiller):
 						else:
 							end_cursor_json = json.dumps({'end_cursor':end_cursor})
 						db.insert_update(identity_id=identity_id,repo_id=repo_id,table=self.items_name,success=True,info=end_cursor_json)
+						elt_list.pop(0)
+						new_elt = True
+						elt_nb += 1
+						continue
+
+					if (self.queried_obj=='email' and parsed_result[0]['repo_owner'] is None):
+						self.logger.info('No such repo: {}/{} for email {} ({}/{})'.format(repo_owner,repo_name,elt_name,elt_nb,total_elt))
+						db.insert_update(identity_id=identity_id,repo_id=repo_id,table=self.items_name,success=False)
+						elt_list.pop(0)
+						new_elt = True
+						elt_nb += 1
+						continue
+					elif (self.queried_obj=='email' and parsed_result[0]['commit_sha'] is None):
+						self.logger.info('No such commit: {} for email {} ({}/{})'.format(commit_sha,elt_name,elt_nb,total_elt))
+						db.insert_update(identity_id=identity_id,repo_id=repo_id,table=self.items_name,success=False)
 						elt_list.pop(0)
 						new_elt = True
 						elt_nb += 1
@@ -1711,6 +1739,250 @@ class ReleasesGQLFiller(GHGQLFiller):
 		if self.start_offset is not None:
 			self.elt_list = [r for r in self.elt_list if r[1]>=self.start_offset]
 
+
+class LoginsGQLFiller(GHGQLFiller):
+	'''
+	Querying logins through the GraphQL API using commits
+	'''
+	def __init__(self,target_identity_type='github_login',source_name='GitHub',**kwargs):
+		self.items_name = 'login'
+		self.queried_obj = 'email'
+		self.pageinfo_path = None
+		self.target_identity_type = target_identity_type
+		GHGQLFiller.__init__(self,source_name=source_name,**kwargs)
+
+	def query_string(self,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: python-formatable string representing the graphql query
+		'''
+		return '''query {{
+  					repository(owner: "{repo_owner}", name: "{repo_name}") {{
+  							nameWithOwner
+    						id
+    						object(oid:"{commit_sha}"){{
+    							... on Commit{{
+
+    								oid
+    								author {{
+    									user {{
+    									login
+    									createdAt
+    										}}
+    								}}
+    							}}
+    							}}
+  							}}
+						}}'''
+
+	def parse_query_result(self,query_result,identity_id,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: [{'commit_sha':sha,'login':lo,'created_at':cr_at,'repo_owner':rpo,'repo_name':rpn,'email_id':eid}]
+		'''
+		ans = dict()
+		ans['email_id'] = identity_id
+		if query_result['repository'] is None:
+			ans['login'] = None
+			ans['repo_owner'] = None
+			ans['repo_name'] = None
+			ans['created_at'] = None
+			ans['commit_sha'] = None
+		elif query_result['repository']['object'] is None:
+			ans['login'] = None
+			ans['repo_owner'] = query_result['repository']['nameWithOwner'].split('/')[1]
+			ans['repo_name'] = query_result['repository']['nameWithOwner'].split('/')[0]
+			ans['created_at'] = None
+			ans['commit_sha'] = None
+		else:
+			ans['repo_owner'] = query_result['repository']['nameWithOwner'].split('/')[1]
+			ans['repo_name'] = query_result['repository']['nameWithOwner'].split('/')[0]
+			if query_result['repository']['object']['author'] is None:
+				ans['login'] = None
+				ans['created_at'] = None
+			elif query_result['repository']['object']['author']['user'] is None:
+				ans['login'] = None
+				ans['created_at'] = None
+			else:
+				ans['login'] = query_result['repository']['object']['author']['user']['login']
+				ans['created_at'] = query_result['repository']['object']['author']['user']['createdAt']
+			ans['commit_sha'] = query_result['repository']['object']['oid']
+
+		return [ans]
+
+
+	def insert_items(self,items_list,commit=True,db=None):
+		'''
+		In subclasses this has to be implemented
+		inserts results in the DB
+		'''
+		if db is None:
+			db = self.db
+		for item in items_list:
+			login = item['login']
+			reason = 'Email/login match through {} for commit {}'.format(self.__class__.__name__,item['commit_sha'])
+			identity_id = item['email_id']
+			if db.db_type == 'postgres':
+				if login is not None:
+					db.cursor.execute(''' INSERT INTO users(creation_identity_type_id,creation_identity) VALUES(
+												(SELECT id FROM identity_types WHERE name=%s),
+												%s
+												) ON CONFLICT DO NOTHING;''',(self.target_identity_type,login,))
+
+					db.cursor.execute(''' INSERT INTO identities(identity_type_id,user_id,identity)
+													VALUES((SELECT id FROM identity_types WHERE name=%s),
+															(SELECT id FROM users
+															WHERE creation_identity_type_id=(SELECT id FROM identity_types WHERE name=%s)
+																AND creation_identity=%s),
+															%s)
+													ON CONFLICT DO NOTHING;''',(self.target_identity_type,self.target_identity_type,login,login,))
+
+					db.cursor.execute('''SELECT id FROM identities
+												WHERE identity_type_id=(SELECT id FROM identity_types WHERE name=%s)
+												AND identity=%s;''',(self.target_identity_type,login,))
+					identity2 = db.cursor.fetchone()[0]
+					db.merge_identities(identity1=identity2,identity2=identity_id,autocommit=False,reason=reason)
+				db.cursor.execute('''INSERT INTO table_updates(identity_id,table_name,success) VALUES(%s,'login',%s);''',(identity_id,(login is not None)))
+			else:
+				if login is not None:
+
+
+					db.cursor.execute(''' INSERT OR IGNORE INTO users(creation_identity_type_id,creation_identity) VALUES(
+												(SELECT id FROM identity_types WHERE name=?),
+												?
+												);''',(self.target_identity_type,login,))
+
+					db.cursor.execute(''' INSERT OR IGNORE INTO identities(identity_type_id,user_id,identity)
+													VALUES((SELECT id FROM identity_types WHERE name=?),
+															(SELECT id FROM users
+															WHERE creation_identity_type_id=(SELECT id FROM identity_types WHERE name=?)
+																AND creation_identity=?),
+															?);''',(self.target_identity_type,self.target_identity_type,login,login,))
+
+					db.cursor.execute('''SELECT id FROM identities
+												WHERE identity_type_id=(SELECT id FROM identity_types WHERE name=?)
+												AND identity=?;''',(self.target_identity_type,login,))
+					identity2 = db.cursor.fetchone()[0]
+
+
+					db.merge_identities(identity1=identity2,identity2=identity_id,autocommit=False,reason=reason)
+
+				db.cursor.execute('''INSERT INTO table_updates(identity_id,table_name,success) VALUES(?,'login',?);''',(identity_id,(login is not None)))
+		if commit:
+			db.connection.commit()
+
+
+	def get_nb_items(self,query_result):
+		'''
+		In subclasses this has to be implemented
+		output: nb_items or None if not relevant
+		'''
+		return 1
+
+	def set_element_list(self):
+		'''
+		In subclasses this has to be implemented
+		sets self.elt_list to be used in self.fill_items
+		source,owner,repo_name,repo_id,commit_sha,email,identity_id,identity_type_id
+		'''
+
+		#if force: all elts
+		#if retry: all without success false or null on last update
+		#else: all with success is null on lats update
+
+
+		if self.force:
+			if self.db.db_type == 'postgres':
+				self.db.cursor.execute('''
+					SELECT s.id,r.owner,r.name,c.repo_id,c.sha,i.identity,i.id,i.identity_type_id
+					FROM (	(SELECT i1.id,i1.identity,i1.identity_type_id FROM identities i1)
+								EXCEPT
+							(SELECT i2.id,i2.identity,i2.identity_type_id FROM identities i2
+								INNER JOIN identities i3
+								ON i3.user_id = i2.user_id
+								INNER JOIN identity_types it2
+								ON it2.id=i3.identity_type_id AND it2.name=%s)
+							) AS i
+				 	JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
+				 		WHERE cc.author_id=i.id ORDER BY cc.created_at DESC LIMIT 1) AS c
+				 	ON true
+				 	INNER JOIN repositories r
+				 	ON c.repo_id=r.id
+				 	INNER JOIN sources s
+					ON s.id=r.source AND s.name=%s
+					ORDER BY i.identity
+					;''',(self.target_identity_type,self.source_name))
+			else:
+				self.db.cursor.execute('''
+					SELECT s.id,r.owner,r.name,c.repo_id,c.sha,i.identity,i.id,i.identity_type_id
+					FROM (	SELECT i1.id,i1.identity,i1.identity_type_id FROM identities i1
+								EXCEPT
+							SELECT i2.id,i2.identity,i2.identity_type_id FROM identities i2
+								INNER JOIN identities i3
+								ON i3.user_id = i2.user_id
+								INNER JOIN identity_types it2
+								ON it2.id=i3.identity_type_id AND it2.name=?
+							) AS i
+				 	JOIN commits c
+				 	ON c.id IN (SELECT cc.id FROM commits cc
+				 		WHERE cc.author_id=i.id ORDER BY cc.created_at DESC LIMIT 1)
+				 	INNER JOIN repositories r
+				 	ON c.repo_id=r.id
+				 	INNER JOIN sources s
+					ON s.id=r.source AND s.name=?
+					ORDER BY i.identity
+					;''',(self.target_identity_type,self.source_name))
+		else:
+			if self.db.db_type == 'postgres':
+				self.db.cursor.execute('''
+					SELECT s.id,r.owner,r.name,c.repo_id,c.sha,i.identity,i.id,i.identity_type_id
+					FROM (
+						SELECT ii.id,ii.identity,ii.identity_type_id FROM
+					 		(SELECT iii.id,iii.identity,iii.identity_type_id FROM identities iii
+							WHERE (SELECT iiii.id FROM identities iiii
+								INNER JOIN identity_types iiiit
+								ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name=%s) IS NULL) AS ii
+							LEFT JOIN table_updates tu
+							ON tu.identity_id=ii.id AND tu.table_name='login'
+							GROUP BY ii.id,ii.identity,ii.identity_type_id,tu.identity_id
+							HAVING tu.identity_id IS NULL
+						) AS i
+					JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
+						WHERE cc.author_id=i.id ORDER BY cc.created_at DESC LIMIT 1) AS c
+					ON true
+					INNER JOIN repositories r
+					ON r.id=c.repo_id
+				 	INNER JOIN sources s
+					ON s.id=r.source AND s.name=%s
+					ORDER BY i.id
+					;''',(self.target_identity_type,self.source_name))
+			else:
+				self.db.cursor.execute('''
+					SELECT s.id,r.owner,r.name,c.repo_id,c.sha,i.identity,i.id,i.identity_type_id
+					FROM (
+						SELECT ii.id,ii.identity,ii.identity_type_id FROM
+					 		(SELECT iii.id,iii.identity,iii.identity_type_id FROM identities iii
+							WHERE (SELECT iiii.id FROM identities iiii
+								INNER JOIN identity_types iiiit
+								ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name=?) IS NULL) AS ii
+							LEFT JOIN table_updates tu
+							ON tu.identity_id=ii.id AND tu.table_name='login'
+							GROUP BY ii.id,ii.identity,ii.identity_type_id,tu.identity_id
+							HAVING tu.identity_id IS NULL
+						) AS i
+					JOIN commits c
+						ON
+						c.id IN (SELECT cc.id FROM commits cc
+							WHERE cc.author_id=i.id ORDER BY cc.created_at DESC LIMIT 1)
+					INNER JOIN repositories r
+					ON r.id=c.repo_id
+					INNER JOIN sources s
+					ON s.id=r.source AND s.name=?
+					ORDER BY i.id
+					;''',(self.target_identity_type,self.source_name))
+
+		self.elt_list = list(self.db.cursor.fetchall())
+		self.logger.info(self.force)
 
 
 
