@@ -153,13 +153,14 @@ class GHGQLFiller(github_rest.GithubFiller):
 	class to be inherited from, contains github credentials management
 	"""
 
-	def __init__(self,requester_class=None,source_name='GitHub',**kwargs):
+	def __init__(self,requester_class=None,source_name='GitHub',target_identity_type='github_login',**kwargs):
 		if requester_class is None:
 			self.Requester = Requester
 		else:
 			self.Requester = requester_class
 		self.source_name = source_name
-		github_rest.GithubFiller.__init__(self,**kwargs)
+		self.target_identity_type = target_identity_type
+		github_rest.GithubFiller.__init__(self,identity_type=target_identity_type,**kwargs)
 
 	def apply(self):
 		self.fill_items(elt_list=self.elt_list,workers=self.workers,incremental_update=self.incremental_update)
@@ -483,20 +484,20 @@ class StarsGQLFiller(GHGQLFiller):
 				VALUES(%s,
 						%s,
 						%s,
-						(SELECT id FROM identity_types WHERE name='github_login'),
-						(SELECT id FROM identities WHERE identity=%s AND identity_type_id=(SELECT id FROM identity_types WHERE name='github_login'))
+						(SELECT id FROM identity_types WHERE name=%s),
+						(SELECT id FROM identities WHERE identity=%s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%s))
 					)
 				ON CONFLICT DO NOTHING
-				;''',((s['starred_at'],s['starrer_login'],s['repo_id'],s['starrer_login']) for s in items_list))
+				;''',((s['starred_at'],s['starrer_login'],s['repo_id'],self.target_identity_type,s['starrer_login'],self.target_identity_type) for s in items_list))
 		else:
 			db.cursor.executemany('''
 					INSERT OR IGNORE INTO stars(starred_at,login,repo_id,identity_type_id,identity_id)
 					VALUES(?,
 							?,
 							?,
-							(SELECT id FROM identity_types WHERE name='github_login'),
-							(SELECT id FROM identities WHERE identity=? AND identity_type_id=(SELECT id FROM identity_types WHERE name='github_login'))
-						);''',((s['starred_at'],s['starrer_login'],s['repo_id'],s['starrer_login']) for s in items_list))
+							(SELECT id FROM identity_types WHERE name=?),
+							(SELECT id FROM identities WHERE identity=? AND identity_type_id=(SELECT id FROM identity_types WHERE name=?))
+						);''',((s['starred_at'],s['starrer_login'],s['repo_id'],self.target_identity_type,s['starrer_login'],self.target_identity_type) for s in items_list))
 
 		if commit:
 			db.connection.commit()
@@ -525,7 +526,7 @@ class StarsGQLFiller(GHGQLFiller):
 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
 								FROM repositories r
 								INNER JOIN sources s
-								ON s.id=r.source AND s.name='GitHub'
+								ON s.id=r.source AND s.name=%(source_name)s
 								LEFT OUTER JOIN table_updates tu
 								ON tu.repo_id=r.id AND tu.table_name='stars'
 								ORDER BY r.owner,r.name,tu.updated_at ) as t1
@@ -533,20 +534,20 @@ class StarsGQLFiller(GHGQLFiller):
 								(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
 								FROM repositories r
 								INNER JOIN sources s
-								ON s.id=r.source AND s.name='GitHub'
+								ON s.id=r.source AND s.name=%(source_name)s
 								LEFT OUTER JOIN table_updates tu
 								ON tu.repo_id=r.id AND tu.table_name='stars'
 								GROUP BY r.owner,r.name,r.id,s.id ) AS t2
 						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
 						ORDER BY t1.sid,t1.rowner,t1.rname
-				;''')
+				;''',{'source_name':self.source_name})
 			elif self.retry:
 				self.db.cursor.execute('''
 						SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
 								FROM repositories r
 								INNER JOIN sources s
-								ON s.id=r.source AND s.name='GitHub'
+								ON s.id=r.source AND s.name=%(source_name)s
 								LEFT OUTER JOIN table_updates tu
 								ON tu.repo_id=r.id AND tu.table_name='stars'
 								ORDER BY r.owner,r.name,tu.updated_at ) as t1
@@ -554,21 +555,21 @@ class StarsGQLFiller(GHGQLFiller):
 								(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
 								FROM repositories r
 								INNER JOIN sources s
-								ON s.id=r.source AND s.name='GitHub'
+								ON s.id=r.source AND s.name=%(source_name)s
 								LEFT OUTER JOIN table_updates tu
 								ON tu.repo_id=r.id AND tu.table_name='stars'
 								GROUP BY r.owner,r.name,r.id,s.id ) AS t2
 						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
 						AND ((NOT t1.success) OR t1.succ IS NULL)
 						ORDER BY t1.sid,t1.rowner,t1.rname
-				;''')
+				;''',{'source_name':self.source_name})
 			else:
 				self.db.cursor.execute('''
 						SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
 								FROM repositories r
 								INNER JOIN sources s
-								ON s.id=r.source AND s.name='GitHub'
+								ON s.id=r.source AND s.name=%(source_name)s
 								LEFT OUTER JOIN table_updates tu
 								ON tu.repo_id=r.id AND tu.table_name='stars'
 								ORDER BY r.owner,r.name,tu.updated_at ) as t1
@@ -576,14 +577,14 @@ class StarsGQLFiller(GHGQLFiller):
 								(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
 								FROM repositories r
 								INNER JOIN sources s
-								ON s.id=r.source AND s.name='GitHub'
+								ON s.id=r.source AND s.name=%(source_name)s
 								LEFT OUTER JOIN table_updates tu
 								ON tu.repo_id=r.id AND tu.table_name='stars'
 								GROUP BY r.owner,r.name,r.id,s.id ) AS t2
 						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
 						AND t1.succ IS NULL
 						ORDER BY t1.sid,t1.rowner,t1.rname
-				;''')
+				;''',{'source_name':self.source_name})
 
 			self.elt_list = list(self.db.cursor.fetchall())
 
@@ -594,7 +595,7 @@ class StarsGQLFiller(GHGQLFiller):
 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
 								FROM repositories r
 								INNER JOIN sources s
-								ON s.id=r.source AND s.name='GitHub'
+								ON s.id=r.source AND s.name=:source_name
 								LEFT OUTER JOIN table_updates tu
 								ON tu.repo_id=r.id AND tu.table_name='stars'
 								ORDER BY r.owner,r.name,tu.updated_at ) as t1
@@ -602,20 +603,20 @@ class StarsGQLFiller(GHGQLFiller):
 								(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
 								FROM repositories r
 								INNER JOIN sources s
-								ON s.id=r.source AND s.name='GitHub'
+								ON s.id=r.source AND s.name=:source_name
 								LEFT OUTER JOIN table_updates tu
 								ON tu.repo_id=r.id AND tu.table_name='stars'
 								GROUP BY r.owner,r.name,r.id,s.id ) AS t2
 						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
 						ORDER BY t1.sid,t1.rowner,t1.rname
-				;''')
+				;''',{'source_name':self.source_name})
 			elif self.retry:
 				self.db.cursor.execute('''
 						SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
 								FROM repositories r
 								INNER JOIN sources s
-								ON s.id=r.source AND s.name='GitHub'
+								ON s.id=r.source AND s.name=:source_name
 								LEFT OUTER JOIN table_updates tu
 								ON tu.repo_id=r.id AND tu.table_name='stars'
 								ORDER BY r.owner,r.name,tu.updated_at ) as t1
@@ -623,21 +624,21 @@ class StarsGQLFiller(GHGQLFiller):
 								(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
 								FROM repositories r
 								INNER JOIN sources s
-								ON s.id=r.source AND s.name='GitHub'
+								ON s.id=r.source AND s.name=:source_name
 								LEFT OUTER JOIN table_updates tu
 								ON tu.repo_id=r.id AND tu.table_name='stars'
 								GROUP BY r.owner,r.name,r.id,s.id ) AS t2
 						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
 						AND ((NOT t1.success) OR t1.succ IS NULL)
 						ORDER BY t1.sid,t1.rowner,t1.rname
-				;''')
+				;''',{'source_name':self.source_name})
 			else:
 				self.db.cursor.execute('''
 						SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
 								FROM repositories r
 								INNER JOIN sources s
-								ON s.id=r.source AND s.name='GitHub'
+								ON s.id=r.source AND s.name=:source_name
 								LEFT OUTER JOIN table_updates tu
 								ON tu.repo_id=r.id AND tu.table_name='stars'
 								ORDER BY r.owner,r.name,tu.updated_at ) as t1
@@ -645,14 +646,14 @@ class StarsGQLFiller(GHGQLFiller):
 								(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
 								FROM repositories r
 								INNER JOIN sources s
-								ON s.id=r.source AND s.name='GitHub'
+								ON s.id=r.source AND s.name=:source_name
 								LEFT OUTER JOIN table_updates tu
 								ON tu.repo_id=r.id AND tu.table_name='stars'
 								GROUP BY r.owner,r.name,r.id,s.id ) AS t2
 						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
 						AND t1.succ IS NULL
 						ORDER BY t1.sid,t1.rowner,t1.rname
-				;''')
+				;''',{'source_name':self.source_name})
 
 
 			elt_list = list(self.db.cursor.fetchall())

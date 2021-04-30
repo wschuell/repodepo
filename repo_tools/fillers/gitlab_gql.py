@@ -96,8 +96,8 @@ class GitlabGQLFiller(github_gql.GHGQLFiller):
 	class to be inherited from, contains credentials management
 	"""
 
-	def __init__(self,env_apikey='GITLAB_API_KEY',source_name='Gitlab',identity_type='gitlab_login',api_keys_file='gitlab_api_keys.txt',**kwargs):
-		github_gql.GHGQLFiller.__init__(self,requester_class=RequesterGitlab,source_name=source_name,env_apikey=env_apikey,identity_type=identity_type,api_keys_file=api_keys_file,**kwargs)
+	def __init__(self,env_apikey='GITLAB_API_KEY',source_name='Gitlab',target_identity_type='gitlab_login',api_keys_file='gitlab_api_keys.txt',**kwargs):
+		github_gql.GHGQLFiller.__init__(self,requester_class=RequesterGitlab,source_name=source_name,env_apikey=env_apikey,target_identity_type=target_identity_type,api_keys_file=api_keys_file,**kwargs)
 
 
 
@@ -106,12 +106,12 @@ class LoginsFiller(GitlabGQLFiller):
 	'''
 	Querying logins through the GraphQL API using commits
 	'''
-	def __init__(self,target_identity_type='gitlab_login',**kwargs):
+	def __init__(self,**kwargs):
 		self.items_name = 'login'
 		self.queried_obj = 'email'
 		self.pageinfo_path = None
-		self.target_identity_type = target_identity_type
 		GitlabGQLFiller.__init__(self,**kwargs)
+
 
 	def query_string(self,**kwargs):
 		'''
@@ -180,3 +180,76 @@ class LoginsFiller(GitlabGQLFiller):
 	def set_element_list(self):
 		github_gql.LoginsGQLFiller.set_element_list(self)
 
+
+
+class StarsGQLFiller(GitlabGQLFiller):
+	'''
+	Querying stars through the GraphQL API
+	'''
+	def __init__(self,**kwargs):
+		self.items_name = 'stars'
+		self.queried_obj = 'repo'
+
+		raise NotImplementedError #For the moment the Gitlab GraphQL API doesnt offer starrers of projects, only starred projects of users. REST API does though
+		self.pageinfo_path = ['repository','stargazers','pageInfo']
+		GitlabGQLFiller.__init__(self,**kwargs)
+
+	def query_string(self,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: python-formatable string representing the graphql query
+		'''
+		raise NotImplementedError
+		return '''query {{
+					repository(owner:"{repo_owner}", name:"{repo_name}") {{
+						nameWithOwner
+						stargazers (first:100, orderBy: {{ field: STARRED_AT, direction: ASC }} {after_end_cursor} ){{
+						 totalCount
+						 pageInfo {{
+							endCursor
+							hasNextPage
+						 }}
+						 edges {{
+						 	starredAt
+							node {{
+								login
+							}}
+						 }}
+						}}
+					}}
+				}}'''
+
+	def parse_query_result(self,query_result,repo_id,identity_id,repo_owner=None,repo_name=None,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: [ {'repo_id':r_id,'repo_owner':r_ow,'repo_name':r_na,'starrer_login':s_lo,'starred_at':st_at} , ...]
+		'''
+		raise NotImplementedError
+		ans = []
+		if repo_owner is None:
+			repo_owner,repo_name = query_result['repository']['nameWithOwner'].split('/')
+		for e in query_result['repository']['stargazers']['edges']:
+			d = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name}
+			try:
+				d['starred_at'] = e['starredAt']
+				d['starrer_login'] = e['node']['login']
+			except (KeyError,TypeError) as err:
+				self.logger.info('Result triggering error: {} \nError when parsing stars for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+				continue
+			else:
+				ans.append(d)
+		return ans
+
+
+	def insert_items(self,items_list,commit=True,db=None):
+		github_gql.StarsGQLFiller.insert_items(self,items_list=items_list,commit=commit,db=db)
+
+	def set_element_list(self):
+		github_gql.StarsGQLFiller.set_element_list(self)
+
+	def get_nb_items(self,query_result):
+		'''
+		In subclasses this has to be implemented
+		output: nb_items or None if not relevant
+		'''
+		return query_result['repository']['stargazers']['totalCount']
