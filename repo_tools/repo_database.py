@@ -366,6 +366,17 @@ class Database(object):
 				created_at TIMESTAMP DEFAULT NULL,
 				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 				);
+
+				
+				CREATE TABLE IF NOT EXISTS issues(
+				id INTEGER PRIMARY KEY,
+				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
+				issue_number TEXT,
+				issue_title TEXT,
+				created_at TIMESTAMP DEFAULT NULL,
+				closed_at TIMESTAMP DEFAULT NULL,
+				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+				);
 		'''
 			for q in self.DB_INIT.split(';')[:-1]:
 				self.cursor.execute(q)
@@ -624,6 +635,17 @@ class Database(object):
 				created_at TIMESTAMP DEFAULT NULL,
 				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 				);
+
+				
+				CREATE TABLE IF NOT EXISTS issues(
+				id BIGSERIAL PRIMARY KEY,
+				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
+				issue_number TEXT,
+				issue_title TEXT,
+				created_at TIMESTAMP DEFAULT NULL,
+				closed_at TIMESTAMP DEFAULT NULL,
+				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+				);
 				'''
 
 			self.cursor.execute(self.DB_INIT)
@@ -648,6 +670,7 @@ class Database(object):
 		else:
 			self.cursor.execute('DROP TABLE IF EXISTS _dbinfo;')
 			self.cursor.execute('DROP TABLE IF EXISTS releases;')
+			self.cursor.execute('DROP TABLE IF EXISTS issues;')
 			self.cursor.execute('DROP TABLE IF EXISTS sponsors_user;')
 			self.cursor.execute('DROP TABLE IF EXISTS sponsors_repo;')
 			self.cursor.execute('DROP TABLE IF EXISTS packages;')
