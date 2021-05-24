@@ -797,3 +797,51 @@ got: {}'''.format(headers))
 
 		if self.clean_users:
 			self.db.clean_users()
+
+
+
+class SimilarIdentitiesMerger(fillers.Filler):
+	"""
+	Merges identities with same value from two given identity_types
+	"""
+	def __init__(self,identity_type1,identity_type2,**kwargs):
+		self.identity_type1 = identity_type1
+		self.identity_type2 = identity_type2
+		fillers.Filler.__init__(self,**kwargs)
+
+
+	def prepare(self):
+		if self.data_folder is None:
+			self.data_folder = self.db.data_folder
+
+		if self.db.db_type == 'postgres':
+			self.db.cursor.execute('''
+				SELECT i1.id,i2.id
+				FROM identities i1
+				INNER JOIN identity_types it1
+				ON i1.identity_type_id =it1.id and it1.name = %(identity_type1)s
+				INNER JOIN identities i2
+				ON i1.identity = i2.identity AND i1.user_id != i2.user_id
+				INNER JOIN identity_types it2
+				ON it2.id=i2.identity_type_id AND it2.name = %(identity_type2)s
+				;''',{'identity_type1':self.identity_type1,'identity_type2':self.identity_type2})
+		else:
+			self.db.cursor.execute('''
+				SELECT i1.id,i2.id
+				FROM identities i1
+				INNER JOIN identity_types it1
+				ON i1.identity_type_id =it1.id and it1.name = :identity_type1
+				INNER JOIN identities i2
+				ON i1.identity = i2.identity AND i1.user_id != i2.user_id
+				INNER JOIN identity_types it2
+				ON it2.id=i2.identity_type_id AND it2.name = :identity_type2
+				;''',{'identity_type1':self.identity_type1,'identity_type2':self.identity_type2})
+
+		self.to_merge_list = list(self.db.cursor.fetchall())
+
+	def apply(self):
+		self.logger.info('Merging {} couples of similar identities from identity types {} and {}'.format(len(self.to_merge_list),self.identity_type1,self.identity_type2))
+		for i1,i2 in self.to_merge_list:
+			self.db.merge_identities(identity1=i1,identity2=i2,autocommit=False,reason='Same identity string for both identity types: {} and {}'.format(self.identity_type1,self.identity_type2))
+		self.db.connection.commit()
+

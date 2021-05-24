@@ -349,7 +349,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 						continue
 
 					if (self.queried_obj=='email' and parsed_result[0]['repo_owner'] is None):
-						self.logger.info('No such repo: {}/{} for email {} ({}/{})'.format(repo_owner,repo_name,elt_name,elt_nb,total_elt))
+						self.logger.info('No such repo: {}/{} for email {} ({}/{})'.format(owner,repo_name,elt_name,elt_nb,total_elt))
 						db.insert_update(identity_id=identity_id,repo_id=repo_id,table=self.items_name,success=False)
 						elt_list.pop(0)
 						new_elt = True
@@ -2243,6 +2243,255 @@ class IssuesGQLFiller(GHGQLFiller):
 
 		if self.start_offset is not None:
 			self.elt_list = [r for r in self.elt_list if r[1]>=self.start_offset]
+
+
+class SponsorablesGQLFiller(GHGQLFiller):
+	'''
+	Querying sponsorable logins through the GraphQL API
+	'''
+	def __init__(self,**kwargs):
+		self.items_name = 'sponsorable'
+		self.queried_obj = None
+		self.pageinfo_path = ['sponsorables','pageInfo']
+		GHGQLFiller.__init__(self,**kwargs)
+
+	def query_string(self,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: python-formatable string representing the graphql query
+		'''
+		return '''query {{
+  					sponsorables(first:100 {after_end_cursor}) {{
+  						totalCount
+  						pageInfo{{
+  							hasNextPage
+  							endCursor
+  							}}
+  						nodes{{
+  							__typename
+  							... on User{{
+  								login
+  								}}
+  							}}
+  						}}
+					}}'''
+
+	def parse_query_result(self,query_result,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: [{'login':lo}]
+		'''
+		ans = [{'login':qr['login']} for qr in query_result['sponsorables']['nodes'] if qr['__typename']=='User']
+		return ans
+
+
+	def insert_items(self,items_list,commit=True,db=None):
+		'''
+		In subclasses this has to be implemented
+		inserts results in the DB
+		'''
+		if db is None:
+			db = self.db
+		if db.db_type == 'postgres':
+			extras.execute_batch(db.cursor,''' INSERT INTO users(creation_identity_type_id,creation_identity) VALUES(
+												(SELECT id FROM identity_types WHERE name=%s),
+												%s
+												) ON CONFLICT DO NOTHING;''',((self.target_identity_type,item['login'],) for item in items_list))
+
+			extras.execute_batch(db.cursor,''' INSERT INTO identities(identity_type_id,user_id,identity)
+													VALUES((SELECT id FROM identity_types WHERE name=%s),
+															(SELECT id FROM users
+															WHERE creation_identity_type_id=(SELECT id FROM identity_types WHERE name=%s)
+																AND creation_identity=%s),
+															%s)
+													ON CONFLICT DO NOTHING;''',((self.target_identity_type,self.target_identity_type,item['login'],item['login'],) for item in items_list))
+
+		else:
+
+			db.cursor.executemany(''' INSERT OR IGNORE INTO users(creation_identity_type_id,creation_identity) VALUES(
+												(SELECT id FROM identity_types WHERE name=?),
+												?
+												);''',((self.target_identity_type,item['login'],) for item in items_list))
+
+			db.cursor.executemany(''' INSERT OR IGNORE INTO identities(identity_type_id,user_id,identity)
+													VALUES((SELECT id FROM identity_types WHERE name=?),
+															(SELECT id FROM users
+															WHERE creation_identity_type_id=(SELECT id FROM identity_types WHERE name=?)
+																AND creation_identity=?),
+															?);''',((self.target_identity_type,self.target_identity_type,item['login'],item['login'],) for item in items_list))
+
+		if commit:
+			db.connection.commit()
+
+
+	def get_nb_items(self,query_result):
+		'''
+		In subclasses this has to be implemented
+		output: nb_items or None if not relevant
+		'''
+		return query_result['sponsorables']['totalCount']
+
+	def set_element_list(self):
+		'''
+		[None],[] or [end_cursor]
+
+		'''
+		if self.db.db_type == 'postgres':
+			if self.force:
+				self.db.cursor.execute('''
+						SELECT DISTINCT
+ 							FIRST_VALUE(tu.info->> 'end_cursor') OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS end_cursor
+							,FIRST_VALUE(tu.updated_at) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS updated_at
+							,FIRST_VALUE(tu.table_name) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS table_name
+							,FIRST_VALUE(tu.success) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS success
+						FROM table_updates tu
+						WHERE table_name=%(table_name)s
+				;''',{'table_name':self.items_name})
+
+				ans = self.db.cursor.fetchone()
+				if ans is None:
+					self.elt_list = [None]
+				else:
+					end_cursor,upd_at,t_name,succ = ans
+					self.elt_list = [end_cursor]
+
+			elif self.retry:
+				self.elt_list = [None]
+			else:
+				self.db.cursor.execute('''
+						SELECT DISTINCT
+ 							FIRST_VALUE(tu.info->> 'end_cursor') OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS end_cursor
+							,FIRST_VALUE(tu.updated_at) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS updated_at
+							,FIRST_VALUE(tu.table_name) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS table_name
+							,FIRST_VALUE(tu.success) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS success
+						FROM table_updates tu
+						WHERE table_name=%(table_name)s
+				;''',{'table_name':self.items_name})
+
+			ans = self.db.cursor.fetchone()
+			if ans is None:
+				self.elt_list = [None]
+			else:
+				end_cursor,upd_at,t_name,succ = ans
+				if succ is True or succ is False:
+					self.elt_list = []
+				else:
+					self.elt_list = [end_cursor]
+
+		else:
+			if self.force:
+				self.db.cursor.execute('''
+						SELECT DISTINCT
+ 							FIRST_VALUE(tu.info) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS end_cursor
+							,FIRST_VALUE(tu.updated_at) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS updated_at
+							,FIRST_VALUE(tu.table_name) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS table_name
+							,FIRST_VALUE(tu.success) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS success
+						FROM table_updates tu
+						WHERE table_name=:table_name
+				;''',{'table_name':self.items_name})
+
+				ans = self.db.cursor.fetchone()
+				if ans is None:
+					self.elt_list = [None]
+				else:
+					end_cursor_info,upd_at,t_name,succ = ans
+					if end_cursor_info is None:
+						self.elt_list = [None]
+					else:
+						self.elt_list = [json.loads(end_cursor_info)['end_cursor']]
+			elif self.retry:
+				self.elt_list = [None]
+			else:
+				self.db.cursor.execute('''
+						SELECT DISTINCT
+ 							FIRST_VALUE(tu.info) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS end_cursor
+							,FIRST_VALUE(tu.updated_at) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS updated_at
+							,FIRST_VALUE(tu.table_name) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS table_name
+							,FIRST_VALUE(tu.success) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS success
+						FROM table_updates tu
+						WHERE table_name=:table_name
+				;''',{'table_name':self.items_name})
+
+			ans = self.db.cursor.fetchone()
+			if ans is None:
+				self.elt_list = [None]
+			else:
+				end_cursor_info,upd_at,t_name,succ = ans
+				if succ is True or succ is False:
+					self.elt_list = []
+				elif end_cursor_info is None:
+					self.elt_list = [None]
+				else:
+					self.elt_list = [json.loads(end_cursor_info)['end_cursor']]
+
+
+	def fill_items(self,elt_list=None,workers=1,in_thread=False,incremental_update=True,elt_nb=None,total_elt=None):
+		'''
+		Main loop to batch query on list of repos or users
+		'''
+
+		db = self.db
+		if elt_list is None:
+			elt_list = self.elt_list
+
+		elt_list = copy.deepcopy(elt_list)
+		if len(elt_list):
+			end_cursor = elt_list[0]
+			try:
+				requester_gen = self.get_requester(in_thread=in_thread)
+				self.logger.info('Filling {}'.format(self.items_name))
+				requester = next(requester_gen)
+
+				params = {'after_end_cursor':end_cursor}
+
+				paginated_query = requester.paginated_query(gql_query=self.query_string(),params=params,pageinfo_path=self.pageinfo_path)
+				result,pageinfo = next(paginated_query)
+
+				# detect 0 elts
+				parsed_result = self.parse_query_result(result,)
+				if len(parsed_result) == 0:
+					self.logger.info('No new {}'.format(self.items_name,))
+					if end_cursor is None:
+						end_cursor_json = None
+					else:
+						end_cursor_json = json.dumps({'end_cursor':end_cursor})
+					db.insert_update(table=self.items_name,success=True,info=end_cursor_json)
+				else:
+					# loop
+					while pageinfo['hasNextPage']:
+						# raise ValueError
+						while requester.get_rate_limit()>self.querymin_threshold and pageinfo['hasNextPage']:
+							# insert results
+							self.insert_items(items_list=parsed_result,commit=True,db=db)
+							end_cursor = pageinfo['endCursor']
+							if end_cursor is None:
+								end_cursor_json = None
+							else:
+								end_cursor_json = json.dumps({'end_cursor':end_cursor})
+							# detect loop end
+							if not pageinfo['hasNextPage']:
+								# insert update success True (+ end cursor)
+								db.insert_update(table=self.items_name,success=True,info=end_cursor_json,autocommit=True)
+								nb_items = self.get_nb_items(result)
+								if nb_items is not None:
+									self.logger.info('Filled {}: {}'.format(self.items_name,nb_items))
+								else:
+									self.logger.info('Filled {}'.format(self.items_name,))
+							else:
+
+								# insert partial update with endcursor value and success NULL (?)
+								db.insert_update(table=self.items_name,success=None,info=end_cursor_json)
+								db.connection.commit()
+								# continue query
+								result,pageinfo = next(paginated_query)
+								parsed_result = self.parse_query_result(result,)
+						if pageinfo['hasNextPage']:
+							requester = next(requester_gen)
+
+			except Exception as e:
+				db.log_error('Exception in {}: \n {}: {}'.format(self.items_name,e.__class__.__name__,e))
+				raise Exception('Exception in {}'.format(self.items_name)) from e
+
 
 
 '''
