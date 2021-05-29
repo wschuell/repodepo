@@ -41,6 +41,7 @@ jobs:
     - name: Set up Postgres Usage
       run: |
         echo "localhost:5432:*:postgres:postgres" >> $HOME/.pgpass
+        chmod 0600 $HOME/.pgpass
         sudo apt-get install -y postgresql-client
         psql -c 'create database travis_ci_test_repo_tools;' -U postgres
     - name: Set up Python 3.9
