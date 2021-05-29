@@ -5,7 +5,6 @@ import pandas as pd
 import logging
 import csv
 from psycopg2 import extras
-import shapefile
 import json
 import subprocess
 
