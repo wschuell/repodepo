@@ -261,7 +261,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 
 		if workers == 1:
 			elt_name,owner,repo_name,end_cursor,login = None,None,None,None,None # init values for the exception
-
+			page_info = {'endCursor':end_cursor}
 			try:
 				if in_thread:
 					db = self.db.copy()

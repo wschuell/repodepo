@@ -22,7 +22,7 @@ class DummyMetaFiller(fillers.Filler):
 		if packages_file is None:
 			self.packages_file = os.path.join(os.path.dirname(os.path.dirname(rp.__file__)),'tests','testmodule','dummy_data','packages.csv')
 		else:
-			self.packages_file = packages
+			self.packages_file = packages_file
 		self.fail_on_wait = fail_on_wait
 		fillers.Filler.__init__(self,**kwargs)
 

@@ -367,7 +367,7 @@ class Database(object):
 				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 				);
 
-				
+
 				CREATE TABLE IF NOT EXISTS issues(
 				id INTEGER PRIMARY KEY,
 				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
@@ -636,7 +636,7 @@ class Database(object):
 				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 				);
 
-				
+
 				CREATE TABLE IF NOT EXISTS issues(
 				id BIGSERIAL PRIMARY KEY,
 				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
@@ -1699,8 +1699,8 @@ class Database(object):
 		'''
 
 		if repo_id is None:
-			if owner is None or source is None or name is None:
-				raise SyntaxError('Invalid information for repo, source:{}, owner:{}, name:{}'.format(source,owner,name))
+			if owner is None or source is None or repo is None:
+				raise SyntaxError('Invalid information for repo, source:{}, owner:{}, name:{}'.format(source,owner,repo))
 			else:
 				repo_id = self.get_repo_id(name=repo,owner=owner,source=source)
 		if self.db_type == 'postgres':
@@ -1720,8 +1720,8 @@ class Database(object):
 		Counts registered starring events of a repo
 		'''
 		if repo_id is None:
-			if owner is None or source is None or name is None:
-				raise SyntaxError('Invalid information for repo, source:{}, owner:{}, name:{}'.format(source,owner,name))
+			if owner is None or source is None or repo is None:
+				raise SyntaxError('Invalid information for repo, source:{}, owner:{}, name:{}'.format(source,owner,repo))
 			else:
 				repo_id = self.get_repo_id(name=repo,owner=owner,source=source)
 		if self.db_type == 'postgres':
@@ -1739,8 +1739,8 @@ class Database(object):
 		Counts registered forks of a repo
 		'''
 		if repo_id is None:
-			if owner is None or source is None or name is None:
-				raise SyntaxError('Invalid information for repo, source:{}, owner:{}, name:{}'.format(source,owner,name))
+			if owner is None or source is None or repo is None:
+				raise SyntaxError('Invalid information for repo, source:{}, owner:{}, name:{}'.format(source,owner,repo))
 			else:
 				repo_id = self.get_repo_id(name=repo,owner=owner,source=source)
 		if self.db_type == 'postgres':
