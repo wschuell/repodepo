@@ -2271,6 +2271,9 @@ class SponsorablesGQLFiller(GHGQLFiller):
   							__typename
   							... on User{{
   								login
+  								sponsorsListing{{
+  										createdAt
+  									}}
   								}}
   							}}
   						}}
@@ -2281,7 +2284,15 @@ class SponsorablesGQLFiller(GHGQLFiller):
 		In subclasses this has to be implemented
 		output: [{'login':lo}]
 		'''
-		ans = [{'login':qr['login']} for qr in query_result['sponsorables']['nodes'] if qr['__typename']=='User']
+		# ans = [{'login':qr['login'],'sponsorsListing_createdat':qr['sponsorsListing']['createdAt']} for qr in query_result['sponsorables']['nodes'] if qr['__typename']=='User']
+		ans = []
+		for qr in query_result['sponsorables']['nodes']:
+			if qr['__typename']=='User':
+				try:
+					elt = {'login':qr['login'],'sponsorsListing_createdat':qr['sponsorsListing']['createdAt']}
+				except KeyError:
+					elt = {'login':qr['login'],'sponsorsListing_createdat':None}
+				ans.append(elt)
 		return ans
 
 
