@@ -41,6 +41,8 @@ jobs:
     - name: Set up Postgres Usage
       run: |
         echo "localhost:5432:*:postgres:postgres" >> $HOME/.pgpass
+        apt-get install postgresql-client
+        psql -c 'create database travis_ci_test_repo_tools;' -U postgres
     - name: Set up Python 3.9
       uses: actions/setup-python@v2
       with:
