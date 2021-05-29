@@ -73,14 +73,14 @@ identity_list = [
 def identity_id(request):
 	return request.param
 
-subclasses_Pmeasures = inspect.getmembers(project_getters, lambda elt:(inspect.isclass(elt) and issubclass(elt,project_getters.ProjectGetter) and elt!=project_getters.ProjectGetter ))
-@pytest.fixture(params=subclasses_Pmeasures)
-def Pmeasure(request):
+subclasses_Pgetters = inspect.getmembers(project_getters, lambda elt:(inspect.isclass(elt) and issubclass(elt,project_getters.ProjectGetter) and elt!=project_getters.ProjectGetter ))
+@pytest.fixture(params=subclasses_Pgetters)
+def Pgetter(request):
 	return request.param[1]
 
-subclasses_Umeasures = inspect.getmembers(user_getters, lambda elt:(inspect.isclass(elt) and issubclass(elt,user_getters.UserGetter) and elt!=user_getters.UserGetter ))
-@pytest.fixture(params=subclasses_Umeasures)
-def Umeasure(request):
+subclasses_Ugetters = inspect.getmembers(user_getters, lambda elt:(inspect.isclass(elt) and issubclass(elt,user_getters.UserGetter) and elt!=user_getters.UserGetter ))
+@pytest.fixture(params=subclasses_Ugetters)
+def Ugetter(request):
 	return request.param[1]
 
 
@@ -108,18 +108,18 @@ def testdb(request):
 def test_setdb(testdb):
 	testdb.init_db()
 
-def test_measuresPproj(testdb,time_window,Pmeasure,proj_id,cumulative):
+def test_gettersPproj(testdb,time_window,Pgetter,proj_id,cumulative):
 	testdb.init_db()
-	df = Pmeasure().get_result(db=testdb,aggregated=True,time_window=time_window,cumulative=cumulative,project_id=proj_id)
+	df = Pgetter().get_result(db=testdb,aggregated=True,time_window=time_window,cumulative=cumulative,project_id=proj_id)
 
-def test_measuresP(testdb,time_window,Pmeasure,aggregated,cumulative):
+def test_gettersP(testdb,time_window,Pgetter,aggregated,cumulative):
 	testdb.init_db()
-	df = Pmeasure().get_result(db=testdb,aggregated=aggregated,time_window=time_window,cumulative=cumulative)
+	df = Pgetter().get_result(db=testdb,aggregated=aggregated,time_window=time_window,cumulative=cumulative)
 
-def test_measuresUuser(testdb,time_window,Umeasure,identity_id,cumulative):
+def test_gettersUuser(testdb,time_window,Ugetter,identity_id,cumulative):
 	testdb.init_db()
-	df = Umeasure().get_result(db=testdb,aggregated=True,time_window=time_window,cumulative=cumulative,identity_id=identity_id)
+	df = Ugetter().get_result(db=testdb,aggregated=True,time_window=time_window,cumulative=cumulative,identity_id=identity_id)
 
-def test_measuresU(testdb,time_window,Umeasure,cumulative,aggregated):
+def test_gettersU(testdb,time_window,Ugetter,cumulative,aggregated):
 	testdb.init_db()
-	df = Umeasure().get_result(db=testdb,aggregated=aggregated,time_window=time_window,cumulative=cumulative)
+	df = Ugetter().get_result(db=testdb,aggregated=aggregated,time_window=time_window,cumulative=cumulative)
