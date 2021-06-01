@@ -377,6 +377,35 @@ class Database(object):
 				closed_at TIMESTAMP DEFAULT NULL,
 				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 				);
+
+				CREATE TABLE IF NOT EXISTS package_versions(
+				id INTEGER PRIMARY KEY,
+				package_id INTEGER NOT NULL REFERENCES packages(id) ON DELETE CASCADE,
+				version_str TEXT,
+				created_at TIMESTAMP
+				);
+
+				CREATE INDEX IF NOT EXISTS package_versions_idx ON package_versions(package_id,created_at);
+				CREATE UNIQUE INDEX IF NOT EXISTS package_versions_str_idx ON package_versions(package_id,version_str);
+				CREATE INDEX IF NOT EXISTS package_versions_date_idx ON package_versions(created_at);
+
+				CREATE TABLE IF NOT EXISTS package_dependencies(
+				depending_version INTEGER NOT NULL REFERENCES package_versions(id) ON DELETE CASCADE,
+				depending_on_package INTEGER NOT NULL REFERENCES packages(id) ON DELETE CASCADE,
+				semver_str TEXT,
+				PRIMARY KEY(depending_version,depending_on_package)
+				);
+
+				CREATE INDEX IF NOT EXISTS reverse_package_deps_idx ON package_dependencies(depending_on_package,depending_version);
+
+				CREATE TABLE IF NOT EXISTS package_version_downloads(
+				downloaded_at DATE,
+				downloads INTEGER DEFAULT 1,
+				package_version INTEGER NOT NULL REFERENCES package_versions(id) ON DELETE CASCADE,
+				PRIMARY KEY(package_version,downloaded_at)
+				);
+
+				CREATE INDEX IF NOT EXISTS package_version_downloads_date_idx ON package_version_downloads(downloaded_at);
 		'''
 			for q in self.DB_INIT.split(';')[:-1]:
 				self.cursor.execute(q)
@@ -646,6 +675,35 @@ class Database(object):
 				closed_at TIMESTAMP DEFAULT NULL,
 				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 				);
+
+				CREATE TABLE IF NOT EXISTS package_versions(
+				id BIGSERIAL PRIMARY KEY,
+				package_id BIGINT NOT NULL REFERENCES packages(id) ON DELETE CASCADE,
+				version_str TEXT,
+				created_at TIMESTAMP
+				);
+
+				CREATE INDEX IF NOT EXISTS package_versions_idx ON package_versions(package_id,created_at);
+				CREATE UNIQUE INDEX IF NOT EXISTS package_versions_str_idx ON package_versions(package_id,version_str);
+				CREATE INDEX IF NOT EXISTS package_versions_date_idx ON package_versions(created_at);
+
+				CREATE TABLE IF NOT EXISTS package_dependencies(
+				depending_version BIGINT NOT NULL REFERENCES package_versions(id) ON DELETE CASCADE,
+				depending_on_package BIGINT NOT NULL REFERENCES packages(id) ON DELETE CASCADE,
+				semver_str TEXT,
+				PRIMARY KEY(depending_version,depending_on_package)
+				);
+
+				CREATE INDEX IF NOT EXISTS reverse_package_deps_idx ON package_dependencies(depending_on_package,depending_version);
+
+				CREATE TABLE IF NOT EXISTS package_version_downloads(
+				downloaded_at DATE,
+				downloads INT DEFAULT 1,
+				package_version BIGINT NOT NULL REFERENCES package_versions(id) ON DELETE CASCADE,
+				PRIMARY KEY(package_version,downloaded_at)
+				);
+
+				CREATE INDEX IF NOT EXISTS package_version_downloads_date_idx ON package_version_downloads(downloaded_at);
 				'''
 
 			self.cursor.execute(self.DB_INIT)
@@ -673,6 +731,9 @@ class Database(object):
 			self.cursor.execute('DROP TABLE IF EXISTS issues;')
 			self.cursor.execute('DROP TABLE IF EXISTS sponsors_user;')
 			self.cursor.execute('DROP TABLE IF EXISTS sponsors_repo;')
+			self.cursor.execute('DROP TABLE IF EXISTS package_version_downloads;')
+			self.cursor.execute('DROP TABLE IF EXISTS package_dependencies;')
+			self.cursor.execute('DROP TABLE IF EXISTS package_versions;')
 			self.cursor.execute('DROP TABLE IF EXISTS packages;')
 			self.cursor.execute('DROP TABLE IF EXISTS followers;')
 			self.cursor.execute('DROP TABLE IF EXISTS stars;')

@@ -30,9 +30,25 @@ class PackageFiller(fillers.Filler):
 	or
 	name,created_at,repository
 	"""
-	def __init__(self,package_list=None,package_list_file=None,force=False,**kwargs):
+	def __init__(self,package_list=None,package_list_file=None,package_version_list=None,package_deps_list=None,package_version_download_list=None,force=False,deps_to_delete=None,**kwargs):
 		self.package_list = package_list
 		self.package_list_file = package_list_file
+		if package_version_download_list is None:
+			self.package_version_download_list = []
+		else:
+			self.package_version_download_list = package_version_download_list
+		if package_version_list is None:
+			self.package_version_list = []
+		else:
+			self.package_version_list = package_version_list
+		if package_deps_list is None:
+			self.package_deps_list = []
+		else:
+			self.package_deps_list = package_deps_list
+		if deps_to_delete is None:
+			self.deps_to_delete = []
+		else:
+			self.deps_to_delete = deps_to_delete
 		self.force = force
 		fillers.Filler.__init__(self,**kwargs)
 
@@ -63,6 +79,9 @@ got: {}'''.format(headers))
 
 	def apply(self):
 		self.fill_packages(force=self.force)
+		self.fill_package_versions(force=self.force)
+		self.fill_package_version_downloads(force=self.force)
+		self.fill_package_dependencies(force=self.force)
 		self.db.connection.commit()
 
 	def fill_packages(self,package_list=None,source=None,force=False,clean_urls=True):
@@ -101,6 +120,233 @@ got: {}'''.format(headers))
 
 			self.db.register_packages(source=source,package_list=package_list)
 			self.logger.info('Filled packages')
+
+
+	def fill_package_versions(self,package_version_list=None,source=None,force=False,clean_urls=True):
+		'''
+		syntax of package_version list:
+		package id (in source), version_name, created_at (datetime.datetime)
+
+		'''
+
+		if package_version_list is None:
+			package_version_list = self.package_version_list
+		if source is None:
+			source = self.source
+		if not force:
+			if self.db.db_type == 'postgres':
+				self.db.cursor.execute('''SELECT 1 FROM package_versions pv
+					INNER JOIN packages p
+					ON pv.package_id=p.id
+					INNER JOIN sources s
+					ON p.source_id=s.id AND s.name=%s
+					LIMIT 1;''',(source,))
+			else:
+				self.db.cursor.execute('''SELECT 1 FROM package_versions pv
+					INNER JOIN packages p
+					ON pv.package_id=p.id
+					INNER JOIN sources s
+					ON p.source_id=s.id AND s.name=?
+					LIMIT 1;''',(source,))
+			sample_package = self.db.cursor.fetchone()
+			if sample_package is not None:
+				self.logger.info('Skipping package versions from {}'.format(source))
+			else:
+				self.fill_package_versions(package_version_list=package_version_list,source=source,force=True)
+		else:
+			self.logger.info('Filling package versions from {}'.format(source))
+			self.db.register_source(source)
+			self.set_source_id()
+			if self.db.db_type == 'postgres':
+				extras.execute_batch(self.db.cursor,'''
+					INSERT INTO package_versions(package_id,version_str,created_at)
+					-- SELECT p.id,%(version_str)s,%(created_at)s
+					-- FROM packages p
+					-- WHERE p.source_id=%(package_source_id)s
+					VALUES((SELECT id FROM packages WHERE source_id=%(package_source_id)s AND insource_id=%(package_insource_id)s),%(version_str)s,%(created_at)s)
+					ON CONFLICT DO NOTHING
+					;''',({'version_str':v_str,'package_insource_id':p_id,'package_source_id':self.source_id,'created_at':created_at} for (p_id,v_str,created_at) in package_version_list))
+			else:
+				self.db.cursor.executemany('''
+					INSERT OR INGORE INTO package_versions(package_id,version_str,created_at)
+					VALUES((SELECT id FROM packages WHERE source_id=:package_source_id
+						AND insource_id=:package_insource_id)
+					,:version_str,
+					:created_at)
+					;''',({'version_str':v_str,'package_insource_id':p_id,'package_source_id':self.source_id,'created_at':created_at} for (p_id,v_str,created_at) in package_version_list))
+
+			self.logger.info('Filled package versions')
+
+
+	def set_source_id(self):
+		if not hasattr(self,'source_id'):
+			if self.db.db_type == 'postgres':
+				self.db.cursor.execute('''
+					SELECT id FROM sources WHERE name=%s
+						;''',(self.source,))
+			else:
+				self.db.cursor.execute('''
+					SELECT id FROM sources WHERE name=?
+						;''',(self.source,))
+			self.source_id = self.db.cursor.fetchone()[0]
+
+	def fill_package_version_downloads(self,package_version_download_list=None,source=None,force=False,clean_urls=True):
+		'''
+		syntax of package_version_download list:
+		package id (in source), version_name, nb_downloads ,downloaded_at (datetime.datetime)
+
+		'''
+
+		if package_version_download_list is None:
+			package_version_download_list = self.package_version_download_list
+		if source is None:
+			source = self.source
+		if not force:
+			if self.db.db_type == 'postgres':
+				self.db.cursor.execute('''SELECT 1 FROM package_version_downloads pvd
+					INNER JOIN package_versions pv
+					ON pv.id=pvd.package_version
+					INNER JOIN packages p
+					ON pv.package_id=p.id
+					INNER JOIN sources s
+					ON p.source_id=s.id AND s.name=%s
+					LIMIT 1;''',(source,))
+			else:
+				self.db.cursor.execute('''SELECT 1 FROM package_version_downloads pvd
+					INNER JOIN package_versions pv
+					ON pv.id=pvd.package_version
+					INNER JOIN packages p
+					ON pv.package_id=p.id
+					INNER JOIN sources s
+					ON p.source_id=s.id AND s.name=?
+					LIMIT 1;''',(source,))
+			sample_package = self.db.cursor.fetchone()
+			if sample_package is not None:
+				self.logger.info('Skipping package version downloads from {}'.format(source))
+			else:
+				self.fill_package_version_downloads(package_version_download_list=package_version_download_list,source=source,force=True)
+		else:
+			self.logger.info('Filling package version downloads from {}'.format(source))
+			self.db.register_source(source)
+			self.set_source_id()
+			if self.db.db_type == 'postgres':
+				extras.execute_batch(self.db.cursor,'''
+					INSERT INTO package_version_downloads(package_version,downloaded_at,downloads)
+					VALUES(
+						(SELECT v.id FROM package_versions v
+							INNER JOIN packages p
+							ON p.source_id=%(package_source_id)s AND p.insource_id=%(package_insource_id)s
+							AND p.id=v.package_id AND v.version_str=%(version_str)s)
+						,%(downloaded_at)s,%(nb_downloads)s)
+					ON CONFLICT DO NOTHING
+					;''',({'version_str':v_str,'package_insource_id':p_id,'package_source_id':self.source_id,'downloaded_at':dl_at,'nb_downloads':nb_dl} for (p_id,v_str,nb_dl,dl_at) in package_version_download_list))
+			else:
+				self.db.cursor.executemany('''
+					INSERT OR IGNORE INTO package_version_downloads(package_version,downloaded_at,downloads)
+					VALUES(
+						(SELECT v.id FROM package_versions v
+							INNER JOIN packages p
+							ON p.source_id=:package_source_id AND p.insource_id=:package_insource_id
+							AND p.id=v.package_id AND v.version_str=:version_str)
+						,:downloaded_at,:nb_downloads)
+					;''',({'version_str':v_str,'package_insource_id':p_id,'package_source_id':self.source_id,'downloaded_at':dl_at,'nb_downloads':nb_dl} for (p_id,v_str,nb_dl,dl_at) in package_version_download_list))
+
+			self.logger.info('Filled package version downloads')
+
+
+
+	def fill_package_dependencies(self,package_deps_list=None,source=None,force=False,clean_urls=True):
+		'''
+		syntax of package_deps list:
+		depending package id (in source), depending version_name, depending_on_package source_id, semver
+
+		'''
+
+		if package_deps_list is None:
+			package_deps_list = self.package_deps_list
+		if source is None:
+			source = self.source
+		if not force:
+			if self.db.db_type == 'postgres':
+				self.db.cursor.execute('''SELECT 1 FROM package_dependencies pd
+					INNER JOIN packages p
+					ON pd.depending_on_package=p.id
+					INNER JOIN sources s
+					ON p.source_id=s.id AND s.name=%s
+					LIMIT 1;''',(source,))
+			else:
+				self.db.cursor.execute('''SELECT 1 FROM package_dependencies pd
+					INNER JOIN packages p
+					ON pd.depending_on_package=p.id
+					INNER JOIN sources s
+					ON p.source_id=s.id AND s.name=?
+					LIMIT 1;''',(source,))
+			sample_package = self.db.cursor.fetchone()
+			if sample_package is not None:
+				self.logger.info('Skipping package dependencies from {}'.format(source))
+			else:
+				self.fill_package_dependencies(package_deps_list=package_deps_list,source=source,force=True)
+		else:
+			self.logger.info('Filling package dependencies from {}'.format(source))
+			self.db.register_source(source)
+			self.set_source_id()
+			if self.db.db_type == 'postgres':
+				extras.execute_batch(self.db.cursor,'''
+					INSERT INTO package_dependencies(depending_version,depending_on_package,semver_str)
+					VALUES(
+						(SELECT v.id FROM package_versions v
+							INNER JOIN packages p
+							ON p.source_id=%(package_source_id)s AND p.insource_id=%(version_package_id)s
+							AND p.id=v.package_id AND v.version_str=%(version_str)s),
+						(SELECT id FROM packages WHERE source_id=%(package_source_id)s AND insource_id=%(depending_on_package)s),
+						%(semver_str)s)
+					ON CONFLICT DO NOTHING
+					;''',({'version_package_id':vp_id,'version_str':v_str,'depending_on_package':dop_id,'package_source_id':self.source_id,'semver_str':semver_str} for (vp_id,v_str,dop_id,semver_str) in package_deps_list))
+
+				for (dep_p,dep_on_p) in self.deps_to_delete:
+					self.db.cursor.execute('''
+						DELETE FROM package_dependencies WHERE
+							depending_version IN
+								(SELECT pv.id FROM packages p
+									INNER JOIN package_versions pv
+									ON pv.package_id=p.id AND p.name=%(dep_p)s
+									AND p.source_id=%(package_source_id)s)
+							AND depending_on_package IN
+								(SELECT p.id FROM packages p
+									WHERE p.name=%(dep_on_p)s
+									AND p.source_id=%(package_source_id)s)
+					;''',{'dep_p':dep_p,'dep_on_p':dep_on_p,'package_source_id':self.source_id})
+			else:
+				self.db.cursor.executemany('''
+					INSERT INTO package_dependencies(depending_version,depending_on_package,semver_str)
+					VALUES(
+						(SELECT v.id FROM package_versions v
+							INNER JOIN packages p
+							ON p.source_id=:package_source_id AND p.insource_id=:version_package_id
+							AND p.id=v.package_id AND v.version_str=:version_str),
+						(SELECT id FROM packages WHERE source_id=:package_source_id AND insource_id=:depending_on_package),
+						:semver_str)
+					ON CONFLICT DO NOTHING
+					;''',({'version_package_id':vp_id,'version_str':v_str,'depending_on_package':dop_id,'package_source_id':self.source_id,'semver_str':semver_str} for (vp_id,v_str,dop_id,semver_str) in package_deps_list))
+
+
+				for (dep_p,dep_on_p) in self.to_delete:
+					self.db.cursor.execute('''
+						DELETE FROM package_dependencies WHERE
+							depending_version IN
+								(SELECT pv.id FROM packages p
+									INNER JOIN package_versions pv
+									ON pv.package_id=p.id AND p.name=:dep_p
+									AND p.source_id=:package_source_id)
+							AND depending_on_package IN
+								(SELECT p.id FROM packages p
+									WHERE p.name=:dep_on_p
+									AND p.source_id=:package_source_id)
+					;''',{'dep_p':dep_p,'dep_on_p':dep_on_p,'package_source_id':self.source_id})
+
+			self.db.connection.commit()
+			self.logger.info('Filled package dependencies')
+
 
 class URLFiller(fillers.Filler):
 	'''

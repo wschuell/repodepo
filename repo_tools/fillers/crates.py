@@ -21,6 +21,9 @@ class CratesFiller(generic.PackageFiller):
 			host='localhost',
 			package_limit=None,
 			force=False,
+			deps_to_delete=[('juju','charmhelpers'),
+							('arraygen','arraygen-docfix'),
+							('expr-parent','expr-child'),],
 					**kwargs):
 		self.source = source
 		self.source_urlroot = source_urlroot
@@ -31,6 +34,12 @@ class CratesFiller(generic.PackageFiller):
 						'password':password,
 						'host':host}
 		self.force = force
+
+		if deps_to_delete is None:
+			self.deps_to_delete = []
+		else:
+			self.deps_to_delete = deps_to_delete
+
 		fillers.Filler.__init__(self,**kwargs)
 
 	def prepare(self):
@@ -48,7 +57,9 @@ class CratesFiller(generic.PackageFiller):
 
 		crates_conn = psycopg2.connect(**self.conninfo)
 		try:
-			self.package_list = self.get_packages_from_crates(conn=crates_conn)
+			self.db.connection.commit()
+			self.package_list = list(self.get_packages_from_crates(conn=crates_conn))
+			self.db.connection.commit()
 			if not self.force:
 				if self.db.db_type == 'postgres':
 					self.db.cursor.execute('''SELECT MAX(p.created_at) FROM packages p
@@ -63,11 +74,20 @@ class CratesFiller(generic.PackageFiller):
 									AND s.name=?
 									; ''',(self.source,))
 				ans = self.db.cursor.fetchone()
-				if ans is not None:
+				if ans is not None and ans[0] is not None:
 					last_created_at = ans[0]
 					if isinstance(last_created_at,str):
 						last_created_at = datetime.datetime.strptime(last_created_at,'%Y-%m-%d %H:%M:%S')
 					self.package_list = [(i,n,c_at,r) for (i,n,c_at,r) in self.package_list if c_at>last_created_at]
+
+
+			self.db.connection.commit()
+			self.package_version_list = list(self.get_package_versions_from_crates(conn=crates_conn))
+			self.db.connection.commit()
+			self.package_version_download_list = list(self.get_package_version_downloads_from_crates(conn=crates_conn))
+			self.db.connection.commit()
+			self.package_deps_list = list(self.get_package_deps_from_crates(conn=crates_conn))
+			self.db.connection.commit()
 		finally:
 			crates_conn.close()
 
@@ -92,6 +112,89 @@ class CratesFiller(generic.PackageFiller):
 
 		cursor.execute('''
 			SELECT id,name,created_at,COALESCE(repository,homepage,documentation) FROM crates {}
+			;'''.format(limit_str))
+
+		return cursor.fetchall()
+
+	def get_package_versions_from_crates(self,conn,limit=None):
+		'''
+		From a connection to a crates.io database, output the list of package versions as expected
+		package id, version name, created_at (datetime.datetime)
+		'''
+		cursor = conn.cursor()
+
+		if limit is None:
+			limit = self.package_limit
+
+
+		if limit is not None:
+			if not isinstance(limit,int):
+				raise ValueError('limit should be an integer, given {}'.format(limit))
+			else:
+				limit_str = ' LIMIT {}'.format(limit)
+		else:
+			limit_str = ''
+
+		cursor.execute('''
+			SELECT crate_id,num,created_at FROM versions {}
+			;'''.format(limit_str))
+
+		return cursor.fetchall()
+
+	def get_package_version_downloads_from_crates(self,conn,limit=None):
+		'''
+		From a connection to a crates.io database, output the list of package versions as expected
+		package id, version name, download_count, created_at (datetime.datetime)
+		'''
+		cursor = conn.cursor()
+
+		if limit is None:
+			limit = self.package_limit
+
+
+		if limit is not None:
+			if not isinstance(limit,int):
+				raise ValueError('limit should be an integer, given {}'.format(limit))
+			else:
+				limit_str = ' LIMIT {}'.format(limit)
+		else:
+			limit_str = ''
+
+		cursor.execute('''
+			SELECT v.crate_id,v.num,vd.downloads,vd.date FROM version_downloads vd
+			INNER JOIN versions v
+			ON v.id=vd.version_id
+			{}
+			;'''.format(limit_str))
+
+		return cursor.fetchall()
+
+
+	def get_package_deps_from_crates(self,conn,limit=None):
+		'''
+		From a connection to a crates.io database, output the list of package deps as expected
+		depending package id (in source), depending version_name, depending_on_package source_id, semver
+		'''
+		cursor = conn.cursor()
+
+		if limit is None:
+			limit = self.package_limit
+
+
+		if limit is not None:
+			if not isinstance(limit,int):
+				raise ValueError('limit should be an integer, given {}'.format(limit))
+			else:
+				limit_str = ' LIMIT {}'.format(limit)
+		else:
+			limit_str = ''
+
+		cursor.execute('''
+			SELECT v.crate_id,v.num,d.crate_id,d.req FROM dependencies d
+			INNER JOIN versions v
+			ON v.id=d.version_id
+			AND NOT d.optional AND d.kind=0
+			{}
 			;'''.format(limit_str))
 
 		return cursor.fetchall()
