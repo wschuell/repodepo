@@ -376,6 +376,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 						if not pageinfo['hasNextPage']:
 							# insert update success True (+ end cursor)
 							db.insert_update(identity_id=identity_id,repo_id=repo_id,table=self.items_name,success=True,info=end_cursor_json,autocommit=True)
+							db.connection.commit()
 							# clean partial updates with NULL success (?)
 							# db.clean_null_updates(identity_id=identity_id,repo_id=repo_id,table=self.items_name,autocommit=True)
 							# message with total count from result

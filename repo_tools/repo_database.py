@@ -44,7 +44,7 @@ class Database(object):
 	A 'computation_db' can be associated to it (always SQLite, can be in memory) to store temporary measures on repositories and users.
 	'''
 
-	def __init__(self,db_type='sqlite',db_name='repo_tools',db_folder='.',db_user='postgres',port='5432',host='localhost',data_folder='./datafolder',password=None,clean_first=False,do_init=False,timeout=5,computation_db_name='repo_tools_computation.db'):
+	def __init__(self,db_type='sqlite',db_name='repo_tools',db_folder='.',db_schema=None,db_user='postgres',port='5432',host='localhost',data_folder='./datafolder',password=None,clean_first=False,do_init=False,timeout=5,computation_db_name='repo_tools_computation.db'):
 		self.db_type = db_type
 		self.logger = logger
 		if db_type == 'sqlite':
@@ -60,17 +60,23 @@ class Database(object):
 				self.connection = sqlite3.connect(self.db_path,timeout=timeout, detect_types=sqlite3.PARSE_DECLTYPES)
 			self.cursor = self.connection.cursor()
 		elif db_type == 'postgres':
+			if db_schema is not None:
+				self.db_schema = db_schema
+				options = '-c search_path="{}"'.format(db_schema)
+			else:
+				self.db_schema = None
+				options = None
 			if password is not None:
 				logger.warning('You are providing your password directly, this could be a security concern, consider using solutions like .pgpass file.')
 			try:
-				self.connection = psycopg2.connect(user=db_user,port=port,host=host,database=db_name,password=password)
+				self.connection = psycopg2.connect(user=db_user,port=port,host=host,database=db_name,password=password,options=options)
 			except psycopg2.OperationalError:
 				pgpass_env = 'PGPASSFILE'
 				default_pgpass = os.path.join(os.environ['HOME'],'.pgpass')
 				if pgpass_env not in os.environ.keys():
 					os.environ[pgpass_env] = default_pgpass
 					self.logger.info('Password authentication failed,trying to set .pgpass env variable')
-					self.connection = psycopg2.connect(user=db_user,port=port,host=host,database=db_name,password=password)
+					self.connection = psycopg2.connect(user=db_user,port=port,host=host,database=db_name,password=password,options=options)
 				else:
 					raise
 			self.cursor = self.connection.cursor()
@@ -99,6 +105,7 @@ class Database(object):
 				'port':port,
 				'host':host,
 				'password':password,
+				'db_schema':db_schema,
 		}
 
 	def get_computation_db(self):
@@ -757,16 +764,18 @@ class Database(object):
 
 	def fill_db(self):
 		for f in self.fillers:
-			if not f.executed:
+			if not f.done:
 				f.prepare()
-				f.apply()
-				f.executed = True
-				self.logger.info('Filled with filler {}'.format(f.name))
+				self.logger.info('Prepared filler {}'.format(f.name))
+				if not f.done:
+					f.apply()
+					f.done = True
+					self.logger.info('Filled with filler {}'.format(f.name))
 			else:
 				self.logger.info('Already filled with filler {}, skipping'.format(f.name))
 
 	def add_filler(self,f):
-		if f.name in [ff.name for ff in self.fillers if ff.unique]:
+		if f.name in [ff.name for ff in self.fillers if ff.unique_name]:
 			self.logger.warning('Filler {} already present'.format(f.name))
 			return
 		f.db = self

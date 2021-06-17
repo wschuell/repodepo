@@ -168,7 +168,7 @@ got: {}'''.format(headers))
 					;''',({'version_str':v_str,'package_insource_id':p_id,'package_source_id':self.source_id,'created_at':created_at} for (p_id,v_str,created_at) in package_version_list))
 			else:
 				self.db.cursor.executemany('''
-					INSERT OR INGORE INTO package_versions(package_id,version_str,created_at)
+					INSERT OR IGNORE INTO package_versions(package_id,version_str,created_at)
 					VALUES((SELECT id FROM packages WHERE source_id=:package_source_id
 						AND insource_id=:package_insource_id)
 					,:version_str,
