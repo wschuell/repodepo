@@ -330,7 +330,7 @@ got: {}'''.format(headers))
 					;''',({'version_package_id':vp_id,'version_str':v_str,'depending_on_package':dop_id,'package_source_id':self.source_id,'semver_str':semver_str} for (vp_id,v_str,dop_id,semver_str) in package_deps_list))
 
 
-				for (dep_p,dep_on_p) in self.to_delete:
+				for (dep_p,dep_on_p) in self.deps_to_delete:
 					self.db.cursor.execute('''
 						DELETE FROM package_dependencies WHERE
 							depending_version IN
