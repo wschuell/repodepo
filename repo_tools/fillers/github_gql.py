@@ -725,7 +725,7 @@ class SponsorsUserFiller(GHGQLFiller):
 		ans = []
 		if query_result['user'] is not None:
 			user_login = query_result['user']['login']
-			sl_ca = query_result['sponsorsListing']['createdAt']
+			sl_ca = query_result['user']['sponsorsListing']['createdAt']
 			for e in query_result['user']['sponsorshipsAsMaintainer']['nodes']:
 				d = {'sponsored_id':identity_id,
 					'sponsored_login':user_login,
