@@ -689,6 +689,9 @@ class SponsorsUserFiller(GHGQLFiller):
 		return '''query {{
 					user(login:"{user_login}") {{
 						login
+						sponsorsListing {{
+      						createdAt
+    							}}
 						sponsorshipsAsMaintainer (includePrivate:true, first:100{after_end_cursor} ){{
 							totalCount
 							pageInfo {{
@@ -722,8 +725,12 @@ class SponsorsUserFiller(GHGQLFiller):
 		ans = []
 		if query_result['user'] is not None:
 			user_login = query_result['user']['login']
+			sl_ca = query_result['sponsorsListing']['createdAt']
 			for e in query_result['user']['sponsorshipsAsMaintainer']['nodes']:
-				d = {'sponsored_id':identity_id,'sponsored_login':user_login,'identity_type_id':identity_type_id}
+				d = {'sponsored_id':identity_id,
+					'sponsored_login':user_login,
+					'sponsorsListing_createdat':sl_ca,
+					'identity_type_id':identity_type_id}
 				try:
 					d['created_at'] = e['createdAt']
 					d['external_id'] = e['id']
@@ -763,6 +770,12 @@ class SponsorsUserFiller(GHGQLFiller):
 					)
 				ON CONFLICT DO NOTHING
 				;''',((f['sponsored_id'],f['identity_type_id'],f['sponsor_login'],f['identity_type_id'],f['sponsor_login'],f['created_at'],f['external_id'],f['tier']) for f in items_list))
+
+			extras.execute_batch(db.cursor,''' INSERT INTO sponsors_listings(identity_type_id,login,created_at)
+													VALUES(%(identity_type_id)s,
+															%(sponsored_login)s,
+															%(sponsorsListing_createdat)s)
+													ON CONFLICT DO NOTHING;''',items_list)
 		else:
 			db.cursor.executemany('''
 				INSERT OR IGNORE INTO sponsors_user(sponsored_id,sponsor_identity_type_id,sponsor_id,sponsor_login,created_at,external_id,tier)
@@ -775,9 +788,15 @@ class SponsorsUserFiller(GHGQLFiller):
 						?
 					)
 				;''',((f['sponsored_id'],f['identity_type_id'],f['sponsor_login'],f['identity_type_id'],f['sponsor_login'],f['created_at'],f['external_id'],f['tier']) for f in items_list))
+
+			db.cursor.executemany(''' INSERT OR IGNORE INTO sponsors_listings(identity_type_id,login,created_at)
+													VALUES(:identity_type_id,
+															:sponsored_login,
+															:sponsorsListing_createdat)
+													;''',items_list)
+
 		if commit:
 			db.connection.commit()
-
 
 	def get_nb_items(self,query_result):
 		'''
@@ -2290,9 +2309,9 @@ class SponsorablesGQLFiller(GHGQLFiller):
 		for qr in query_result['sponsorables']['nodes']:
 			if qr['__typename']=='User':
 				try:
-					elt = {'login':qr['login'],'sponsorsListing_createdat':qr['sponsorsListing']['createdAt']}
+					elt = {'identity_type':'github_login','login':qr['login'],'sponsorsListing_createdat':qr['sponsorsListing']['createdAt']}
 				except KeyError:
-					elt = {'login':qr['login'],'sponsorsListing_createdat':None}
+					elt = {'identity_type':'github_login','login':qr['login'],'sponsorsListing_createdat':None}
 				ans.append(elt)
 		return ans
 
@@ -2318,6 +2337,12 @@ class SponsorablesGQLFiller(GHGQLFiller):
 															%s)
 													ON CONFLICT DO NOTHING;''',((self.target_identity_type,self.target_identity_type,item['login'],item['login'],) for item in items_list))
 
+			extras.execute_batch(db.cursor,''' INSERT INTO sponsors_listings(identity_type_id,login,created_at)
+													VALUES((SELECT id FROM identity_types WHERE name=%(identity_type)s),
+															%(login)s,
+															%(sponsorsListing_createdat)s)
+													ON CONFLICT DO NOTHING;''',items_list)
+
 		else:
 
 			db.cursor.executemany(''' INSERT OR IGNORE INTO users(creation_identity_type_id,creation_identity) VALUES(
@@ -2331,6 +2356,12 @@ class SponsorablesGQLFiller(GHGQLFiller):
 															WHERE creation_identity_type_id=(SELECT id FROM identity_types WHERE name=?)
 																AND creation_identity=?),
 															?);''',((self.target_identity_type,self.target_identity_type,item['login'],item['login'],) for item in items_list))
+
+			db.cursor.executemany(''' INSERT OR IGNORE INTO sponsors_listings(identity_type_id,login,created_at)
+													VALUES((SELECT id FROM identity_types WHERE name=:identity_type),
+															:login,
+															:sponsorsListing_createdat)
+													;''',items_list)
 
 		if commit:
 			db.connection.commit()

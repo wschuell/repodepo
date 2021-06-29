@@ -11,6 +11,7 @@ import csv
 import copy
 import json
 import numpy as np
+import io
 
 logger = logging.getLogger(__name__)
 ch = logging.StreamHandler()
@@ -30,7 +31,28 @@ except ImportError:
 	logger.info('Psycopg2 not installed, pip install psycopg2 (or binary-psycopg2) if you want to use a PostgreSQL DB')
 
 
+def adapt_array(arr):
+    """
+    http://stackoverflow.com/a/31312102/190597 (SoulNibbler)
+    """
+    out = io.BytesIO()
+    np.save(out, arr)
+    out.seek(0)
+    return sqlite3.Binary(out.read())
+
+def convert_array(text):
+    out = io.BytesIO(text)
+    out.seek(0)
+    return np.load(out)
+
+# Converts np.array to TEXT when inserting
+sqlite3.register_adapter(np.ndarray, adapt_array)
+
+# Converts TEXT to np.array when selecting
+sqlite3.register_converter("array", convert_array)
+
 sqlite3.register_adapter(np.int64, int)
+
 
 class Database(object):
 	'''
@@ -365,6 +387,16 @@ class Database(object):
 				CREATE INDEX IF NOT EXISTS sponsors_user_idx ON sponsors_user(sponsored_id,created_at,sponsor_login,sponsor_id);
 				CREATE INDEX IF NOT EXISTS sponsors_user_idx2 ON sponsors_user(sponsor_id,created_at);
 
+				CREATE TABLE IF NOT EXISTS sponsors_listings(
+				id INTEGER PRIMARY KEY,
+				login TEXT NOT NULL,
+				identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
+				created_at TIMESTAMP NOT NULL,
+				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				UNIQUE(identity_type_id,login,created_at)
+				);
+				CREATE INDEX IF NOT EXISTS sponsors_listings_idx ON sponsors_listings(created_at);
+
 				CREATE TABLE IF NOT EXISTS releases(
 				id INTEGER PRIMARY KEY,
 				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
@@ -662,6 +694,16 @@ class Database(object):
 
 				CREATE INDEX IF NOT EXISTS sponsors_user_idx ON sponsors_user(sponsored_id,created_at,sponsor_login,sponsor_id);
 				CREATE INDEX IF NOT EXISTS sponsors_user_idx2 ON sponsors_user(sponsor_id,created_at);
+
+				CREATE TABLE IF NOT EXISTS sponsors_listings(
+				id BIGSERIAL PRIMARY KEY,
+				login TEXT NOT NULL,
+				identity_type_id BIGINT REFERENCES identity_types(id) ON DELETE CASCADE,
+				created_at TIMESTAMP NOT NULL,
+				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				UNIQUE(identity_type_id,login,created_at)
+				);
+				CREATE INDEX IF NOT EXISTS sponsors_listings_idx ON sponsors_listings(created_at);
 
 				CREATE TABLE IF NOT EXISTS releases(
 				id BIGSERIAL PRIMARY KEY,
