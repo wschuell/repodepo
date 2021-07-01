@@ -776,6 +776,7 @@ class Database(object):
 			self.cursor = self.connection.cursor()
 		else:
 			self.cursor.execute('DROP TABLE IF EXISTS _dbinfo;')
+			self.cursor.execute('DROP TABLE IF EXISTS sponsors_listings;')
 			self.cursor.execute('DROP TABLE IF EXISTS releases;')
 			self.cursor.execute('DROP TABLE IF EXISTS issues;')
 			self.cursor.execute('DROP TABLE IF EXISTS sponsors_user;')
