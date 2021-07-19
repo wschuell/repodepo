@@ -27,7 +27,7 @@ class Getter(object):
 	This class is just an abstract 'mother' class
 	"""
 
-	def __init__(self,db=None,name=None,data_folder=None):#,file_info=None):
+	def __init__(self,db=None,name=None,data_folder=None,**kwargs):#,file_info=None):
 		if name is None:
 			name = self.__class__.__name__
 		self.db = db
