@@ -204,6 +204,7 @@ class Database(object):
 			self.cursor.execute('DROP TABLE IF EXISTS identity_types;')
 			self.cursor.execute('DROP TABLE IF EXISTS full_updates;')
 			self.cursor.execute('DROP TABLE IF EXISTS download_attempts;')
+			self.cursor.execute('DROP TABLE IF EXISTS repo_languages;')
 			self.cursor.execute('DROP TABLE IF EXISTS repositories;')
 			self.cursor.execute('DROP TABLE IF EXISTS urls;')
 			self.cursor.execute('DROP TABLE IF EXISTS sources;')

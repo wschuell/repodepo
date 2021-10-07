@@ -30,7 +30,7 @@ workers = 5
 
 #### Tests
 
-@pytest.mark.timeout(200)
+@pytest.mark.timeout(300)
 def test_github_gql(testdb):
 	testdb.add_filler(generic.SourcesFiller(source=['GitHub',],source_urlroot=['github.com',]))
 	testdb.add_filler(generic.PackageFiller(package_list_file='packages.csv',data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))
@@ -42,9 +42,9 @@ def test_github_gql(testdb):
 	testdb.add_filler(github_gql.StarsGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.ReleasesGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.FollowersGQLFiller(fail_on_wait=True,workers=workers))
+	testdb.add_filler(github_gql.LanguagesGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.SponsorsUserFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.IssuesGQLFiller(fail_on_wait=True,workers=workers))
-	testdb.add_filler(github_gql.LanguagesGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.BackwardsSponsorsUserFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(generic.RepoCommitOwnershipFiller()) # Clones after forks to have up-to-date repo URLS (detect redirects)
 	testdb.add_filler(snowball.UserSnowballFiller())

@@ -725,28 +725,31 @@ class SponsorsUserFiller(GHGQLFiller):
 		ans = []
 		if query_result['user'] is not None:
 			user_login = query_result['user']['login']
-			sl_ca = query_result['user']['sponsorsListing']['createdAt']
-			for e in query_result['user']['sponsorshipsAsMaintainer']['nodes']:
-				d = {'sponsored_id':identity_id,
-					'sponsored_login':user_login,
-					'sponsorsListing_createdat':sl_ca,
-					'identity_type_id':identity_type_id}
-				try:
-					d['created_at'] = e['createdAt']
-					d['external_id'] = e['id']
-					if e['privacyLevel'] == 'PRIVATE' or e['sponsor'] is None:
-						d['sponsor_login'] = None
+			if query_result['user']['sponsorsListing'] is None:
+				self.logger.info('{} is not sponsorable'.format(user_login))
+			else:
+				sl_ca = query_result['user']['sponsorsListing']['createdAt']
+				for e in query_result['user']['sponsorshipsAsMaintainer']['nodes']:
+					d = {'sponsored_id':identity_id,
+						'sponsored_login':user_login,
+						'sponsorsListing_createdat':sl_ca,
+						'identity_type_id':identity_type_id}
+					try:
+						d['created_at'] = e['createdAt']
+						d['external_id'] = e['id']
+						if e['privacyLevel'] == 'PRIVATE' or e['sponsor'] is None:
+							d['sponsor_login'] = None
+						else:
+							d['sponsor_login'] = e['sponsor']['login']
+						if e['tier'] is None:
+							d['tier'] = None
+						else:
+							d['tier'] = json.dumps(e['tier'])
+					except KeyError as err:
+						self.logger.info('KeyError when parsing sponsors_user for {}: {}'.format(user_login,err))
+						continue
 					else:
-						d['sponsor_login'] = e['sponsor']['login']
-					if e['tier'] is None:
-						d['tier'] = None
-					else:
-						d['tier'] = json.dumps(e['tier'])
-				except KeyError as err:
-					self.logger.info('KeyError when parsing sponsors_user for {}: {}'.format(user_login,err))
-					continue
-				else:
-					ans.append(d)
+						ans.append(d)
 		return ans
 
 
