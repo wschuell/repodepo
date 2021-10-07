@@ -368,10 +368,12 @@ class URLFiller(fillers.Filler):
 				filehash = hashlib.sha256(f.read()).hexdigest()
 			self.source = '{}_{}'.format(self.url_list_file,filehash)
 			self.db.register_source(source=self.source)
-			with open(os.path.join(self.data_folder,self.url_list_file),'r') as f:
-				reader = csv.reader(f)
-				self.url_list = [r[0] for r in reader]
+			self.set_url_list()
 
+	def set_url_list(self):
+		with open(os.path.join(self.data_folder,self.url_list_file),'r') as f:
+			reader = csv.reader(f)
+			self.url_list = [r[0] for r in reader]
 
 	def apply(self):
 		self.fill_urls(force=self.force)
@@ -385,6 +387,13 @@ class URLFiller(fillers.Filler):
 		self.db.register_urls(source=source,url_list=url_list)
 		self.logger.info('Filled URLs')
 
+class GithubURLFiller(URLFiller):
+
+	def set_url_list(self):
+		with open(os.path.join(self.data_folder,self.url_list_file),'r') as f:
+			reader = csv.reader(f)
+			header = next(reader)
+			self.url_list = ['github.com/'+r[-1] for r in reader]
 
 
 class SourcesFiller(fillers.Filler):
