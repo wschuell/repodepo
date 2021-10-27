@@ -318,7 +318,7 @@ got: {}'''.format(headers))
 					;''',{'dep_p':dep_p,'dep_on_p':dep_on_p,'package_source_id':self.source_id})
 			else:
 				self.db.cursor.executemany('''
-					INSERT INTO package_dependencies(depending_version,depending_on_package,semver_str)
+					INSERT OR IGNORE INTO package_dependencies(depending_version,depending_on_package,semver_str)
 					VALUES(
 						(SELECT v.id FROM package_versions v
 							INNER JOIN packages p
@@ -326,7 +326,6 @@ got: {}'''.format(headers))
 							AND p.id=v.package_id AND v.version_str=:version_str),
 						(SELECT id FROM packages WHERE source_id=:package_source_id AND insource_id=:depending_on_package),
 						:semver_str)
-					ON CONFLICT DO NOTHING
 					;''',({'version_package_id':vp_id,'version_str':v_str,'depending_on_package':dop_id,'package_source_id':self.source_id,'semver_str':semver_str} for (vp_id,v_str,dop_id,semver_str) in package_deps_list))
 
 

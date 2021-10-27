@@ -292,11 +292,10 @@ class Database(object):
 			self.cursor.executemany(''' UPDATE urls SET cleaned_url=id WHERE url=?;''',((url_cleaned,) for url,url_cleaned,source_root_id in url_list if url_cleaned is not None))
 			self.cursor.executemany(''' UPDATE urls SET source=(SELECT id FROM sources WHERE name=?),source_root=? WHERE url=?;''',((source,source_root_id,url,) for url,url_cleaned,source_root_id in url_list if url_cleaned is not None))
 			self.cursor.executemany(''' UPDATE urls SET source=(SELECT id FROM sources WHERE name=?),source_root=? WHERE url=?;''',((source,source_root_id,url_cleaned,) for url,url_cleaned,source_root_id in url_list if url_cleaned is not None))
-			self.cursor.executemany(''' INSERT INTO urls(source,source_root,url,cleaned_url)
+			self.cursor.executemany(''' INSERT OR REPLACE INTO urls(source,source_root,url,cleaned_url)
 				 VALUES((SELECT id FROM sources WHERE name=?),
 				 				?,
-								?,(SELECT id FROM urls WHERE url=?)) ON CONFLICT(url) DO UPDATE
-								SET cleaned_url=excluded.cleaned_url;''',((source,source_root_id,url,url_cleaned) for url,url_cleaned,source_root_id in url_list))
+								?,(SELECT id FROM urls WHERE url=?));''',((source,source_root_id,url,url_cleaned) for url,url_cleaned,source_root_id in url_list))
 
 		self.connection.commit()
 

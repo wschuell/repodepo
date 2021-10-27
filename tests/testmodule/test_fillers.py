@@ -1,6 +1,6 @@
 
 import repo_tools
-from repo_tools.fillers import generic,commit_info,github_rest,meta_fillers
+from repo_tools.fillers import generic,commit_info,github_rest,meta_fillers,bot_fillers
 import pytest
 import datetime
 import time
@@ -76,6 +76,32 @@ def test_identities2(testdb):
 @pytest.mark.timeout(30)
 def test_identities3(testdb):
 	testdb.add_filler(generic.IdentitiesFiller(identity_type='test_identities',identities_list=[('blah',{'name':'blih','age':25}),('bleh','{"name":"bloh","age":35}')],data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))
+	testdb.fill_db()
+
+@pytest.mark.timeout(30)
+def test_bots(testdb):
+	testdb.add_filler(generic.IdentitiesFiller(identity_type='test_identities',identities_list_file='identities_2.csv',data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))
+	testdb.add_filler(bot_fillers.BotFiller(identity_type='dummy_data'))
+	testdb.fill_db()
+
+@pytest.mark.timeout(30)
+def test_botsfull(testdb):
+	testdb.add_filler(generic.IdentitiesFiller(identity_type='test_identities',identities_list_file='identities_2.csv',data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))
+	testdb.add_filler(bot_fillers.BotFiller(identity_type='dummy_data'))
+	testdb.add_filler(bot_fillers.BotUserFiller(identity_type='dummy_data'))
+	testdb.add_filler(bot_fillers.ResetBotsFiller(identity_type='dummy_data'))
+	testdb.fill_db()
+
+@pytest.mark.timeout(30)
+def test_botlist(testdb):
+	testdb.add_filler(generic.IdentitiesFiller(identity_type='test_identities',identities_list_file='identities_2.csv',data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))
+	testdb.add_filler(bot_fillers.BotListFiller(bot_list=["blah['bot']"],identity_type='dummy_data'))
+	testdb.fill_db()
+
+@pytest.mark.timeout(30)
+def test_botfile(testdb):
+	testdb.add_filler(generic.IdentitiesFiller(identity_type='test_identities',identities_list_file='identities_2.csv',data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))
+	testdb.add_filler(bot_fillers.BotFileFiller(bot_file='botlist.csv',identity_type='test_identities',data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))
 	testdb.fill_db()
 
 @pytest.mark.timeout(100)

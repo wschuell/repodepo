@@ -60,11 +60,13 @@
 				created_at TIMESTAMP,
 				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 				attributes TEXT,
+				is_bot BOOLEAN DEFAULT false,
 				UNIQUE(identity_type_id,identity)
 				);
 
 				CREATE INDEX IF NOT EXISTS identities_idx ON identities(identity);
 				CREATE INDEX IF NOT EXISTS identity_users_idx ON identities(user_id);
+				CREATE INDEX IF NOT EXISTS identity_isbot_idx ON identities(is_bot);
 
 				CREATE TABLE IF NOT EXISTS merged_identities(
 				id INTEGER PRIMARY KEY,
