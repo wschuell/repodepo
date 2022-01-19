@@ -37,5 +37,5 @@ def test_urls(testdb):
 	testdb.add_filler(generic.RepositoriesFiller())
 	testdb.add_filler(generic.ClonesFiller(data_folder='dummy_clones'))
 	testdb.add_filler(commit_info.CommitsFiller(data_folder='dummy_clones'))
-	testdb.add_filler(github_gql.StarsGQLFiller())
+	testdb.add_filler(github_gql.StarsGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.fill_db()
