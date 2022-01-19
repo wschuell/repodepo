@@ -69,6 +69,7 @@ class Database(object):
 	def __init__(self,db_type='sqlite',db_name='repo_tools',db_folder='.',db_schema=None,db_user='postgres',port='5432',host='localhost',data_folder='./datafolder',password=None,clean_first=False,do_init=False,timeout=5,computation_db_name='repo_tools_computation.db'):
 		self.db_type = db_type
 		self.logger = logger
+		self.db_name = db_name
 		if db_type == 'sqlite':
 			if db_name.startswith(':memory:'):
 				self.connection = sqlite3.connect(db_name, detect_types=sqlite3.PARSE_DECLTYPES)
