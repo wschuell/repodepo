@@ -96,7 +96,7 @@ class GithubFiller(fillers.Filler):
 				api_keys.append(ak)
 		self.api_keys = api_keys
 		if not len(self.api_keys):
-			self.logger.info('No API keys found for Github, using default anonymous (but limited and only REST, no GQL) authentication.\nLooking for api_keys_file in db.data_folder, then in current folder, then in ~/.repo_tools/.\nAdding content of environment variable GITHUB_API_KEY.')
+			self.logger.info('No API keys found for {}, using default anonymous (but limited and only REST, no GQL) authentication.\nLooking for api_keys_file in db.data_folder, then in current folder, then in ~/.repo_tools/.\nAdding content of environment variables {} and REPOTOOLS_{}.'.format(self.env_apikey.split('_')[0],self.env_apikey,self.env_apikey))
 
 
 	def set_requesters(self):
