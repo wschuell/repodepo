@@ -86,7 +86,7 @@ class GithubFiller(fillers.Filler):
 		except KeyError:
 			pass
 		try:
-			self.api_keys.append('REPOTOOLS_'+os.environ[self.env_apikey])
+			self.api_keys.append(os.environ['REPOTOOLS_'+self.env_apikey])
 		except KeyError:
 			pass
 		self.api_keys = [ak for ak in self.api_keys if ak!=''] # removing empty api keys, can come from e.g. trailing newlines at end of parsed file
