@@ -105,21 +105,21 @@ def testdb(request):
 
 #### Tests
 
-def test_setdb(testdb):
-	testdb.init_db()
+# def test_setdb(testdb):
+# 	testdb.init_db()
 
-def test_gettersPproj(testdb,time_window,Pgetter,proj_id,cumulative):
-	testdb.init_db()
-	df = Pgetter().get_result(db=testdb,aggregated=True,time_window=time_window,cumulative=cumulative,project_id=proj_id)
+# def test_gettersPproj(testdb,time_window,Pgetter,proj_id,cumulative):
+# 	testdb.init_db()
+# 	df = Pgetter().get_result(db=testdb,aggregated=True,time_window=time_window,cumulative=cumulative,project_id=proj_id)
 
-def test_gettersP(testdb,time_window,Pgetter,aggregated,cumulative):
-	testdb.init_db()
-	df = Pgetter().get_result(db=testdb,aggregated=aggregated,time_window=time_window,cumulative=cumulative)
+# def test_gettersP(testdb,time_window,Pgetter,aggregated,cumulative):
+# 	testdb.init_db()
+# 	df = Pgetter().get_result(db=testdb,aggregated=aggregated,time_window=time_window,cumulative=cumulative)
 
-def test_gettersUuser(testdb,time_window,Ugetter,identity_id,cumulative):
-	testdb.init_db()
-	df = Ugetter().get_result(db=testdb,aggregated=True,time_window=time_window,cumulative=cumulative,identity_id=identity_id)
+# def test_gettersUuser(testdb,time_window,Ugetter,identity_id,cumulative):
+# 	testdb.init_db()
+# 	df = Ugetter().get_result(db=testdb,aggregated=True,time_window=time_window,cumulative=cumulative,identity_id=identity_id)
 
-def test_gettersU(testdb,time_window,Ugetter,cumulative,aggregated):
-	testdb.init_db()
-	df = Ugetter().get_result(db=testdb,aggregated=aggregated,time_window=time_window,cumulative=cumulative)
+# def test_gettersU(testdb,time_window,Ugetter,cumulative,aggregated):
+# 	testdb.init_db()
+# 	df = Ugetter().get_result(db=testdb,aggregated=aggregated,time_window=time_window,cumulative=cumulative)
