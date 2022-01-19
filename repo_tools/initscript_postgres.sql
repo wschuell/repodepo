@@ -48,6 +48,7 @@
 				creation_identity_type_id BIGINT REFERENCES identity_types(id) ON DELETE CASCADE,
 				creation_identity TEXT,
 				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				is_bot BOOLEAN DEFAULT false,
 				UNIQUE(creation_identity_type_id,creation_identity)
 				);
 
@@ -220,6 +221,7 @@
 				sponsor_id BIGINT REFERENCES identities(id) ON DELETE CASCADE,
 				created_at TIMESTAMP NOT NULL,
 				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				is_onetime_payment BOOLEAN DEFAULT false,
 				external_id TEXT UNIQUE,
 				tier JSONB
 				);
@@ -235,6 +237,7 @@
 				sponsor_login TEXT,
 				created_at TIMESTAMP NOT NULL,
 				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				is_onetime_payment BOOLEAN DEFAULT false,
 				external_id TEXT UNIQUE,
 				tier JSONB
 				);
@@ -310,3 +313,23 @@
 					);
 
 				CREATE INDEX IF NOT EXISTS lang_idx ON repo_languages(language,repo_id);
+
+				CREATE TABLE IF NOT EXISTS filtered_deps_package(
+					package_id BIGINT PRIMARY KEY REFERENCES packages(id) ON DELETE CASCADE,
+					reason TEXT,
+					created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+					);
+
+				CREATE TABLE IF NOT EXISTS filtered_deps_repo(
+					repo_id BIGINT PRIMARY KEY REFERENCES repositories(id) ON DELETE CASCADE,
+					reason TEXT,
+					created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+					);
+
+				CREATE TABLE IF NOT EXISTS filtered_deps_repoedges(
+					repo_source_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
+					repo_dest_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
+					reason TEXT,
+					created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+					PRIMARY KEY(repo_source_id,repo_dest_id)
+					);

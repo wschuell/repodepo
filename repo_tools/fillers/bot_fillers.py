@@ -53,10 +53,20 @@ class BotUserFiller(BotFiller):
 					WHERE user_id IN (SELECT DISTINCT user_id FROM identities
 						WHERE is_bot);
 				''')
+			self.db.cursor.execute('''
+					UPDATE users SET is_bot=true
+					WHERE id in (SELECT DISTINCT user_id FROM identities
+						WHERE is_bot);
+				''')
 		else:
 			self.db.cursor.execute('''
 					UPDATE identities SET is_bot=1
 					WHERE user_id IN (SELECT DISTINCT user_id FROM identities
+						WHERE is_bot);
+				''')
+			self.db.cursor.execute('''
+					UPDATE users SET is_bot=1
+					WHERE id in (SELECT DISTINCT user_id FROM identities
 						WHERE is_bot);
 				''')
 
@@ -68,9 +78,15 @@ class ResetBotsFiller(BotFiller):
 	def fill_bots(self):
 		if self.db.db_type == 'postgres':
 			self.db.cursor.execute('''
+				UPDATE users SET is_bot=false;
+				''')
+			self.db.cursor.execute('''
 				UPDATE identities SET is_bot=false;
 				''')
 		else:
+			self.db.cursor.execute('''
+				UPDATE users SET is_bot=0;
+				''')
 			self.db.cursor.execute('''
 				UPDATE identities SET is_bot=0;
 				''')

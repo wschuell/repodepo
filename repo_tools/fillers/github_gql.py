@@ -701,6 +701,7 @@ class SponsorsUserFiller(GHGQLFiller):
 						 	nodes {{
 								createdAt
 								privacyLevel
+								isOneTimePayment
 								id
 								tier {{
 									updatedAt
@@ -745,6 +746,8 @@ class SponsorsUserFiller(GHGQLFiller):
 							d['tier'] = None
 						else:
 							d['tier'] = json.dumps(e['tier'])
+						d['is_otp'] = bool(e['isOneTimePayment'])
+
 					except KeyError as err:
 						self.logger.info('KeyError when parsing sponsors_user for {}: {}'.format(user_login,err))
 						continue
@@ -762,17 +765,18 @@ class SponsorsUserFiller(GHGQLFiller):
 			db = self.db
 		if db.db_type == 'postgres':
 			extras.execute_batch(db.cursor,'''
-				INSERT INTO sponsors_user(sponsored_id,sponsor_identity_type_id,sponsor_id,sponsor_login,created_at,external_id,tier)
+				INSERT INTO sponsors_user(sponsored_id,sponsor_identity_type_id,sponsor_id,sponsor_login,created_at,external_id,tier,is_onetime_payment)
 				VALUES(%s,
 						%s,
 						(SELECT id FROM identities WHERE identity=%s AND identity_type_id=%s),
 						%s,
 						%s,
 						%s,
+						%s,
 						%s
 					)
 				ON CONFLICT DO NOTHING
-				;''',((f['sponsored_id'],f['identity_type_id'],f['sponsor_login'],f['identity_type_id'],f['sponsor_login'],f['created_at'],f['external_id'],f['tier']) for f in items_list))
+				;''',((f['sponsored_id'],f['identity_type_id'],f['sponsor_login'],f['identity_type_id'],f['sponsor_login'],f['created_at'],f['external_id'],f['tier'],f['is_otp']) for f in items_list))
 
 			extras.execute_batch(db.cursor,''' INSERT INTO sponsors_listings(identity_type_id,login,created_at)
 													VALUES(%(identity_type_id)s,
@@ -781,16 +785,17 @@ class SponsorsUserFiller(GHGQLFiller):
 													ON CONFLICT DO NOTHING;''',items_list)
 		else:
 			db.cursor.executemany('''
-				INSERT OR IGNORE INTO sponsors_user(sponsored_id,sponsor_identity_type_id,sponsor_id,sponsor_login,created_at,external_id,tier)
+				INSERT OR IGNORE INTO sponsors_user(sponsored_id,sponsor_identity_type_id,sponsor_id,sponsor_login,created_at,external_id,tier,is_onetime_payment)
 				VALUES(?,
 						?,
 						(SELECT id FROM identities WHERE identity=? AND identity_type_id=?),
 						?,
 						?,
 						?,
+						?,
 						?
 					)
-				;''',((f['sponsored_id'],f['identity_type_id'],f['sponsor_login'],f['identity_type_id'],f['sponsor_login'],f['created_at'],f['external_id'],f['tier']) for f in items_list))
+				;''',((f['sponsored_id'],f['identity_type_id'],f['sponsor_login'],f['identity_type_id'],f['sponsor_login'],f['created_at'],f['external_id'],f['tier'],f['is_otp']) for f in items_list))
 
 			db.cursor.executemany(''' INSERT OR IGNORE INTO sponsors_listings(identity_type_id,login,created_at)
 													VALUES(:identity_type_id,

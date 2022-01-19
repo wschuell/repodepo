@@ -24,7 +24,7 @@ def testdb(request):
 	db.init_db()
 	return db
 
-workers = 5
+workers = 1 #5
 
 ##############
 

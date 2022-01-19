@@ -13,8 +13,8 @@ ch = logging.StreamHandler()
 ch.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 ch.setFormatter(formatter)
-logger.addHandler(ch)
-logger.setLevel(logging.INFO)
+# logger.addHandler(ch)
+# logger.setLevel(logging.INFO)
 
 
 class Getter(object):
@@ -71,3 +71,15 @@ class Getter(object):
 		returns list of elements to be used for pandas or geopandas
 		'''
 		raise NotImplementedError
+
+	def __getstate__(self):
+		attributes = self.__dict__.copy()
+		# del attributes['db']
+		# attributes['db'] = None
+		attributes['db'] = 'Dummy DB copy'
+		return attributes
+
+	# def __setstate__(self, state):
+	# 	self.__dict__ = state
+	# 	if not hasattr(self,'db'):
+	# 		self.db = None
