@@ -216,6 +216,7 @@ class Database(object):
 
 
 	def fill_db(self):
+		self.connection.commit()
 		for f in self.fillers:
 			if not f.done:
 				f.prepare()
