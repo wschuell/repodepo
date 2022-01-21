@@ -157,13 +157,13 @@ def test_reset_merged_identities(testdb):
 	testdb.add_filler(github_rest.GHLoginsFiller(fail_on_wait=True,workers=workers,no_unauth=True))
 	testdb.fill_db()
 	# count = testdb.count_users()
-	# count = testdb.count_identities()
 	testdb.reset_merged_identities()
 	# assert testdb.count_users() == testdb.count_identities(), 'There should be as many users as identities'
 	testdb.fillers = []
 	testdb.add_filler(github_rest.GHLoginsFiller(fail_on_wait=True,workers=workers,force=True,no_unauth=True))
 	testdb.fill_db()
 	# assert testdb.count_users() == count
+	count = testdb.count_identities()
 
 # @pytest.mark.timeout(100)
 # def test_metafiller(testdb):
