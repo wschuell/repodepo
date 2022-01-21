@@ -156,7 +156,7 @@ def test_reset_merged_identities(testdb):
 	testdb.add_filler(commit_info.CommitsFiller(data_folder='dummy_clones')) # Commits after forks because fork info needed for repo commit ownership
 	testdb.add_filler(github_rest.GHLoginsFiller(fail_on_wait=True,workers=workers,no_unauth=True))
 	testdb.fill_db()
-	testdb.commit()
+	testdb.connection.commit()
 	count = testdb.count_users()
 	testdb.reset_merged_identities()
 	# assert testdb.count_users() == testdb.count_identities(), 'There should be as many users as identities'
