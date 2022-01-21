@@ -1291,21 +1291,21 @@ class Database(object):
 				WHERE followee_id=?
 				;
 				''',(login_id,))
-		ans = self.cursor.fetchone()[0] # When no count, result is (None,)
+		ans = self.cursor.fetchall()
 		if ans is None:
 			return 0
 		else:
-			return ans
+			return ans[0][0]
 
 	def count_users(self):
 		self.cursor.execute('''
 				SELECT COUNT(*) FROM users
 				;''')
-		ans = self.cursor.fetchone()[0] # When no count, result is (None,)
+		ans = self.cursor.fetchall()
 		if ans is None:
 			return 0
 		else:
-			return ans
+			return ans[0][0]
 
 	def count_identities(self,user_id=None):
 		if user_id is None:
@@ -1323,11 +1323,11 @@ class Database(object):
 					SELECT COUNT(*) FROM identities
 					WHERE user_id=?
 					;''',(user_id,))
-		ans = self.cursor.fetchone()[0] # When no count, result is (None,)
+		ans = self.cursor.fetchall()
 		if ans is None:
 			return 0
 		else:
-			return ans
+			return ans[0][0]
 
 	def insert_stars(self,stars_list,commit=True):
 		'''
@@ -1418,24 +1418,24 @@ class Database(object):
 		# Getting user_id that may disappear
 		if self.db_type == 'postgres':
 			self.cursor.execute('''
-				SELECT user_id FROM identities WHERE id=%s
+				SELECT user_id FROM identities WHERE id=%s LIMIT 1
 				;''',(identity2,))
 		else:
 			self.cursor.execute('''
-				SELECT user_id FROM identities WHERE id=?
+				SELECT user_id FROM identities WHERE id=? LIMIT 1
 				;''',(identity2,))
-		old_user_id2 = self.cursor.fetchone()[0]
+		old_user_id2 = self.cursor.fetchall()[0][0]
 
 		#Getting common user_id that will be used at the end
 		if self.db_type == 'postgres':
 			self.cursor.execute('''
-				SELECT user_id FROM identities WHERE id=%s
+				SELECT user_id FROM identities WHERE id=%s LIMIT 1
 				;''',(identity1,))
 		else:
 			self.cursor.execute('''
-				SELECT user_id FROM identities WHERE id=?
+				SELECT user_id FROM identities WHERE id=? LIMIT 1
 				;''',(identity1,))
-		user_id = self.cursor.fetchone()[0]
+		user_id = self.cursor.fetchall()[0][0]
 
 		#If same do nothing
 		if user_id != old_user_id2:
