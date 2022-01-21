@@ -226,6 +226,7 @@ class Database(object):
 					self.logger.info('Filled with filler {}'.format(f.name))
 			else:
 				self.logger.info('Already filled with filler {}, skipping'.format(f.name))
+		self.connection.commit()
 
 	def add_filler(self,f):
 		if f.name in [ff.name for ff in self.fillers if ff.unique_name]:
