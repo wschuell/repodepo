@@ -8,8 +8,8 @@ import os
 
 #### Parameters
 dbtype_list = [
-	'sqlite',
-	# 'postgres'
+	# 'sqlite',
+	'postgres'
 	]
 @pytest.fixture(params=dbtype_list)
 def dbtype(request):
