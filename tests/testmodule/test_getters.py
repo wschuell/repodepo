@@ -97,8 +97,9 @@ def testdb(request):
 		db.init_db()
 		db.add_filler(meta_fillers.DummyMetaFiller())
 		db.fill_db()
-	return db
-
+	yield db
+	db.connection.close()
+	del db
 
 
 ##############

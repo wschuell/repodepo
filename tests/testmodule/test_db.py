@@ -20,7 +20,9 @@ def testdb(request):
 	db = repo_tools.repo_database.Database(db_name='travis_ci_test_repo_tools',db_type=request.param)
 	db.clean_db()
 	db.init_db()
-	return db
+	yield db
+	db.connection.close()
+	del db
 
 ##############
 
