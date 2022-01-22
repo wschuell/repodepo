@@ -154,8 +154,8 @@ def test_reset_merged_identities(testdb):
 	testdb.add_filler(github_rest.ForksFiller(fail_on_wait=True,workers=workers,no_unauth=True))
 	testdb.add_filler(generic.ClonesFiller(data_folder='dummy_clones')) # Clones after forks to have up-to-date repo URLS (detect redirects)
 	testdb.add_filler(commit_info.CommitsFiller(data_folder='dummy_clones')) # Commits after forks because fork info needed for repo commit ownership
-	count = testdb.count_users()
 	testdb.add_filler(github_rest.GHLoginsFiller(fail_on_wait=True,workers=workers,no_unauth=True))
+	count = testdb.count_users()
 	testdb.fill_db()
 	# count = testdb.count_users()
 	# testdb.reset_merged_identities()
