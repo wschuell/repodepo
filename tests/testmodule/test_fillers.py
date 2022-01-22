@@ -160,12 +160,12 @@ def test_reset_merged_identities(testdb):
 	# count = testdb.count_users()
 	testdb.fill_db()
 	count = testdb.count_users()
-	# testdb.reset_merged_identities()
-	# assert testdb.count_users() == testdb.count_identities(), 'There should be as many users as identities'
-	# testdb.fillers = []
-	# testdb.add_filler(github_rest.GHLoginsFiller(fail_on_wait=True,workers=workers,force=True,no_unauth=True))
-	# testdb.fill_db()
-	# assert testdb.count_users() == count
+	testdb.reset_merged_identities()
+	assert testdb.count_users() == testdb.count_identities(), 'There should be as many users as identities'
+	testdb.fillers = []
+	testdb.add_filler(github_rest.GHLoginsFiller(fail_on_wait=True,workers=workers,force=True,no_unauth=True))
+	testdb.fill_db()
+	assert testdb.count_users() == count
 
 @pytest.mark.timeout(100)
 def test_count_identities(testdb):
