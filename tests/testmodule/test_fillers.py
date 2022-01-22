@@ -25,7 +25,7 @@ def testdb(request):
 	db.connection.close()
 	del db
 
-workers = 1 #5
+workers = 5
 
 ##############
 
