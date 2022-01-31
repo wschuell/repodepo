@@ -106,6 +106,12 @@ def test_botfile(testdb):
 	testdb.add_filler(bot_fillers.BotFileFiller(bot_file='botlist.csv',identity_type='test_identities',data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))
 	testdb.fill_db()
 
+@pytest.mark.timeout(30)
+def test_botfile_MG(testdb):
+	testdb.add_filler(generic.IdentitiesFiller(identity_type='test_identities',identities_list_file='identities_2.csv',data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))
+	testdb.add_filler(bot_fillers.MGBotFiller(data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))
+	testdb.fill_db()
+
 @pytest.mark.timeout(100)
 def test_clones_https(testdb):
 	testdb.add_filler(generic.SourcesFiller(source=['GitHub',],source_urlroot=['github.com',]))

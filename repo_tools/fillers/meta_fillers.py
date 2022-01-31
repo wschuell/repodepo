@@ -6,7 +6,7 @@ import time
 import random
 
 from repo_tools import fillers
-from repo_tools.fillers import generic,github_rest,commit_info
+from repo_tools.fillers import generic,github_rest,commit_info,bot_fillers
 import repo_tools as rp
 
 
@@ -49,3 +49,15 @@ class DummyMetaFiller(fillers.Filler):
 		self.db.add_filler(github_rest.GHLoginsFiller(fail_on_wait=self.fail_on_wait,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
 		self.db.add_filler(github_rest.StarsFiller(fail_on_wait=self.fail_on_wait,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
 		self.db.add_filler(github_rest.FollowersFiller(fail_on_wait=self.fail_on_wait,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
+
+class MetaBotFiller(fillers.Filler):
+	def prepare(self):
+		if self.data_folder is None:
+			self.data_folder = self.db.data_folder
+		self.db.add_filler(bot_fillers.BotFiller(pattern='%[bot]'))
+		self.db.add_filler(bot_fillers.BotFiller(pattern='%-bot'))
+		self.db.add_filler(bot_fillers.BotFiller(pattern='%-bors'))
+		self.db.add_filler(bot_fillers.BotFiller(pattern='bors-%'))
+		self.db.add_filler(bot_fillers.BotFileFiller(os.path.join(os.path.dirname(rp.__file__),'data','botlist.csv')))
+		self.db.add_filler(bot_fillers.MGBotFiller(data_folder=self.data_folder)) # Golzadeh et al. paper
+		self.db.add_filler(bot_fillers.BotUserFiller()) # propagating from identities to users and connected identities

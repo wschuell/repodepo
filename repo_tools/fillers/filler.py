@@ -7,6 +7,8 @@ import csv
 from psycopg2 import extras
 import json
 import subprocess
+import gzip
+import shutil
 
 logger = logging.getLogger(__name__)
 ch = logging.StreamHandler()
@@ -101,3 +103,11 @@ class Filler(object):
 		Wrapper to solve data_folder mismatch with DB
 		'''
 		self.db.record_file(folder=self.data_folder,**kwargs)
+
+	def ungzip(self,orig_file,destination,clean_zip=False):
+		self.logger.info('UnGzipping {}'.format(orig_file))
+		with gzip.open(orig_file, 'rb') as f_in:
+			with open(destination, 'wb') as f_out:
+				shutil.copyfileobj(f_in, f_out)
+		if clean_zip:
+			os.remove(orig_file)

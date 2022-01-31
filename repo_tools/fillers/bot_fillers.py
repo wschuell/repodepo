@@ -155,8 +155,21 @@ class MGBotFiller(BotFileFiller):
 		if not os.path.exists(os.path.join(self.data_folder,'groundtruthbots_formatted.csv')):
 			if not os.path.exists(os.path.join(self.data_folder,'groundtruthbots.csv')):
 				if not os.path.exists(os.path.join(self.data_folder,'groundtruthbots.csv.gz')):
-					self.download(self.botfile_url)
-				# self.ungzip()
-			# extract in specific format
+					self.download(url=self.botfile_url,destination=os.path.join(self.data_folder,'groundtruthbots.csv.gz'))
+				self.ungzip(orig_file=os.path.join(self.data_folder,'groundtruthbots.csv.gz'),destination=os.path.join(self.data_folder,'groundtruthbots.csv'))
+			self.parse(orig_file=os.path.join(self.data_folder,'groundtruthbots.csv'),destination=os.path.join(self.data_folder,'groundtruthbots_formatted.csv'))
+		BotFileFiller.prepare(self)
 
+	def parse(self,orig_file,destination):
+		bots = []
+		with open(orig_file,'r') as f:
+			reader = csv.reader(f)
+			next(reader) #header
+			for login,project,bot_or_human in reader:
+				if bot_or_human == 'Bot':
+					bots.append(login)
+
+		sorted_bots = sorted(set(bots))
+		with open(destination,'w') as f:
+			f.write('\n'.join(sorted_bots))
 
