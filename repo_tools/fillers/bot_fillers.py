@@ -138,3 +138,25 @@ class BotFileFiller(BotListFiller):
 		
 		with open(filepath,'r') as f:
 			self.bot_list = f.read().split('\n')
+
+class MGBotFiller(BotFileFiller):
+	'''
+	Fills in bots from the paper "A ground-truth dataset and classification model for detecting bots in
+	GitHub issue and PR comments" by Golzadeh et al
+	'''
+	def __init__(self,botfile_url='https://zenodo.org/record/4000388/files/groundtruthbots.csv.gz?download=1',**kwargs):
+		self.botfile_url = botfile_url
+		BotFileFiller.__init__(self,bot_file='groundtruthbots_formatted.csv',**kwargs)
+
+	def prepare(self):
+		if self.data_folder is None:
+			self.data_folder = self.db.data_folder
+
+		if not os.path.exists(os.path.join(self.data_folder,'groundtruthbots_formatted.csv')):
+			if not os.path.exists(os.path.join(self.data_folder,'groundtruthbots.csv')):
+				if not os.path.exists(os.path.join(self.data_folder,'groundtruthbots.csv.gz')):
+					self.download(self.botfile_url)
+				# self.ungzip()
+			# extract in specific format
+
+
