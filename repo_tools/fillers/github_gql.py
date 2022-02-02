@@ -1836,7 +1836,7 @@ class LoginsGQLFiller(GHGQLFiller):
 				ans['login'] = query_result['repository']['object']['author']['user']['login']
 				ans['created_at'] = query_result['repository']['object']['author']['user']['createdAt']
 			ans['commit_sha'] = query_result['repository']['object']['oid']
-
+		print(ans['login'])
 		return [ans]
 
 
@@ -2012,6 +2012,114 @@ class LoginsGQLFiller(GHGQLFiller):
 
 		self.elt_list = list(self.db.cursor.fetchall())
 		self.logger.info(self.force)
+
+class RandomCommitLoginsGQLFiller(LoginsGQLFiller):
+
+	def set_element_list(self):
+		'''
+		In subclasses this has to be implemented
+		sets self.elt_list to be used in self.fill_items
+		source,owner,repo_name,repo_id,commit_sha,email,identity_id,identity_type_id
+		'''
+
+		#if force: all elts
+		#if retry: all without success false or null on last update
+		#else: all with success is null on lats update
+
+
+		if self.force:
+			if self.db.db_type == 'postgres':
+				self.db.cursor.execute('''
+					SELECT s.id,r.owner,r.name,c.repo_id,c.sha,i.identity,i.id,i.identity_type_id
+					FROM (	(SELECT i1.id,i1.identity,i1.identity_type_id FROM identities i1)
+								EXCEPT
+							(SELECT i2.id,i2.identity,i2.identity_type_id FROM identities i2
+								INNER JOIN identities i3
+								ON i3.user_id = i2.user_id
+								INNER JOIN identity_types it2
+								ON it2.id=i3.identity_type_id AND it2.name=%s)
+							) AS i
+				 	JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
+				 		WHERE cc.author_id=i.id ORDER BY RANDOM() LIMIT 1) AS c
+				 	ON true
+				 	INNER JOIN repositories r
+				 	ON c.repo_id=r.id
+				 	INNER JOIN sources s
+					ON s.id=r.source AND s.name=%s
+					ORDER BY i.identity
+					;''',(self.target_identity_type,self.source_name))
+			else:
+				self.db.cursor.execute('''
+					SELECT s.id,r.owner,r.name,c.repo_id,c.sha,i.identity,i.id,i.identity_type_id
+					FROM (	SELECT i1.id,i1.identity,i1.identity_type_id FROM identities i1
+								EXCEPT
+							SELECT i2.id,i2.identity,i2.identity_type_id FROM identities i2
+								INNER JOIN identities i3
+								ON i3.user_id = i2.user_id
+								INNER JOIN identity_types it2
+								ON it2.id=i3.identity_type_id AND it2.name=?
+							) AS i
+				 	JOIN commits c
+				 	ON c.id IN (SELECT cc.id FROM commits cc
+				 		WHERE cc.author_id=i.id ORDER BY RANDOM() LIMIT 1)
+				 	INNER JOIN repositories r
+				 	ON c.repo_id=r.id
+				 	INNER JOIN sources s
+					ON s.id=r.source AND s.name=?
+					ORDER BY i.identity
+					;''',(self.target_identity_type,self.source_name))
+		else:
+			if self.db.db_type == 'postgres':
+				self.db.cursor.execute('''
+					SELECT s.id,r.owner,r.name,c.repo_id,c.sha,i.identity,i.id,i.identity_type_id
+					FROM (
+						SELECT ii.id,ii.identity,ii.identity_type_id FROM
+					 		(SELECT iii.id,iii.identity,iii.identity_type_id FROM identities iii
+							WHERE (SELECT iiii.id FROM identities iiii
+								INNER JOIN identity_types iiiit
+								ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name=%s) IS NULL) AS ii
+							LEFT JOIN table_updates tu
+							ON tu.identity_id=ii.id AND tu.table_name='login'
+							GROUP BY ii.id,ii.identity,ii.identity_type_id,tu.identity_id
+							HAVING tu.identity_id IS NULL OR NOT BOOL_OR(tu.success)
+						) AS i
+					JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
+						WHERE cc.author_id=i.id ORDER BY RANDOM() LIMIT 1) AS c
+					ON true
+					INNER JOIN repositories r
+					ON r.id=c.repo_id
+				 	INNER JOIN sources s
+					ON s.id=r.source AND s.name=%s
+					ORDER BY i.id
+					;''',(self.target_identity_type,self.source_name))
+			else:
+				self.db.cursor.execute('''
+					SELECT s.id,r.owner,r.name,c.repo_id,c.sha,i.identity,i.id,i.identity_type_id
+					FROM (
+						SELECT ii.id,ii.identity,ii.identity_type_id FROM
+					 		(SELECT iii.id,iii.identity,iii.identity_type_id FROM identities iii
+							WHERE (SELECT iiii.id FROM identities iiii
+								INNER JOIN identity_types iiiit
+								ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name=?) IS NULL) AS ii
+							LEFT JOIN table_updates tu
+							ON tu.identity_id=ii.id AND tu.table_name='login'
+							GROUP BY ii.id,ii.identity,ii.identity_type_id,tu.identity_id
+							HAVING tu.identity_id IS NULL OR NOT BOOL_OR(tu.success)
+						) AS i
+					JOIN commits c
+						ON
+						c.id IN (SELECT cc.id FROM commits cc
+							WHERE cc.author_id=i.id ORDER BY RANDOM() LIMIT 1)
+					INNER JOIN repositories r
+					ON r.id=c.repo_id
+					INNER JOIN sources s
+					ON s.id=r.source AND s.name=?
+					ORDER BY i.id
+					;''',(self.target_identity_type,self.source_name))
+
+		self.elt_list = list(self.db.cursor.fetchall())
+		self.logger.info(self.force)
+
 
 class IssuesGQLFiller(GHGQLFiller):
 	'''

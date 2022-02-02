@@ -66,7 +66,22 @@ class Database(object):
 	A 'computation_db' can be associated to it (always SQLite, can be in memory) to store temporary measures on repositories and users.
 	'''
 
-	def __init__(self,db_type='sqlite',db_name='repo_tools',db_folder='.',db_schema=None,db_user='postgres',port='5432',host='localhost',data_folder='./datafolder',password=None,clean_first=False,do_init=False,timeout=5,computation_db_name='repo_tools_computation.db'):
+	def __init__(self,
+					db_type='sqlite',
+					db_name='repo_tools',
+					db_folder='.',
+					db_schema=None,
+					db_user='postgres',
+					port='5432',
+					host='localhost',
+					data_folder='./datafolder',
+					password=None,
+					clean_first=False,
+					do_init=False,
+					timeout=5,
+					computation_db_name='repo_tools_computation.db',
+					reconnect_on_pickling=False):
+		self.reconnect_on_pickling = reconnect_on_pickling
 		self.db_type = db_type
 		self.logger = logger
 		self.db_name = db_name
@@ -130,6 +145,21 @@ class Database(object):
 				'password':password,
 				'db_schema':db_schema,
 		}
+
+	def __getstate__(self):
+		d = self.__dict__.copy()
+		del d['connection']
+		del d['cursor']
+
+	def __setstate__(self, d):
+		if d['reconnect_on_pickling']:
+			new = d['__class__'](do_init=False,**d['db_conninfo'])
+			self.__dict__ = new.__dict__
+		else:
+			d['connection'] = None
+			d['cursor'] = None
+			self.__dict__ = d
+
 
 	def get_computation_db(self):
 		if not hasattr(self,'computation_db'):

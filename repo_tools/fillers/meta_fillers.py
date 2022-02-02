@@ -58,6 +58,7 @@ class MetaBotFiller(fillers.Filler):
 		self.db.add_filler(bot_fillers.BotFiller(pattern='%-bot'))
 		self.db.add_filler(bot_fillers.BotFiller(pattern='%-bors'))
 		self.db.add_filler(bot_fillers.BotFiller(pattern='bors-%'))
+		self.db.add_filler(bot_fillers.BotListFiller(bot_list=[''],identity_type='email')) # Marking as discarded empty email string in commits
 		self.db.add_filler(bot_fillers.BotFileFiller(os.path.join(os.path.dirname(rp.__file__),'data','botlist.csv')))
 		self.db.add_filler(bot_fillers.MGBotFiller(data_folder=self.data_folder)) # Golzadeh et al. paper
 		self.db.add_filler(bot_fillers.BotUserFiller()) # propagating from identities to users and connected identities

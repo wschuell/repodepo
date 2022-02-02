@@ -1049,7 +1049,7 @@ got: {}'''.format(headers))
 				''',((c[1],c[0],identity_type,c[0]) for c in identities_list))
 			self.db.connection.commit()
 
-		if self.clean_users:
+		if clean_users:
 			self.db.clean_users()
 
 
@@ -1097,5 +1097,49 @@ class SimilarIdentitiesMerger(fillers.Filler):
 		self.logger.info('Merging {} couples of similar identities from identity types {} and {}'.format(len(self.to_merge_list),self.identity_type1,self.identity_type2))
 		for i1,i2 in self.to_merge_list:
 			self.db.merge_identities(identity1=i1,identity2=i2,autocommit=False,reason='Same identity string for both identity types: {} and {}'.format(self.identity_type1,self.identity_type2))
+		self.db.connection.commit()
+
+class GithubNoreplyEmailMerger(IdentitiesFiller):
+	"""
+	Merges identities NUMBER+LOGIN@users.noreply.github.com with LOGIN
+	"""
+	def __init__(self,**kwargs):
+		fillers.Filler.__init__(self,**kwargs)
+
+	def prepare(self):
+		if self.data_folder is None:
+			self.data_folder = self.db.data_folder
+
+		self.db.cursor.execute('''
+				SELECT i.id,i.identity FROM identities i
+				INNER JOIN identity_types it
+				ON it.name='email' AND it.id=i.identity_type_id
+				LEFT OUTER JOIN identities i2
+				ON i2.user_id=i.user_id AND i.id!=i2.id
+				WHERE i.identity LIKE '%@users.noreply.github.com'
+				AND i2.id IS NULL
+				;''')
+
+		self.to_merge_list = [(i,email,self.parse_email(email))for i,email in self.db.cursor.fetchall()]
+
+	def parse_email(self,email):
+		assert email.endswith('@users.noreply.github.com'),email
+		ans = email.split('@users.noreply.github.com')[0].split('+')[-1]
+		assert len(ans) > 0
+		return ans
+
+	def apply(self):
+		self.logger.info('Merging {} emails finishing in @users.noreply.github.com with their github_login'.format(len(self.to_merge_list)))
+		self.fill_identities(identities_list=list(set([login for i,email,login in self.to_merge_list])),identity_type='github_login',clean_users=False)
+
+		self.db.cursor.execute('''
+			SELECT i.id,i.identity FROM identities i
+			INNER JOIN identity_types it
+				ON it.name='github_login' AND it.id=i.identity_type_id
+			;''')
+		ghlogin_ids = {login:i for i,login in self.db.cursor.fetchall()}
+
+		for i,email,login in self.to_merge_list:
+			self.db.merge_identities(identity1=i,identity2=ghlogin_ids[login],autocommit=False,reason='Parsed email {} as github_login {}'.format(email,login))
 		self.db.connection.commit()
 
