@@ -24,6 +24,15 @@ def testdb(request):
 	db.connection.close()
 	del db
 
+@pytest.fixture(params=dbtype_list)
+def otherdb(request):
+	db = repo_tools.repo_database.Database(db_name='travis_ci_test_repo_tools_dumptest',db_type=request.param)
+	db.clean_db()
+	db.init_db()
+	yield db
+	db.connection.close()
+	del db
+
 ##############
 
 #### Tests
@@ -66,3 +75,18 @@ def test_dl(testdb):
 	testdb.register_repo(source='GitHub',repo='test',owner='test')
 	testdb.submit_download_attempt(source='GitHub',owner='test',repo='test',success=False)
 	testdb.submit_download_attempt(source='GitHub',owner='test',repo='test',success=True)
+
+def test_dump(testdb,otherdb):
+	testdb.register_source(source='GitHub',source_urlroot='github.com')
+	testdb.register_url(source='GitHub',repo_url='https://github.com/test/test')
+	testdb.register_repo(source='GitHub',repo='test',owner='test')
+	testdb.submit_download_attempt(source='GitHub',owner='test',repo='test',success=False)
+	testdb.submit_download_attempt(source='GitHub',owner='test',repo='test',success=True)
+	if testdb.db_type=='postgres' and otherdb.db_type=='sqlite':
+		testdb.dump_pg_to_sqlite(other_db=otherdb)
+	else:
+		try:
+			testdb.dump_pg_to_sqlite(other_db=otherdb)
+			raise ValueError('Should have raise NotImplementedError')
+		except NotImplementedError:
+			pass
