@@ -671,6 +671,273 @@ class StarsGQLFiller(GHGQLFiller):
 			self.elt_list = [r for r in self.elt_list if r[1]>=self.start_offset]
 
 
+class ForksGQLFiller(GHGQLFiller):
+	'''
+	Querying forks through the GraphQL API
+	'''
+	def __init__(self,**kwargs):
+		self.items_name = 'forks'
+		self.queried_obj = 'repo'
+		self.pageinfo_path = ['repository','forks','pageInfo']
+		GHGQLFiller.__init__(self,**kwargs)
+
+	def apply(self):
+		GHGQLFiller.apply(self)
+		self.fill_fork_ranks()
+		self.db.connection.commit()
+		self.db.batch_merge_repos()
+
+	def fill_fork_ranks(self,step=1):
+		github_rest.ForksFiller.fill_fork_ranks(self,step=step)
+
+	def query_string(self,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: python-formatable string representing the graphql query
+		'''
+		return '''query {{
+					repository(owner:"{repo_owner}", name:"{repo_name}") {{
+						nameWithOwner
+						forks (first:100, orderBy: {{ field: CREATED_AT, direction: ASC }} {after_end_cursor} ){{
+						 totalCount
+						 pageInfo {{
+							endCursor
+							hasNextPage
+						 }}
+						 nodes {{
+						 		createdAt
+								nameWithOwner
+							}}
+						 
+						}}
+					}}
+				}}'''
+
+	def parse_query_result(self,query_result,repo_id,identity_id,repo_owner=None,repo_name=None,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: [ {'repo_id':r_id,'repo_owner':r_ow,'repo_name':r_na,'starrer_login':s_lo,'starred_at':st_at} , ...]
+		'''
+		ans = []
+		if repo_owner is None:
+			repo_owner,repo_name = query_result['repository']['nameWithOwner'].split('/')
+		for e in query_result['repository']['forks']['nodes']:
+			d = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'source':'GitHub'}
+			try:
+				d['forked_at'] = e['createdAt']
+				d['fork_fullname'] = e['nameWithOwner']
+			except (KeyError,TypeError) as err:
+				self.logger.info('Result triggering error: {} \nError when parsing forks for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+				continue
+			else:
+				ans.append(d)
+		return ans
+
+
+	def insert_items(self,items_list,commit=True,db=None):
+		'''
+		In subclasses this has to be implemented
+		inserts results in the DB
+		'''
+		if db is None:
+			db = self.db
+		if db.db_type == 'postgres':
+			extras.execute_batch(db.cursor,'''
+										INSERT INTO forks(forking_repo_id,forked_repo_id,forking_repo_url,forked_at)
+										VALUES((SELECT r.id FROM repositories r
+													INNER JOIN sources s
+													ON s.name=%(source)s AND s.id=r.source AND CONCAT(r.owner,'/',r.name)=%(fork_fullname)s)
+												,%(repo_id)s
+												,(SELECT CONCAT(s.url_root,'/',%(fork_fullname)s) FROM sources s
+													WHERE s.name=%(source)s)
+												,%(forked_at)s)
+										ON CONFLICT DO NOTHING
+										;''',({'source':s['source'],'fork_fullname':s['fork_fullname'],'repo_id':s['repo_id'],'forked_at':s['forked_at']} for s in items_list))
+		else:
+			db.cursor.executemany('''
+										INSERT OR IGNORE INTO forks(forking_repo_id,forked_repo_id,forking_repo_url,forked_at)
+										VALUES((SELECT r.id FROM repositories r
+													INNER JOIN sources s
+													ON s.name=:source AND s.id=r.source AND r.owner || '/' || r.name=:fork_fullname)
+												,:repo_id
+												,(SELECT s.url_root || '/' || :fork_fullname FROM sources s
+													WHERE s.name=:source)
+												,:forked_at)
+										;''',({'source':s['source'],'fork_fullname':s['fork_fullname'],'repo_id':s['repo_id'],'forked_at':s['forked_at']} for s in items_list))
+
+		if commit:
+			db.connection.commit()
+
+
+
+	def get_nb_items(self,query_result):
+		'''
+		In subclasses this has to be implemented
+		output: nb_items or None if not relevant
+		'''
+		return query_result['repository']['forks']['totalCount']
+
+	def set_element_list(self):
+		'''
+		In subclasses this has to be implemented
+		sets self.elt_list to be used in self.fill_items
+		'''
+
+		#if force: all elts
+		#if retry: all without success false or null on last update
+		#else: all with success is null on lats update
+
+		if self.db.db_type == 'postgres':
+			if self.force:
+				self.db.cursor.execute('''
+						SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
+							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
+								FROM repositories r
+								INNER JOIN sources s
+								ON s.id=r.source AND s.name=%(source_name)s
+								LEFT OUTER JOIN table_updates tu
+								ON tu.repo_id=r.id AND tu.table_name='forks'
+								ORDER BY r.owner,r.name,tu.updated_at ) as t1
+							INNER JOIN
+								(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
+								FROM repositories r
+								INNER JOIN sources s
+								ON s.id=r.source AND s.name=%(source_name)s
+								LEFT OUTER JOIN table_updates tu
+								ON tu.repo_id=r.id AND tu.table_name='forks'
+								GROUP BY r.owner,r.name,r.id,s.id ) AS t2
+						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
+						ORDER BY t1.sid,t1.rowner,t1.rname
+				;''',{'source_name':self.source_name})
+			elif self.retry:
+				self.db.cursor.execute('''
+						SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
+							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
+								FROM repositories r
+								INNER JOIN sources s
+								ON s.id=r.source AND s.name=%(source_name)s
+								LEFT OUTER JOIN table_updates tu
+								ON tu.repo_id=r.id AND tu.table_name='forks'
+								ORDER BY r.owner,r.name,tu.updated_at ) as t1
+							INNER JOIN
+								(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
+								FROM repositories r
+								INNER JOIN sources s
+								ON s.id=r.source AND s.name=%(source_name)s
+								LEFT OUTER JOIN table_updates tu
+								ON tu.repo_id=r.id AND tu.table_name='forks'
+								GROUP BY r.owner,r.name,r.id,s.id ) AS t2
+						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
+						AND ((NOT t1.success) OR t1.succ IS NULL)
+						ORDER BY t1.sid,t1.rowner,t1.rname
+				;''',{'source_name':self.source_name})
+			else:
+				self.db.cursor.execute('''
+						SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
+							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
+								FROM repositories r
+								INNER JOIN sources s
+								ON s.id=r.source AND s.name=%(source_name)s
+								LEFT OUTER JOIN table_updates tu
+								ON tu.repo_id=r.id AND tu.table_name='forks'
+								ORDER BY r.owner,r.name,tu.updated_at ) as t1
+							INNER JOIN
+								(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
+								FROM repositories r
+								INNER JOIN sources s
+								ON s.id=r.source AND s.name=%(source_name)s
+								LEFT OUTER JOIN table_updates tu
+								ON tu.repo_id=r.id AND tu.table_name='forks'
+								GROUP BY r.owner,r.name,r.id,s.id ) AS t2
+						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
+						AND t1.succ IS NULL
+						ORDER BY t1.sid,t1.rowner,t1.rname
+				;''',{'source_name':self.source_name})
+
+			self.elt_list = list(self.db.cursor.fetchall())
+
+		else:
+			if self.force:
+				self.db.cursor.execute('''
+						SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
+							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
+								FROM repositories r
+								INNER JOIN sources s
+								ON s.id=r.source AND s.name=:source_name
+								LEFT OUTER JOIN table_updates tu
+								ON tu.repo_id=r.id AND tu.table_name='forks'
+								ORDER BY r.owner,r.name,tu.updated_at ) as t1
+							INNER JOIN
+								(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
+								FROM repositories r
+								INNER JOIN sources s
+								ON s.id=r.source AND s.name=:source_name
+								LEFT OUTER JOIN table_updates tu
+								ON tu.repo_id=r.id AND tu.table_name='forks'
+								GROUP BY r.owner,r.name,r.id,s.id ) AS t2
+						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
+						ORDER BY t1.sid,t1.rowner,t1.rname
+				;''',{'source_name':self.source_name})
+			elif self.retry:
+				self.db.cursor.execute('''
+						SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
+							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
+								FROM repositories r
+								INNER JOIN sources s
+								ON s.id=r.source AND s.name=:source_name
+								LEFT OUTER JOIN table_updates tu
+								ON tu.repo_id=r.id AND tu.table_name='forks'
+								ORDER BY r.owner,r.name,tu.updated_at ) as t1
+							INNER JOIN
+								(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
+								FROM repositories r
+								INNER JOIN sources s
+								ON s.id=r.source AND s.name=:source_name
+								LEFT OUTER JOIN table_updates tu
+								ON tu.repo_id=r.id AND tu.table_name='forks'
+								GROUP BY r.owner,r.name,r.id,s.id ) AS t2
+						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
+						AND ((NOT t1.success) OR t1.succ IS NULL)
+						ORDER BY t1.sid,t1.rowner,t1.rname
+				;''',{'source_name':self.source_name})
+			else:
+				self.db.cursor.execute('''
+						SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
+							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
+								FROM repositories r
+								INNER JOIN sources s
+								ON s.id=r.source AND s.name=:source_name
+								LEFT OUTER JOIN table_updates tu
+								ON tu.repo_id=r.id AND tu.table_name='forks'
+								ORDER BY r.owner,r.name,tu.updated_at ) as t1
+							INNER JOIN
+								(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
+								FROM repositories r
+								INNER JOIN sources s
+								ON s.id=r.source AND s.name=:source_name
+								LEFT OUTER JOIN table_updates tu
+								ON tu.repo_id=r.id AND tu.table_name='forks'
+								GROUP BY r.owner,r.name,r.id,s.id ) AS t2
+						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
+						AND t1.succ IS NULL
+						ORDER BY t1.sid,t1.rowner,t1.rname
+				;''',{'source_name':self.source_name})
+
+
+			elt_list = list(self.db.cursor.fetchall())
+
+			# specific to sqlite because no internal json parsing implemented in query
+			self.elt_list = []
+			for (source,owner,name,repo_id,end_cursor_info) in elt_list:
+				try:
+					self.elt_list.append((source,owner,name,repo_id,json.loads(end_cursor_info)['end_cursor']))
+				except:
+					self.elt_list.append((source,owner,name,repo_id,None))
+
+		if self.start_offset is not None:
+			self.elt_list = [r for r in self.elt_list if r[1]>=self.start_offset]
+
+
 class SponsorsUserFiller(GHGQLFiller):
 	'''
 	Querying sponsors of users through the GraphQL API
