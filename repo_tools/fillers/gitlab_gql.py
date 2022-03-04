@@ -253,3 +253,9 @@ class StarsGQLFiller(GitlabGQLFiller):
 		output: nb_items or None if not relevant
 		'''
 		return query_result['repository']['stargazers']['totalCount']
+
+
+class RandomCommitLoginsFiller(LoginsFiller):
+
+	def set_element_list(self,**kwargs):
+		github_gql.RandomCommitLoginsGQLFiller.set_element_list(self,**kwargs)

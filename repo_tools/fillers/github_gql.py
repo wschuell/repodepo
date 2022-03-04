@@ -722,7 +722,7 @@ class ForksGQLFiller(GHGQLFiller):
 		if repo_owner is None:
 			repo_owner,repo_name = query_result['repository']['nameWithOwner'].split('/')
 		for e in query_result['repository']['forks']['nodes']:
-			d = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'source':'GitHub'}
+			d = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'source':self.source_name}
 			try:
 				d['forked_at'] = e['createdAt']
 				d['fork_fullname'] = e['nameWithOwner']
@@ -2304,17 +2304,22 @@ class RandomCommitLoginsGQLFiller(LoginsGQLFiller):
 								INNER JOIN identities i3
 								ON i3.user_id = i2.user_id
 								INNER JOIN identity_types it2
-								ON it2.id=i3.identity_type_id AND it2.name=%s)
+								ON it2.id=i3.identity_type_id AND it2.name=%(id_type)s)
 							) AS i
 				 	JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
-				 		WHERE cc.author_id=i.id ORDER BY RANDOM() LIMIT 1) AS c
+									INNER JOIN repositories r2
+									ON cc.author_id=i.id
+									AND r2.id=cc.repo_id
+									INNER JOIN sources s2
+									ON s2.id=r2.source AND s2.name=%(s_name)s
+							ORDER BY RANDOM() LIMIT 1) AS c
 				 	ON true
 				 	INNER JOIN repositories r
 				 	ON c.repo_id=r.id
 				 	INNER JOIN sources s
-					ON s.id=r.source AND s.name=%s
+					ON s.id=r.source AND s.name=%(s_name)s
 					ORDER BY i.identity
-					;''',(self.target_identity_type,self.source_name))
+					;''',{'id_type':self.target_identity_type,'s_name':self.source_name})
 			else:
 				self.db.cursor.execute('''
 					SELECT s.id,r.owner,r.name,c.repo_id,c.sha,i.identity,i.id,i.identity_type_id
@@ -2324,17 +2329,22 @@ class RandomCommitLoginsGQLFiller(LoginsGQLFiller):
 								INNER JOIN identities i3
 								ON i3.user_id = i2.user_id
 								INNER JOIN identity_types it2
-								ON it2.id=i3.identity_type_id AND it2.name=?
+								ON it2.id=i3.identity_type_id AND it2.name=:id_type
 							) AS i
 				 	JOIN commits c
 				 	ON c.id IN (SELECT cc.id FROM commits cc
-				 		WHERE cc.author_id=i.id ORDER BY RANDOM() LIMIT 1)
+									INNER JOIN repositories r2
+									ON cc.author_id=i.id
+									AND r2.id=cc.repo_id
+									INNER JOIN sources s2
+									ON s2.id=r2.source AND s2.name=:s_name
+							ORDER BY RANDOM() LIMIT 1)
 				 	INNER JOIN repositories r
 				 	ON c.repo_id=r.id
 				 	INNER JOIN sources s
-					ON s.id=r.source AND s.name=?
+					ON s.id=r.source AND s.name=:s_name
 					ORDER BY i.identity
-					;''',(self.target_identity_type,self.source_name))
+					;''',{'id_type':self.target_identity_type,'s_name':self.source_name})
 		else:
 			if self.db.db_type == 'postgres':
 				self.db.cursor.execute('''
@@ -2344,21 +2354,26 @@ class RandomCommitLoginsGQLFiller(LoginsGQLFiller):
 					 		(SELECT iii.id,iii.identity,iii.identity_type_id FROM identities iii
 							WHERE (SELECT iiii.id FROM identities iiii
 								INNER JOIN identity_types iiiit
-								ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name=%s) IS NULL) AS ii
+								ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name=%(id_type)s) IS NULL) AS ii
 							LEFT JOIN table_updates tu
 							ON tu.identity_id=ii.id AND tu.table_name='login'
 							GROUP BY ii.id,ii.identity,ii.identity_type_id,tu.identity_id
 							HAVING tu.identity_id IS NULL OR NOT BOOL_OR(tu.success)
 						) AS i
 					JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
-						WHERE cc.author_id=i.id ORDER BY RANDOM() LIMIT 1) AS c
+									INNER JOIN repositories r2
+									ON cc.author_id=i.id
+									AND r2.id=cc.repo_id
+									INNER JOIN sources s2
+									ON s2.id=r2.source AND s2.name=%(s_name)s
+							ORDER BY RANDOM() LIMIT 1) AS c
 					ON true
 					INNER JOIN repositories r
 					ON r.id=c.repo_id
 				 	INNER JOIN sources s
-					ON s.id=r.source AND s.name=%s
+					ON s.id=r.source AND s.name=%(s_name)s
 					ORDER BY i.id
-					;''',(self.target_identity_type,self.source_name))
+					;''',{'id_type':self.target_identity_type,'s_name':self.source_name})
 			else:
 				self.db.cursor.execute('''
 					SELECT s.id,r.owner,r.name,c.repo_id,c.sha,i.identity,i.id,i.identity_type_id
@@ -2367,22 +2382,27 @@ class RandomCommitLoginsGQLFiller(LoginsGQLFiller):
 					 		(SELECT iii.id,iii.identity,iii.identity_type_id FROM identities iii
 							WHERE (SELECT iiii.id FROM identities iiii
 								INNER JOIN identity_types iiiit
-								ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name=?) IS NULL) AS ii
+								ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name=:id_type) IS NULL) AS ii
 							LEFT JOIN table_updates tu
 							ON tu.identity_id=ii.id AND tu.table_name='login'
 							GROUP BY ii.id,ii.identity,ii.identity_type_id,tu.identity_id
-							HAVING tu.identity_id IS NULL OR NOT BOOL_OR(tu.success)
+							HAVING tu.identity_id IS NULL OR NOT SUM(tu.success)
 						) AS i
 					JOIN commits c
 						ON
 						c.id IN (SELECT cc.id FROM commits cc
-							WHERE cc.author_id=i.id ORDER BY RANDOM() LIMIT 1)
+									INNER JOIN repositories r2
+									ON cc.author_id=i.id
+									AND r2.id=cc.repo_id
+									INNER JOIN sources s2
+									ON s2.id=r2.source AND s2.name=:s_name
+							ORDER BY RANDOM() LIMIT 1)
 					INNER JOIN repositories r
 					ON r.id=c.repo_id
 					INNER JOIN sources s
-					ON s.id=r.source AND s.name=?
+					ON s.id=r.source AND s.name=:s_name
 					ORDER BY i.id
-					;''',(self.target_identity_type,self.source_name))
+					;''',{'id_type':self.target_identity_type,'s_name':self.source_name})
 
 		self.elt_list = list(self.db.cursor.fetchall())
 		self.logger.info(self.force)
