@@ -21,7 +21,7 @@ class CommitsFiller(fillers.Filler):
 			only_null_commit_origs=True,
 			all_commits=False,
 			force=False,
-			allbranches=False,
+			allbranches=True,
 					**kwargs):
 		self.force = force
 		self.allbranches = allbranches

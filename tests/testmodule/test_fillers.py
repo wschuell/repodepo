@@ -155,6 +155,10 @@ def test_github(testdb):
 	testdb.fill_db()
 
 @pytest.mark.timeout(100)
+def test_count_identities(testdb):
+	count = testdb.count_identities()
+
+@pytest.mark.timeout(100)
 def test_reset_merged_identities(testdb):
 	testdb.add_filler(generic.SourcesFiller(source=['GitHub',],source_urlroot=['github.com',]))
 	testdb.add_filler(generic.PackageFiller(package_list_file='packages.csv',data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))
@@ -171,10 +175,6 @@ def test_reset_merged_identities(testdb):
 	testdb.add_filler(github_rest.GHLoginsFiller(fail_on_wait=True,workers=workers,force=True,no_unauth=True))
 	testdb.fill_db()
 	assert testdb.count_users() == count
-
-@pytest.mark.timeout(100)
-def test_count_identities(testdb):
-	count = testdb.count_identities()
 
 # @pytest.mark.timeout(100)
 # def test_metafiller(testdb):

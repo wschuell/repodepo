@@ -20,6 +20,7 @@ class CratesFiller(generic.PackageFiller):
 			password=None,
 			host='localhost',
 			package_limit=None,
+			package_limit_is_global=False,
 			force=False,
 			deps_to_delete=[('juju','charmhelpers'),
 							('arraygen','arraygen-docfix'),
@@ -28,6 +29,7 @@ class CratesFiller(generic.PackageFiller):
 		self.source = source
 		self.source_urlroot = source_urlroot
 		self.package_limit = package_limit
+		self.package_limit_is_global = package_limit_is_global
 		self.conninfo = {'database':database,
 						'port':port,
 						'user':user,
@@ -82,12 +84,17 @@ class CratesFiller(generic.PackageFiller):
 
 
 			self.db.connection.commit()
-			self.package_version_list = list(self.get_package_versions_from_crates(conn=crates_conn))
-			self.db.connection.commit()
-			self.package_version_download_list = list(self.get_package_version_downloads_from_crates(conn=crates_conn))
-			self.db.connection.commit()
-			self.package_deps_list = list(self.get_package_deps_from_crates(conn=crates_conn))
-			self.db.connection.commit()
+			if self.force or len(self.package_list)>0:
+				self.package_version_list = list(self.get_package_versions_from_crates(conn=crates_conn))
+				self.db.connection.commit()
+				self.package_version_download_list = list(self.get_package_version_downloads_from_crates(conn=crates_conn))
+				self.db.connection.commit()
+				self.package_deps_list = list(self.get_package_deps_from_crates(conn=crates_conn))
+				self.db.connection.commit()
+			else:
+				self.package_version_list = []
+				self.package_version_download_list = []
+				self.package_deps_list = []
 		finally:
 			crates_conn.close()
 
@@ -106,7 +113,7 @@ class CratesFiller(generic.PackageFiller):
 			if not isinstance(limit,int):
 				raise ValueError('limit should be an integer, given {}'.format(limit))
 			else:
-				limit_str = ' LIMIT {}'.format(limit)
+				limit_str = ' ORDER BY id LIMIT {}'.format(limit)
 		else:
 			limit_str = ''
 
@@ -123,7 +130,7 @@ class CratesFiller(generic.PackageFiller):
 		'''
 		cursor = conn.cursor()
 
-		if limit is None:
+		if limit is None and self.package_limit_is_global:
 			limit = self.package_limit
 
 
@@ -132,11 +139,16 @@ class CratesFiller(generic.PackageFiller):
 				raise ValueError('limit should be an integer, given {}'.format(limit))
 			else:
 				limit_str = ' LIMIT {}'.format(limit)
+		elif self.package_limit is not None:
+			if not isinstance(self.package_limit,int):
+				raise ValueError('limit should be an integer, given {}'.format(self.package_limit))
+			else:
+				limit_str = 'INNER JOIN (SELECT id FROM crates ORDER BY id LIMIT {}) c ON c.id=v.crate_id'.format(self.package_limit)
 		else:
 			limit_str = ''
 
 		cursor.execute('''
-			SELECT crate_id,num,created_at FROM versions {}
+			SELECT crate_id,num,created_at FROM versions v {}
 			;'''.format(limit_str))
 
 		return cursor.fetchall()
@@ -148,7 +160,7 @@ class CratesFiller(generic.PackageFiller):
 		'''
 		cursor = conn.cursor()
 
-		if limit is None:
+		if limit is None and self.package_limit_is_global:
 			limit = self.package_limit
 
 
@@ -157,6 +169,11 @@ class CratesFiller(generic.PackageFiller):
 				raise ValueError('limit should be an integer, given {}'.format(limit))
 			else:
 				limit_str = ' LIMIT {}'.format(limit)
+		elif self.package_limit is not None:
+			if not isinstance(self.package_limit,int):
+				raise ValueError('limit should be an integer, given {}'.format(self.package_limit))
+			else:
+				limit_str = 'INNER JOIN (SELECT id FROM crates ORDER BY id LIMIT {}) c ON c.id=v.crate_id'.format(self.package_limit)
 		else:
 			limit_str = ''
 
@@ -177,7 +194,7 @@ class CratesFiller(generic.PackageFiller):
 		'''
 		cursor = conn.cursor()
 
-		if limit is None:
+		if limit is None and self.package_limit_is_global:
 			limit = self.package_limit
 
 
@@ -186,6 +203,14 @@ class CratesFiller(generic.PackageFiller):
 				raise ValueError('limit should be an integer, given {}'.format(limit))
 			else:
 				limit_str = ' LIMIT {}'.format(limit)
+		elif self.package_limit is not None:
+			if not isinstance(self.package_limit,int):
+				raise ValueError('limit should be an integer, given {}'.format(self.package_limit))
+			else:
+				limit_str = '''INNER JOIN (SELECT id FROM crates ORDER BY id LIMIT {lim}) c
+						ON c.id=v.crate_id
+						INNER JOIN (SELECT id FROM crates ORDER BY id LIMIT {lim}) c2
+						ON c2.id=d.crate_id'''.format(lim=self.package_limit)
 		else:
 			limit_str = ''
 

@@ -30,9 +30,10 @@ class PackageFiller(fillers.Filler):
 	or
 	name,created_at,repository
 	"""
-	def __init__(self,package_list=None,package_list_file=None,package_version_list=None,package_deps_list=None,package_version_download_list=None,force=False,deps_to_delete=None,**kwargs):
+	def __init__(self,package_list=None,package_list_file=None,package_version_list=None,package_deps_list=None,package_version_download_list=None,force=False,deps_to_delete=None,package_limit=None,**kwargs):
 		self.package_list = package_list
 		self.package_list_file = package_list_file
+		self.package_limit = package_limit
 		if package_version_download_list is None:
 			self.package_version_download_list = []
 		else:
@@ -75,6 +76,9 @@ or
 name,created_at,repository
 
 got: {}'''.format(headers))
+
+		if self.package_limit is not None:
+			self.package_list = self.package_list[:self.package_limit]
 
 
 	def apply(self):
