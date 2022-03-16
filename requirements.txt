@@ -5,3 +5,4 @@ pandas
 psycopg2-binary
 pytest-timeout
 gitpython
+oyaml

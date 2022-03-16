@@ -64,7 +64,7 @@ class Getter(object):
 		'''
 		returns dict to be used as var dict for the query
 		'''
-		raise NotImplementedError
+		return {}
 
 	def parse_results(self,query_result):
 		'''
@@ -83,3 +83,77 @@ class Getter(object):
 	# 	self.__dict__ = state
 	# 	if not hasattr(self,'db'):
 	# 		self.db = None
+
+
+class RepoNames(Getter):
+	'''
+	IDs and names of repositories
+	'''
+	def query(self):
+		if self.db.db_type == 'postgres':
+			return '''
+				SELECT r.id,CONCAT(s.name,'/',r.owner,'/',r.name)
+				FROM repositories r
+				INNER JOIN sources s
+				ON s.id=r.source
+				ORDER BY r.id;
+				'''
+		else:
+			return '''
+				SELECT r.id,s.name||'/'||r.owner||'/'||r.name
+				FROM repositories r
+				INNER JOIN sources s
+				ON s.id=r.source
+				ORDER BY r.id;
+				'''
+
+	def parse_results(self,query_result):
+		return [{'project_id':rid,'repo_name':rname} for (rid,rname) in query_result]
+
+class RepoCreatedAt(Getter):
+	'''
+	IDs and creation dates (or proxy) of repositories
+	'''
+	def query(self):
+		return '''
+				SELECT r.id,MIN(p.created_at)
+				FROM repositories r
+				INNER JOIN packages p
+				ON p.repo_id=r.id
+				GROUP BY r.id
+				ORDER BY r.id;
+				'''
+
+	def parse_results(self,query_result):
+		return [{'project_id':rid,'created_at':rcat} for (rid,rcat) in query_result]
+
+
+class RepoIDs(Getter):
+	'''
+	IDs of repositories
+	'''
+	def query(self):
+		return '''
+				SELECT r.id
+				FROM repositories r
+				ORDER BY r.id;
+				'''
+
+	def parse_results(self,query_result):
+		return [{'project_id':rid,} for (rid,) in query_result]
+
+
+class UserIDs(Getter):
+	'''
+	IDs of users
+	'''
+	def query(self):
+		return '''
+				SELECT u.id
+				FROM users u
+				ORDER BY u.id;
+				'''
+
+	def parse_results(self,query_result):
+		return [{'user_id':uid,} for (uid,) in query_result]
+
