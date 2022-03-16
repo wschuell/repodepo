@@ -1155,7 +1155,7 @@ class Downloads(ProjectGetter):
 	def query_proj(self,db,time_window,start_date,end_date,project_id):
 		if db.db_type == 'postgres':
 			db.cursor.execute('''
-				SELECT SUM(vd.downloads),date_trunc(%(time_window)s, vd.downloaded_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp
+				SELECT SUM(vd.downloads),date_trunc(%(time_window)s, vd.downloaded_at)::timestamp + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp
 				FROM packages p
 				INNER JOIN package_versions v
 				ON p.repo_id=%(project_id)s
@@ -1187,7 +1187,7 @@ class Downloads(ProjectGetter):
 	def query_aggregated(self,db,time_window,start_date,end_date,project_id=None):
 		if db.db_type == 'postgres':
 			db.cursor.execute('''
-				SELECT SUM(vd.downloads),date_trunc(%(time_window)s, vd.downloaded_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp
+				SELECT SUM(vd.downloads),date_trunc(%(time_window)s, vd.downloaded_at)::timestamp + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp
 				FROM packages p
 				INNER JOIN package_versions v
 				ON v.package_id=p.id AND p.repo_id IS NOT NULL
@@ -1242,7 +1242,7 @@ class Downloads(ProjectGetter):
 	def query_all(self,db,start_date,end_date,time_window,project_id=None):
 		if db.db_type == 'postgres':
 			db.cursor.execute('''
-				SELECT SUM(vd.downloads),date_trunc(%(time_window)s, vd.downloaded_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp,p.repo_id
+				SELECT SUM(vd.downloads),date_trunc(%(time_window)s, vd.downloaded_at)::timestamp + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp,p.repo_id
 				FROM packages p
 				INNER JOIN package_versions v
 				ON v.package_id=p.id AND p.repo_id IS NOT NULL

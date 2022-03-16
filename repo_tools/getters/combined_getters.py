@@ -35,7 +35,7 @@ class UsageGetter(Getter):
 		commits_cumul = project_getters.Commits(db=self.db).get_result(time_window=self.time_window,start_date=self.start_date,end_date=self.end_date,aggregated=False,cumulative=True)
 		commits_cumul.rename(columns={'commits':'commits_cumul'},inplace=True)
 		devs = project_getters.Developers(db=self.db).get_result(time_window=self.time_window,start_date=self.start_date,end_date=self.end_date,aggregated=False)
-		active_devs = project_getters.ActiveDevelopers(db=self.db).get_result(time_window=self.time_window,start_date=self.start_date,end_date=self.end_date,aggregated=False)
+		active_devs = project_getters.ActiveDevelopers(db=self.db).get_result(time_window=self.time_window,start_date=self.start_date,end_date=self.end_date,aggregated=False,cumulative=False)
 		downloads = project_getters.Downloads(db=self.db).get_result(time_window=self.time_window,start_date=self.start_date,end_date=self.end_date,aggregated=False)
 
 		df = commits_cumul
