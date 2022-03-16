@@ -913,129 +913,129 @@ class RepoMaxCommitRank(RepoCommitRank):
 			;'''
 
 
-class RepoImpactRank(RepoRankGetter):
-	def __init__(self,sr_getter_class=None,srgetter_kwargs=None,start_time=None,end_time=None,**kwargs):
-		if sr_getter_class is None: # cannot top-level import SR_getters, because there would be cyclical imports
-			from .SR_getters import SRGetter
-			sr_getter_class = SRGetter
-		if srgetter_kwargs is None:
-			srgetter_kwargs = {}
-		RepoRankGetter.__init__(self,**kwargs)
-		srgetter_kwargs = copy.deepcopy(srgetter_kwargs)
-		if start_time is None:
-			if not 'start_time' in srgetter_kwargs.keys():
-				srgetter_kwargs['start_time'] = datetime.datetime(2000,1,1)
-		else:
-			if srgetter_kwargs['start_time'] != start_time:
-				self.logger.info('In {}, start_time provided 2 times. Priority to explicit arg over key in srgetter_kwargs.'.format(self.__class__.__name__.split('.')[-1]))
-			srgetter_kwargs['start_time'] = start_time
-		self.start_time = srgetter_kwargs['start_time']
-		if end_time is None:
-			if not 'end_time' in srgetter_kwargs.keys():
-				srgetter_kwargs['end_time'] = datetime.datetime.now()
-		else:
-			if srgetter_kwargs['end_time'] != end_time:
-				self.logger.info('In {}, end_time provided 2 times. Priority to explicit arg over key in srgetter_kwargs.'.format(self.__class__.__name__.split('.')[-1]))
-			srgetter_kwargs['end_time'] = end_time
-		self.end_time = srgetter_kwargs['end_time']
+# class RepoImpactRank(RepoRankGetter):
+# 	def __init__(self,sr_getter_class=None,srgetter_kwargs=None,start_time=None,end_time=None,**kwargs):
+# 		if sr_getter_class is None: # cannot top-level import SR_getters, because there would be cyclical imports
+# 			from .SR_getters import SRGetter
+# 			sr_getter_class = SRGetter
+# 		if srgetter_kwargs is None:
+# 			srgetter_kwargs = {}
+# 		RepoRankGetter.__init__(self,**kwargs)
+# 		srgetter_kwargs = copy.deepcopy(srgetter_kwargs)
+# 		if start_time is None:
+# 			if not 'start_time' in srgetter_kwargs.keys():
+# 				srgetter_kwargs['start_time'] = datetime.datetime(2000,1,1)
+# 		else:
+# 			if srgetter_kwargs['start_time'] != start_time:
+# 				self.logger.info('In {}, start_time provided 2 times. Priority to explicit arg over key in srgetter_kwargs.'.format(self.__class__.__name__.split('.')[-1]))
+# 			srgetter_kwargs['start_time'] = start_time
+# 		self.start_time = srgetter_kwargs['start_time']
+# 		if end_time is None:
+# 			if not 'end_time' in srgetter_kwargs.keys():
+# 				srgetter_kwargs['end_time'] = datetime.datetime.now()
+# 		else:
+# 			if srgetter_kwargs['end_time'] != end_time:
+# 				self.logger.info('In {}, end_time provided 2 times. Priority to explicit arg over key in srgetter_kwargs.'.format(self.__class__.__name__.split('.')[-1]))
+# 			srgetter_kwargs['end_time'] = end_time
+# 		self.end_time = srgetter_kwargs['end_time']
 
 
-		self.sr_getter = sr_getter_class(db=self.db,**srgetter_kwargs)
+# 		self.sr_getter = sr_getter_class(db=self.db,**srgetter_kwargs)
 
-	# def query(self):
-	# 	return '''SELECT id AS repo_id,
-	# 				RANK() OVER
-	# 					(ORDER BY id) AS repo_rank,
-	# 				0. AS value
-	# 				FROM repositories rr
-	# 		;'''
-
-
-	# def query_attributes(self):
-	# 	return {
-	# 	}
-
-	# def parse_results(self,query_result):
-	# 	return [(r_id,rk-1,val) for (r_id,rk,val) in query_result]
-
-	# def get_size_max(self,db):
-	# 	db.cursor.execute('SELECT COUNT(*) FROM repositories r;')
-	# 	r_max = db.cursor.fetchone()[0]
-	# 	return r_max
-
-	def preprocess_result(self):
-		return self.sr_getter.get_result().sum(axis=1)
-
-	def get(self,db,orig_id_rank=False,**kwargs):
-		# db.cursor.execute(self.query(),self.query_attributes())
-		# parsed_results = self.parse_results(query_result=db.cursor.fetchall())
-		results = self.preprocess_result()
-		r_max = results.size
-		ans_direct = np.zeros(shape=(r_max,),dtype=np.int64)
-		ans_values = np.zeros(shape=(r_max,),dtype=np.float64)
-		ans_indirect = {}
-		sorted_results = sorted(enumerate(results),key=lambda x:-x[1])
-		r_direct,r_indirect,r_values = RepoRankGetter(db=db).get(db=db,orig_id_rank=False,**kwargs)
-		for rk,res in enumerate(sorted_results):
-			id_rk,val = res
-			r_id = r_direct[id_rk]
-
-			ans_indirect[r_id] = rk
-			ans_direct[rk] = r_id
-			ans_values[rk] = val
-
-		if not orig_id_rank:
-			return ans_direct,ans_indirect,ans_values
-		else:
-			return self.reorder(prev_direct=ans_direct,prev_indirect=ans_indirect,prev_values=ans_values,db=db,**kwargs)
-
-class RepoImpactCommitRank(RepoImpactRank):
-	def __init__(self,commit_min=1,**kwargs):
-		RepoImpactRank.__init__(self,**kwargs)
-		self.commit_min = commit_min
-
-	def preprocess_result(self):
-		impact = RepoImpactRank.preprocess_result(self)
-		if self.db.db_type == 'postgres':
-			self.db.cursor.execute('''
-				SELECT COUNT(*),r.id,r.rank-1 FROM
-				(SELECT id, RANK() OVER (ORDER BY id) AS rank FROM repositories) AS r
-				INNER JOIN commits c
-				ON c.repo_id=r.id
-				AND %(start_time)s <= c.created_at AND c.created_at < %(end_time)s
-				AND c.repo_id IS NOT NULL
-				GROUP BY r.id,r.rank
-				''',{'start_time':self.start_time,'end_time':self.end_time})
-		else:
-			self.db.cursor.execute('''
-				SELECT COUNT(*),r.id,r.rank-1 FROM
-				(SELECT id, RANK() OVER (ORDER BY id) AS rank FROM repositories) AS r
-				INNER JOIN commits c
-				ON c.repo_id=r.id
-				AND :start_time <= c.created_at AND c.created_at < :end_time
-				AND c.repo_id IS NOT NULL
-				GROUP BY r.id,r.rank
-				''',{'start_time':self.start_time,'end_time':self.end_time})
-		commits = np.zeros(impact.shape,dtype=np.float64)
-		for val,rid,rk in self.db.cursor.fetchall():
-			commits[rk] = val
-		commits[commits<self.commit_min] = self.commit_min
-		return impact/commits
+# 	# def query(self):
+# 	# 	return '''SELECT id AS repo_id,
+# 	# 				RANK() OVER
+# 	# 					(ORDER BY id) AS repo_rank,
+# 	# 				0. AS value
+# 	# 				FROM repositories rr
+# 	# 		;'''
 
 
+# 	# def query_attributes(self):
+# 	# 	return {
+# 	# 	}
 
-class RepoNoDevsModeRank(RepoImpactRank):
-	'''
-	The scenarios in SR are 'a repo fails' and not 'a dev fails'
-	'''
-	def __init__(self,srgetter_kwargs=None,**kwargs):
-		if srgetter_kwargs is None:
-			srgetter_kwargs = {}
-		else:
-			srgetter_kwargs = copy.deepcopy(srgetter_kwargs)
-		srgetter_kwargs['dev_mode'] = False
-		RepoImpactRank.__init__(self,srgetter_kwargs=srgetter_kwargs,**kwargs)
+# 	# def parse_results(self,query_result):
+# 	# 	return [(r_id,rk-1,val) for (r_id,rk,val) in query_result]
 
-	def preprocess_result(self):
-		ans = np.asarray(self.sr_getter.get_result().sum(axis=0)).flatten()
-		return ans
+# 	# def get_size_max(self,db):
+# 	# 	db.cursor.execute('SELECT COUNT(*) FROM repositories r;')
+# 	# 	r_max = db.cursor.fetchone()[0]
+# 	# 	return r_max
+
+# 	def preprocess_result(self):
+# 		return self.sr_getter.get_result().sum(axis=1)
+
+# 	def get(self,db,orig_id_rank=False,**kwargs):
+# 		# db.cursor.execute(self.query(),self.query_attributes())
+# 		# parsed_results = self.parse_results(query_result=db.cursor.fetchall())
+# 		results = self.preprocess_result()
+# 		r_max = results.size
+# 		ans_direct = np.zeros(shape=(r_max,),dtype=np.int64)
+# 		ans_values = np.zeros(shape=(r_max,),dtype=np.float64)
+# 		ans_indirect = {}
+# 		sorted_results = sorted(enumerate(results),key=lambda x:-x[1])
+# 		r_direct,r_indirect,r_values = RepoRankGetter(db=db).get(db=db,orig_id_rank=False,**kwargs)
+# 		for rk,res in enumerate(sorted_results):
+# 			id_rk,val = res
+# 			r_id = r_direct[id_rk]
+
+# 			ans_indirect[r_id] = rk
+# 			ans_direct[rk] = r_id
+# 			ans_values[rk] = val
+
+# 		if not orig_id_rank:
+# 			return ans_direct,ans_indirect,ans_values
+# 		else:
+# 			return self.reorder(prev_direct=ans_direct,prev_indirect=ans_indirect,prev_values=ans_values,db=db,**kwargs)
+
+# class RepoImpactCommitRank(RepoImpactRank):
+# 	def __init__(self,commit_min=1,**kwargs):
+# 		RepoImpactRank.__init__(self,**kwargs)
+# 		self.commit_min = commit_min
+
+# 	def preprocess_result(self):
+# 		impact = RepoImpactRank.preprocess_result(self)
+# 		if self.db.db_type == 'postgres':
+# 			self.db.cursor.execute('''
+# 				SELECT COUNT(*),r.id,r.rank-1 FROM
+# 				(SELECT id, RANK() OVER (ORDER BY id) AS rank FROM repositories) AS r
+# 				INNER JOIN commits c
+# 				ON c.repo_id=r.id
+# 				AND %(start_time)s <= c.created_at AND c.created_at < %(end_time)s
+# 				AND c.repo_id IS NOT NULL
+# 				GROUP BY r.id,r.rank
+# 				''',{'start_time':self.start_time,'end_time':self.end_time})
+# 		else:
+# 			self.db.cursor.execute('''
+# 				SELECT COUNT(*),r.id,r.rank-1 FROM
+# 				(SELECT id, RANK() OVER (ORDER BY id) AS rank FROM repositories) AS r
+# 				INNER JOIN commits c
+# 				ON c.repo_id=r.id
+# 				AND :start_time <= c.created_at AND c.created_at < :end_time
+# 				AND c.repo_id IS NOT NULL
+# 				GROUP BY r.id,r.rank
+# 				''',{'start_time':self.start_time,'end_time':self.end_time})
+# 		commits = np.zeros(impact.shape,dtype=np.float64)
+# 		for val,rid,rk in self.db.cursor.fetchall():
+# 			commits[rk] = val
+# 		commits[commits<self.commit_min] = self.commit_min
+# 		return impact/commits
+
+
+
+# class RepoNoDevsModeRank(RepoImpactRank):
+# 	'''
+# 	The scenarios in SR are 'a repo fails' and not 'a dev fails'
+# 	'''
+# 	def __init__(self,srgetter_kwargs=None,**kwargs):
+# 		if srgetter_kwargs is None:
+# 			srgetter_kwargs = {}
+# 		else:
+# 			srgetter_kwargs = copy.deepcopy(srgetter_kwargs)
+# 		srgetter_kwargs['dev_mode'] = False
+# 		RepoImpactRank.__init__(self,srgetter_kwargs=srgetter_kwargs,**kwargs)
+
+# 	def preprocess_result(self):
+# 		ans = np.asarray(self.sr_getter.get_result().sum(axis=0)).flatten()
+# 		return ans
