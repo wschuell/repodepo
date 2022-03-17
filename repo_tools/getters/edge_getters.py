@@ -109,15 +109,18 @@ class DevToRepo(Getter):
 		db.cursor.execute('SELECT COUNT(*) FROM repositories r;')
 		return db.cursor.fetchone()[0]
 
-	def get(self,db,abs_value=False,**kwargs):
+	def get(self,db,abs_value=False,raw_result=False,**kwargs):
 		u_max = self.get_umax(db=db)
 		r_max = self.get_rmax(db=db)
 		db.cursor.execute(self.query(),self.query_attributes())
 		# query_result = list(db.cursor.fetchall())
 		# self.parse_results(query_result=query_result)
-		parsed_results = self.parse_results(query_result=db.cursor.fetchall(),abs_value=abs_value)
-		ans_mat = sparse.csr_matrix((parsed_results['data'],(parsed_results['coords_r'],parsed_results['coords_u'])),shape=(r_max,u_max))
-		return ans_mat
+		if raw_result:
+			return ({'user_id':uid,'user_rank':urk,'repo_id':rid,'repo_rank':rrk,'norm_value':normval,'abs_value':absval} for (uid,urk,rid,rrk,normval,absval) in db.cursor.fetchall())
+		else:
+			parsed_results = self.parse_results(query_result=db.cursor.fetchall(),abs_value=abs_value)
+			ans_mat = sparse.csr_matrix((parsed_results['data'],(parsed_results['coords_r'],parsed_results['coords_u'])),shape=(r_max,u_max))
+			return ans_mat
 
 
 class DevToRepoAddMax(DevToRepo):
@@ -497,13 +500,16 @@ class RepoToRepoDeps(Getter):
 		return {'data':data,'coords_r':coords_r,'coords_r_do':coords_r_do}
 
 
-	def get(self,db,**kwargs):
+	def get(self,db,raw_result=False,**kwargs):
 		db.cursor.execute('SELECT COUNT(*) FROM repositories r;')
 		r_max = db.cursor.fetchone()[0]
 		db.cursor.execute(self.query(),self.query_attributes())
 		# query_result = list(db.cursor.fetchall())
 		# self.parse_results(query_result=query_result)
-		parsed_results = self.parse_results(query_result=db.cursor.fetchall())
-		ans_mat = sparse.csr_matrix((parsed_results['data'],(parsed_results['coords_r'],parsed_results['coords_r_do'])),shape=(r_max,r_max))
-		return ans_mat
+		if raw_result:
+			return ({'repo_id':rid,'repo_rank':rrk,'dep_id':did,'dep_rank':drk,'value':val} for (rid,rrk,did,drk,val) in db.cursor.fetchall())
+		else:
+			parsed_results = self.parse_results(query_result=db.cursor.fetchall())
+			ans_mat = sparse.csr_matrix((parsed_results['data'],(parsed_results['coords_r'],parsed_results['coords_r_do'])),shape=(r_max,r_max))
+			return ans_mat
 

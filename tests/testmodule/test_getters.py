@@ -1,7 +1,7 @@
 
 import repo_tools
 from repo_tools.fillers import generic,meta_fillers
-from repo_tools.getters import project_getters,user_getters
+from repo_tools.getters import project_getters,user_getters,generic_getters
 import pytest
 import datetime
 import time
@@ -61,6 +61,17 @@ proj_list = [
 def proj_id(request):
 	return request.param
 
+geng_list = [
+	generic_getters.RepoIDs,
+	generic_getters.RepoNames,
+	generic_getters.RepoCreatedAt,
+	generic_getters.UserIDs,
+	generic_getters.UserLogins,
+	]
+@pytest.fixture(params=geng_list)
+def generic_g(request):
+	return request.param
+
 identity_list = [
 	'wschuell',
 	'wschuell@users.noreply.github.com',
@@ -108,6 +119,9 @@ def testdb(request):
 
 def test_setdb(testdb):
 	testdb.init_db()
+
+def test_generic_getters(testdb,generic_g):
+	generic_g(db=testdb).get_result()
 
 def test_gettersPproj(testdb,time_window,Pgetter,proj_id,cumulative):
 	testdb.init_db()

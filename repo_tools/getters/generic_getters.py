@@ -157,3 +157,46 @@ class UserIDs(Getter):
 	def parse_results(self,query_result):
 		return [{'user_id':uid,} for (uid,) in query_result]
 
+
+class UserLogins(Getter):
+	'''
+	IDs and names of repositories
+	'''
+	def query(self):
+		if self.db.db_type == 'postgres':
+			return'''
+				SELECT DISTINCT ON (user_id) user_id,user_login FROM
+					(SELECT u.id AS user_id,CONCAT(it.name,'/',i.identity) AS user_login
+						FROM users u
+						INNER JOIN identities i
+							ON i.user_id=u.id
+						INNER JOIN identity_types it
+							ON i.identity_type_id=it.id
+						ORDER BY user_id,(CASE it.name
+								WHEN 'github_login' THEN -1
+								WHEN 'gitlab_login' THEN 0
+								WHEN 'email' THEN NULL
+								ELSE it.id END) NULLS LAST) AS subquery
+				ORDER BY user_id;
+				'''
+		else:
+			return '''
+				SELECT u.id,it.name||'/'||i.identity AS user_login FROM users u
+					JOIN identities i ON i.id IN (
+ 						SELECT i2.id FROM identities i2
+							INNER JOIN identity_types it2
+								ON it2.id=i2.identity_type_id
+								AND i2.user_id=u.id
+							ORDER BY (CASE it2.name
+									WHEN 'github_login' THEN -1
+									WHEN 'gitlab_login' THEN 0
+									WHEN 'email' THEN NULL
+									ELSE it2.id END) NULLS LAST,
+								i2.id
+							LIMIT 1)
+					INNER JOIN identity_types it
+					ON i.identity_type_id=it.id;
+				'''
+
+	def parse_results(self,query_result):
+		return [{'user_id':uid,'user_login':ulogin} for (uid,ulogin) in query_result]

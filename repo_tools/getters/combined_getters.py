@@ -1,6 +1,7 @@
 
 import pandas as pd
 import datetime
+from dateutil.relativedelta import relativedelta
 import numpy as np
 
 from . import pandas_freq
@@ -9,24 +10,29 @@ from . import generic_getters
 
 from . import project_getters
 from . import user_getters
-# from . import rank_getters
-# from . import edge_getters
+from . import rank_getters
+from . import edge_getters
 
 default_start_date = datetime.datetime(2013,1,1)
 default_end_date = datetime.datetime.now()
 
-
-class UsageGetter(Getter):
+class CombinedGetter(Getter):
 	'''
-	Retrieves as a dataframe:
-	repo_id,repo_name,timestamp,stars,downloads,commits,commits_cumulative,forks,total contributors, active contributors
+	abstract class
 	'''
-	def __init__(self,db,start_date=default_start_date,end_date=default_end_date,time_window='month',with_reponame=True,**kwargs):
+	def __init__(self,db,start_date=default_start_date,end_date=default_end_date,time_window='month',with_reponame=True,with_userlogin=True,**kwargs):
 		self.time_window = time_window
 		self.start_date = start_date
 		self.end_date = end_date
 		self.with_reponame = with_reponame
+		self.with_userlogin = with_userlogin
 		Getter.__init__(self,db=db,**kwargs)
+
+class UsageGetter(CombinedGetter):
+	'''
+	Retrieves as a dataframe:
+	repo_id,repo_name,timestamp,stars,downloads,commits,commits_cumulative,forks,total contributors, active contributors
+	'''
 
 	def get_result(self):
 		stars = project_getters.Stars(db=self.db).get_result(time_window=self.time_window,start_date=self.start_date,end_date=self.end_date,aggregated=False)
@@ -85,18 +91,41 @@ class UsageGetter(Getter):
 
 		return df
 
-class DepsGetter(Getter):
+class DepsGetter(CombinedGetter):
 	'''
 	Retrieves as a dataframe:
 	repo_id,repo_name,dep_id,dep_name,timestamp
 
 	Filtering dependencies so that the result is always a DAG
 	'''
-	def __init__(self,db,start_date=default_start_date,end_date=default_end_date,time_window='month',**kwargs):
+	def __init__(self,db,start_date=default_start_date,end_date=default_end_date,time_window='month',with_reponame=True,**kwargs):
 		self.time_window = time_window
 		self.start_date = start_date
 		self.end_date = end_date
+		self.with_reponame = with_reponame
 		Getter.__init__(self,db=db,**kwargs)
+
+	def get_result(self):
+		date_range = pd.date_range(self.start_date,self.end_date,freq=pandas_freq[self.time_window]).to_pydatetime()
+		ans_df = pd.DataFrame(columns=['timestamp','repo_id','dep_id'])
+		ans_df.set_index(['timestamp','repo_id','dep_id'],inplace=True)
+
+
+		for t in date_range:
+			self.logger.info('Getting dependency network on {}'.format(datetime.datetime.strftime(t,'%Y-%m-%d')))
+			deps_df = pd.DataFrame(edge_getters.RepoToRepoDeps(db=self.db,ref_time=t).get_result(raw_result=True),columns=['repo_id','dep_id'])
+			deps_df = deps_df[['repo_id','dep_id']]
+			deps_df['timestamp'] = t
+			deps_df.set_index(['timestamp','repo_id','dep_id'],inplace=True)
+			ans_df = pd.concat([ans_df,deps_df])
+
+		if self.with_reponame:
+			reponames = generic_getters.RepoNames(db=self.db).get_result()
+			depnames = reponames.rename(columns={'project_id':'dep_id','repo_name':'dep_name'}).set_index('dep_id')
+			reponames = reponames.rename(columns={'project_id':'repo_id'}).set_index('repo_id')
+			ans_df = ans_df.join(reponames,how='left',on='repo_id')
+			ans_df = ans_df.join(depnames,how='left',on='dep_id')
+		return ans_df
 
 
 
@@ -110,72 +139,50 @@ class FilteredDepsGetter(DepsGetter):
 
 
 
-class ContributionsGetter(Getter):
+class ContributionsGetter(CombinedGetter):
 	'''
 	Retrieves as a dataframe:
 	repo_id,repo_name,user_id,nb_commits,timestamp
 
 	removing bots. Not counting
 	'''
-	def __init__(self,db,start_date=default_start_date,end_date=default_end_date,time_window='month',**kwargs):
-		self.time_window = time_window
-		self.start_date = start_date
-		self.end_date = end_date
-		Getter.__init__(self,db=db,**kwargs)
 
-'''
-
-select sq.repo_id,sq.nb_stars,dq.nb_downloads from (select count(s.starred_at) as nb_stars, r.id as repo_id
-from repositories r 
-left outer join stars s
-on s.repo_id =r.id and s.starred_at <='2020-01-01'
-group by r.id) sq
-inner join (select sum(coalesce(0,pvd.downloads)) as nb_downloads,r.id as repo_id from repositories r
-inner join packages p
-on p.repo_id=r.id
-inner join package_versions pv
-on pv.package_id=p.id
-inner join package_version_downloads pvd
-on pvd.package_version=pv.id
-group by r.id) dq
-on dq.repo_id=sq.repo_id
+	def get_result(self):
+		# date_range = pd.date_range(self.start_date,self.end_date,freq=pandas_freq[self.time_window]).to_pydatetime()
+		date_range = pd.date_range(self.start_date,datetime.datetime(2015,1,1),freq=pandas_freq[self.time_window]).to_pydatetime()
+		ans_df = pd.DataFrame(columns=['timestamp','repo_id','user_id','nb_commits'])
+		ans_df.set_index(['timestamp','repo_id','user_id'],inplace=True)
 
 
+		for t in date_range:
+			self.logger.info('Getting contribution network on {}'.format(datetime.datetime.strftime(t,'%Y-%m-%d')))
+			res = ({'repo_id':d['repo_id'],
+						'user_id':d['user_id'],
+						'nb_commits':d['abs_value']
+						} for d in edge_getters.DevToRepo(db=self.db,start_time=t-relativedelta(**{self.time_window:1}),end_time=t).get_result(raw_result=True))
+			deps_df = pd.DataFrame(res,columns=['timestamp','repo_id','user_id','nb_commits'])
+			deps_df = deps_df.convert_dtypes()
+			deps_df['timestamp'] = t
+			deps_df.set_index(['timestamp','repo_id','user_id'],inplace=True)
+			ans_df = pd.concat([ans_df,deps_df])
 
-select sum(coalesce(0,pvd.downloads)) as nb_downloads,r.id as repo_id from repositories r
-inner join packages p
-on p.repo_id=r.id
-inner join package_versions pv
-on pv.package_id=p.id
-inner join package_version_downloads pvd
-on pvd.package_version=pv.id
-group by r.id
+		if self.with_reponame:
+			reponames = generic_getters.RepoNames(db=self.db).get_result()
+			reponames = reponames.rename(columns={'project_id':'repo_id'}).set_index('repo_id')
+			ans_df = ans_df.join(reponames,how='left',on='repo_id')
 
+		if self.with_userlogin:
+			userlogins = generic_getters.UserLogins(db=self.db).get_result()
+			userlogins.set_index('user_id',inplace=True)
+			ans_df = ans_df.join(userlogins,how='left',on='user_id')
 
-select sum(coalesce(0,pvd.downloads)) as nb_downloads,r.id as repo_id
-from package_version_downloads pvd
-inner join package_versions pv
-on pvd.package_version=pv.id
-inner join packages p
-on pv.package_id=p.id
-right outer join repositories r
-on p.repo_id=r.id
-group by r.id
+		order = ['repo_name',
+					'user_login',
+					'nb_commits']
+		if not self.with_reponame:
+			order.remove('repo_name')
+		if not self.with_userlogin:
+			order.remove('user_login')
+		ans_df = ans_df[order]
 
-
-select avg(cnt) from (
-select count(*) as cnt from package_versions pv 
-left outer join package_dependencies pd ON pd.depending_version =pv.id
-group by pv.id) a 
-
-
-
-select i.user_id,count(*),c.repo_id 
-from commits c
-inner join identities i 
-on c.author_id =i.id
-and c.created_at >'2019-12-31' and c.created_at <'2021-01-01'
-group by i.user_id,c.repo_id
-
-
-'''
+		return ans_df
