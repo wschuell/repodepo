@@ -100,12 +100,6 @@ class DepsGetter(CombinedGetter):
 
 	Filtering dependencies so that the result is always a DAG
 	'''
-	def __init__(self,db,start_date=default_start_date,end_date=default_end_date,time_window='month',with_reponame=True,**kwargs):
-		self.time_window = time_window
-		self.start_date = start_date
-		self.end_date = end_date
-		self.with_reponame = with_reponame
-		Getter.__init__(self,db=db,**kwargs)
 
 	def get_result(self):
 		date_range = pd.date_range(self.start_date,self.end_date,freq=pandas_freq[self.time_window]).to_pydatetime()
