@@ -52,9 +52,31 @@ sqlite3.register_adapter(np.ndarray, adapt_array)
 sqlite3.register_converter("array", convert_array)
 
 sqlite3.register_adapter(np.int64, int)
+sqlite3.register_adapter(dict, json.dumps)
+sqlite3.register_adapter(bool, int)
+sqlite3.register_converter("BOOLEAN", lambda v: bool(int(v)))
+def convert_timestamp(val):
+	'''
+	adapted from https://github.com/python/cpython/blob/main/Lib/sqlite3/dbapi2.py
+	'''
+	if b' ' not in val:
+		val = val.replace(b'T',b' ')
+		val = val.replace(b'Z',b'')
+	datepart, timepart = val.split(b" ")
+	year, month, day = map(int, datepart.split(b"-"))
+	timepart_full = timepart.split(b".")
+	hours, minutes, seconds = map(int, timepart_full[0].split(b":"))
+	if len(timepart_full) == 2:
+		microseconds = int('{:0<6.6}'.format(timepart_full[1].decode()))
+	else:
+		microseconds = 0
+	val = datetime.datetime(year, month, day, hours, minutes, seconds, microseconds)
+	return val
 
-def check_sqlname_safe(s):
-    assert s == ''.join( c for c in s if c.isalnum() or c in ('_',) )
+sqlite3.register_converter("timestamp", convert_timestamp)
+
+psycopg2.extensions.register_adapter(dict, psycopg2.extras.Json)
+
 
 class Database(object):
 	'''
@@ -174,36 +196,6 @@ class Database(object):
 		Returns a copy, without init, with independent connection and cursor
 		'''
 		return self.__class__(do_init=False,timeout=timeout,**self.db_conninfo)
-
-	def dump_pg_to_sqlite(self,other_db):
-		'''
-		Wrapper to move the db (postgres) to another with sqlite.
-		Table names are used as variables, and the (self-made) check against injection expects alphanumeric chars or _
-		DB structure has to be the same, and especially attribute order.
-		Maybe attributes could be retrieved and specified also as variables to be safer in terms of data integrity.
-		'''
-		if not (self.db_type == 'postgres' and other_db.db_type == 'sqlite'):
-			raise NotImplementedError('Dumping is only available from PostgreSQL to SQLite. Trying to dump from {} to {}.'.format(self.db_type,other_db.db_type))
-		else:
-			self.logger.info('Dumping PostgreSQL {} into SQLite {}'.format(self.db_conninfo['db_name'],other_db.db_conninfo['db_name']))
-			self.cursor.execute('''SELECT table_name FROM information_schema.tables
-							WHERE table_schema = (SELECT current_schema());''')
-			tab_list = [r[0] for r in self.cursor.fetchall()]
-			for i,tab in enumerate(tab_list):
-				check_sqlname_safe(tab)
-				other_db.cursor.execute(''' SELECT * FROM {} LIMIT 1;'''.format(tab))
-				res = list(other_db.cursor.fetchall())
-				if len(res) == 0:
-					self.logger.info('Dumping table {} ({}/{})'.format(tab,i+1,len(tab_list)))
-					self.cursor.execute(''' SELECT * from {} LIMIT 1;'''.format(tab))
-					resmain_sample = list(self.cursor.fetchall())
-					if len(resmain_sample) > 0:
-						nb_attr = len(resmain_sample[0])
-						self.cursor.execute(''' SELECT * from {};'''.format(tab))
-						other_db.cursor.executemany('''INSERT OR IGNORE INTO {} VALUES({});'''.format(tab,','.join(['?' for _ in range(nb_attr)])),self.cursor.fetchall())
-						other_db.connection.commit()
-				else:
-					self.logger.info('Skipping table {} ({}/{})'.format(tab,i+1,len(tab_list)))
 
 	def init_db(self):
 		'''

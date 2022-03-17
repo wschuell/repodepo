@@ -58,7 +58,7 @@
 				id INTEGER PRIMARY KEY,
 				identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
 				user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-				identity TEXT
+				identity TEXT,
 				created_at TIMESTAMP,
 				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 				attributes TEXT,

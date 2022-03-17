@@ -75,18 +75,3 @@ def test_dl(testdb):
 	testdb.register_repo(source='GitHub',repo='test',owner='test')
 	testdb.submit_download_attempt(source='GitHub',owner='test',repo='test',success=False)
 	testdb.submit_download_attempt(source='GitHub',owner='test',repo='test',success=True)
-
-def test_dump(testdb,otherdb):
-	testdb.register_source(source='GitHub',source_urlroot='github.com')
-	testdb.register_url(source='GitHub',repo_url='https://github.com/test/test')
-	testdb.register_repo(source='GitHub',repo='test',owner='test')
-	testdb.submit_download_attempt(source='GitHub',owner='test',repo='test',success=False)
-	testdb.submit_download_attempt(source='GitHub',owner='test',repo='test',success=True)
-	if testdb.db_type=='postgres' and otherdb.db_type=='sqlite':
-		testdb.dump_pg_to_sqlite(other_db=otherdb)
-	else:
-		try:
-			testdb.dump_pg_to_sqlite(other_db=otherdb)
-			raise ValueError('Should have raise NotImplementedError')
-		except NotImplementedError:
-			pass
