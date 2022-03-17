@@ -44,17 +44,19 @@ class UsageGetter(CombinedGetter):
 		active_devs = project_getters.ActiveDevelopers(db=self.db).get_result(time_window=self.time_window,start_date=self.start_date,end_date=self.end_date,aggregated=False,cumulative=False)
 		downloads = project_getters.Downloads(db=self.db).get_result(time_window=self.time_window,start_date=self.start_date,end_date=self.end_date,aggregated=False)
 
-		df = commits_cumul
-		df = pd.merge(df, stars,  how='left', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
-		df = pd.merge(df, forks,  how='left', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
-		df = pd.merge(df, commits,  how='left', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
-		# df = pd.merge(df, commits_cumul,  how='left', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
-		df = pd.merge(df, devs,  how='left', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
-		df = pd.merge(df, active_devs,  how='left', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
-		df = pd.merge(df, downloads,  how='left', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
+		df = pd.DataFrame(columns=['project_id','timestamp'])
+		# df = commits_cumul
+		df = pd.merge(df, stars,  how='outer', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
+		df = pd.merge(df, forks,  how='outer', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
+		df = pd.merge(df, commits,  how='outer', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
+		df = pd.merge(df, commits_cumul,  how='outer', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
+		df = pd.merge(df, devs,  how='outer', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
+		df = pd.merge(df, active_devs,  how='outer', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
+		df = pd.merge(df, downloads,  how='outer', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
 
 		creation_dates = generic_getters.RepoCreatedAt(db=self.db).get_result()
 		creation_dates.set_index('project_id',inplace=True)
+		creation_dates.fillna(self.start_date,inplace=True)
 		df = df.join(creation_dates,how='left',on='project_id')
 		df.reset_index(inplace=True)
 		df.drop(df[df.created_at > df.timestamp].index, inplace=True)
@@ -149,7 +151,7 @@ class ContributionsGetter(CombinedGetter):
 
 	def get_result(self):
 		# date_range = pd.date_range(self.start_date,self.end_date,freq=pandas_freq[self.time_window]).to_pydatetime()
-		date_range = pd.date_range(self.start_date,datetime.datetime(2015,1,1),freq=pandas_freq[self.time_window]).to_pydatetime()
+		date_range = pd.date_range(self.start_date,self.end_date,freq=pandas_freq[self.time_window]).to_pydatetime()
 		ans_df = pd.DataFrame(columns=['timestamp','repo_id','user_id','nb_commits'])
 		ans_df.set_index(['timestamp','repo_id','user_id'],inplace=True)
 

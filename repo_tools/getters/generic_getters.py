@@ -118,7 +118,7 @@ class RepoCreatedAt(Getter):
 		return '''
 				SELECT r.id,MIN(p.created_at)
 				FROM repositories r
-				INNER JOIN packages p
+				LEFT OUTER JOIN packages p
 				ON p.repo_id=r.id
 				GROUP BY r.id
 				ORDER BY r.id;

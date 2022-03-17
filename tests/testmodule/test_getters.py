@@ -1,7 +1,7 @@
 
 import repo_tools
 from repo_tools.fillers import generic,meta_fillers
-from repo_tools.getters import project_getters,user_getters,generic_getters
+from repo_tools.getters import project_getters,user_getters,generic_getters,combined_getters
 import pytest
 import datetime
 import time
@@ -94,6 +94,11 @@ subclasses_Ugetters = inspect.getmembers(user_getters, lambda elt:(inspect.iscla
 def Ugetter(request):
 	return request.param[1]
 
+subclasses_combined_g = inspect.getmembers(combined_getters, lambda elt:(inspect.isclass(elt) and issubclass(elt,combined_getters.CombinedGetter) and elt!=combined_getters.CombinedGetter ))
+@pytest.fixture(params=subclasses_combined_g)
+def combined_g(request):
+	return request.param[1]
+
 
 @pytest.fixture(params=dbtype_list)
 def testdb(request):
@@ -122,6 +127,9 @@ def test_setdb(testdb):
 
 def test_generic_getters(testdb,generic_g):
 	generic_g(db=testdb).get_result()
+
+def test_combined_getters(testdb,combined_g):
+	combined_g(db=testdb).get_result()
 
 def test_gettersPproj(testdb,time_window,Pgetter,proj_id,cumulative):
 	testdb.init_db()
