@@ -298,7 +298,7 @@ class Commits(UserGetter):
 				INNER JOIN identities i
 				ON c.author_id=i.id
 				AND (:include_bots OR NOT i.is_bot)
-				AND :start_date <= created_at AND created_at < :end_date
+				AND :start_date <= c.created_at AND c.created_at < :end_date
 				GROUP BY i.user_id
 				''',{'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		return list(db.cursor.fetchall())
@@ -398,7 +398,7 @@ class TotalLines(UserGetter):
 				SELECT SUM(c.insertions+c.deletions),i.user_id FROM commits c
 				INNER JOIN identities i
 				ON c.author_id=i.id
-				AND :start_date <= created_at AND created_at < :end_date
+				AND :start_date <= c.created_at AND c.created_at < :end_date
 				GROUP BY i.user_id
 				''',{'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		return list(db.cursor.fetchall())
@@ -496,7 +496,7 @@ class Lines(UserGetter):
 				SELECT SUM(c.insertions-c.deletions),i.user_id FROM commits c
 				INNER JOIN identities i
 				ON c.author_id=i.id
-				AND :start_date <= created_at AND created_at < :end_date
+				AND :start_date <= c.created_at AND c.created_at < :end_date
 				GROUP BY i.user_id
 				''',{'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		return list(db.cursor.fetchall())
@@ -615,7 +615,7 @@ class Projects(UserGetter):
 				(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
 				INNER JOIN identities i
 				ON cc.author_id=i.id
-				AND datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
+				AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
 				GROUP BY i.user_id,cc.repo_id
 				) AS c
 				GROUP BY user_id
@@ -737,7 +737,7 @@ class ActiveProjects(UserGetter):
 				(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
 				INNER JOIN identities i
 				ON cc.author_id=i.id
-				AND datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
+				AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
 				GROUP BY i.user_id,cc.repo_id
 				) AS c
 				GROUP BY user_id
@@ -1014,7 +1014,7 @@ class Sponsors(UserGetter):
 				SELECT COUNT(*),i.user_id FROM sponsors_user s
 				INNER JOIN identities i
 				ON s.sponsored_id=i.id
-				AND :start_date <= created_at AND created_at < :end_date
+				AND :start_date <= s.created_at AND s.created_at < :end_date
 				GROUP BY i.user_id
 				''',{'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		return list(db.cursor.fetchall())
@@ -1115,7 +1115,7 @@ class SponsorsCommunity(UserGetter):
 				SELECT COUNT(*),i.user_id FROM sponsors_user s
 				INNER JOIN identities i
 				ON s.sponsored_id=i.id
-				AND :start_date <= created_at AND created_at < :end_date
+				AND :start_date <= s.created_at AND s.created_at < :end_date
 				AND s.sponsor_id IS NOT NULL
 				GROUP BY i.user_id
 				''',{'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})

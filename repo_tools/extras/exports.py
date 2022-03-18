@@ -147,17 +147,29 @@ def export(orig_db,dest_db):
 				dest_db.cursor.execute('''INSERT INTO _dbinfo(info_type,info_content) VALUES ('exported_from',:orig_uuid);''',{'orig_uuid':orig_uuid})
 			tables_info = get_tables_info(db=orig_db)
 			if dest_db.db_type == 'postgres':
-				for t in tables_info.keys():
-					dest_db.cursor.execute('''ALTER TABLE {table} DISABLE TRIGGER ALL;'''.format(table=t))
+				db.cursor.execute(disable_triggers_cmd(db=dest_db,tables_info=tables_info))
 			for t,columns in tables_info.items():
 				dest_db.logger.info('Exporting table {}'.format(t))
 				table_data = get_table_data(table=t,columns=columns,db=orig_db)
 				insert_table_data(table=t,columns=columns,db=dest_db,table_data=table_data)
 			if dest_db.db_type == 'postgres':
-				for t in tables_info.keys():
-					dest_db.cursor.execute('''ALTER TABLE {table} ENABLE TRIGGER ALL;'''.format(table=t))
+				db.cursor.execute(enable_triggers_cmd(db=dest_db,tables_info=tables_info))
 				fix_sequences(db=dest_db)
 			dest_db.connection.commit()
+
+def disable_triggers_cmd(db,tables_info=None):
+	if tables_info is None:
+		tables_info = get_tables_info(db=db)
+	for t in tables_info.keys():
+		check_sqlname_safe(t)
+	return '\n'.join(['''ALTER TABLE {table} DISABLE TRIGGER ALL;\n'''.format(table=t) for t in tables_info.keys()])
+
+def enable_triggers_cmd(db,tables_info=None):
+	if tables_info is None:
+		tables_info = get_tables_info(db=db)
+	for t in tables_info.keys():
+		check_sqlname_safe(t)
+	return '\n'.join(['''ALTER TABLE {table} ENABLE TRIGGER ALL;\n'''.format(table=t) for t in tables_info.keys()])
 
 def clean(db):
 	'''
@@ -166,33 +178,49 @@ def clean(db):
 	pass
 
 
+def dump_pg_csv(db,output_folder):
+	'''
+	Dumping a postgres DB to schema.sql, import.sql and one CSV per table
+	'''
+	if not os.path.exists(os.path.join(output_folder,'data')):
+		os.makedirs(os.path.join(output_folder,'data'))
 
-	def dump_pg_to_sqlite(self,other_db):
-		'''
-		Wrapper to move the db (postgres) to another with sqlite.
-		Table names are used as variables, and the (self-made) check against injection expects alphanumeric chars or _
-		DB structure has to be the same, and especially attribute order.
-		Maybe attributes could be retrieved and specified also as variables to be safer in terms of data integrity.
-		'''
-		if not (self.db_type == 'postgres' and other_db.db_type == 'sqlite'):
-			raise NotImplementedError('Dumping is only available from PostgreSQL to SQLite. Trying to dump from {} to {}.'.format(self.db_type,other_db.db_type))
-		else:
-			self.logger.info('Dumping PostgreSQL {} into SQLite {}'.format(self.db_conninfo['db_name'],other_db.db_conninfo['db_name']))
-			self.cursor.execute('''SELECT table_name FROM information_schema.tables
-							WHERE table_schema = (SELECT current_schema());''')
-			tab_list = [r[0] for r in self.cursor.fetchall()]
-			for i,tab in enumerate(tab_list):
-				check_sqlname_safe(tab)
-				other_db.cursor.execute(''' SELECT * FROM {} LIMIT 1;'''.format(tab))
-				res = list(other_db.cursor.fetchall())
-				if len(res) == 0:
-					self.logger.info('Dumping table {} ({}/{})'.format(tab,i+1,len(tab_list)))
-					self.cursor.execute(''' SELECT * from {} LIMIT 1;'''.format(tab))
-					resmain_sample = list(self.cursor.fetchall())
-					if len(resmain_sample) > 0:
-						nb_attr = len(resmain_sample[0])
-						self.cursor.execute(''' SELECT * from {};'''.format(tab))
-						other_db.cursor.executemany('''INSERT OR IGNORE INTO {} VALUES({});'''.format(tab,','.join(['?' for _ in range(nb_attr)])),self.cursor.fetchall())
-						other_db.connection.commit()
-				else:
-					self.logger.info('Skipping table {} ({}/{})'.format(tab,i+1,len(tab_list)))
+	'''\\COPY {} TO {} FROM '''
+
+	'''
+	\\copy "categories" ("category", "crates_cnt", "created_at", "description", "id", "path", "slug") FROM 'data/categories.csv' WITH CSV HEADER
+	'''
+
+	# schema.sql
+	with open(os.path.join(output_folder,'schema.sql'),'w') as f:
+		f.write(schema_str)
+	# import.sql
+
+	import_str = '''
+BEGIN;
+
+-- Disabling Triggers
+{disable_trig}
+
+-- Inserting data
+{copy_tables}
+
+-- Reenabling Triggers
+{enable_trig}
+
+COMMIT;
+	'''.format(disable_trig=disable_triggers_cmd(db=db,tables_info=tables_info),
+				enable_trig=enable_triggers_cmd(db=db,tables_info=tables_info),
+				copy_tables=copy_tables_str)
+
+	with open(os.path.join(output_folder,'import.sql'),'w') as f:
+		f.write(import_str)
+
+	# CSV
+	# header, then each line.
+	'''
+	COPY { table_name [ ( column [, ...] ) ] | ( query ) }
+    TO { 'filename' | STDOUT }
+    [ [ WITH ] ( option [, ...] ) ]
+	'''
+
