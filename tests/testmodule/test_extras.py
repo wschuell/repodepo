@@ -82,7 +82,7 @@ def test_tables_info(testdb):
 	exports.get_tables_info(testdb)
 
 @pytest.mark.timeout(30)
-def test_autodump(testdb):
+def test_autoexport(testdb):
 	try:
 		exports.export(orig_db=testdb,dest_db=testdb)
 		raise ValueError('Should have raised an error while trying to export a db to itself')
@@ -90,5 +90,17 @@ def test_autodump(testdb):
 		pass
 
 @pytest.mark.timeout(30)
-def test_dump(testdb,dest_db):
+def test_export(testdb,dest_db):
 	exports.export(orig_db=testdb,dest_db=dest_db)
+
+@pytest.mark.timeout(30)
+def test_dump(testdb):
+	try:
+		exports.dump_pg_csv(db=testdb,output_folder=os.path.join(os.path.dirname(__file__),'dump_pg'))
+	except errors.RepoToolsDumpSQLiteError:
+		if testdb.db_type == 'sqlite':
+			return
+		else:
+			raise
+	if testdb.db_type == 'sqlite':
+		raise ValueError('Should have raised an error for dumping a SQLite DB')

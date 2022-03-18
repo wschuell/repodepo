@@ -5,3 +5,6 @@ class RepoToolsError(Exception):
 
 class RepoToolsExportSameDBError(RepoToolsError):
 	pass
+
+class RepoToolsDumpSQLiteError(RepoToolsError):
+	pass

@@ -2,6 +2,7 @@ import string
 import random
 import sqlite3
 import os
+from sh import pg_dump
 import psycopg2
 import psycopg2.extras
 from . import errors
@@ -183,6 +184,9 @@ def dump_pg_csv(db,output_folder):
 	'''
 	Dumping a postgres DB to schema.sql, import.sql and one CSV per table
 	'''
+	if not db.db_type == 'postgres':
+		raise errors.RepoToolsDumpSQLiteError
+
 	if not os.path.exists(os.path.join(output_folder,'data')):
 		os.makedirs(os.path.join(output_folder,'data'))
 
@@ -191,17 +195,15 @@ def dump_pg_csv(db,output_folder):
 
 	###### schema.sql ######
 
-	schema_str = '' # from _dbinfo or from lib
 	with open(os.path.join(output_folder,'schema.sql'),'w') as f:
-		f.write(schema_str)
+		pg_dump('-h', db.db_conninfo['host'], '-U', db.db_conninfo['db_user'], db.db_conninfo['db_name'],'-p',db.db_conninfo['port'],'-s', _out=f)
 
 
 
 	###### import.sql ######
 
-	copy_tables_str ='''
-			\\copy "categories" ("category", "crates_cnt", "created_at", "description", "id", "path", "slug") FROM 'data/categories.csv' WITH CSV HEADER
-			'''
+	copy_tables_str = '\n'.join(['''\\copy {table} ({columns}) FROM 'data/{table}.csv' WITH CSV HEADER;'''.format(table=t,columns=','.join(col)) 
+				for t,col in sorted(tables_info.items())])
 
 	import_str = '''
 BEGIN;
