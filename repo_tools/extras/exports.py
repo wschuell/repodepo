@@ -185,16 +185,27 @@ def dump_pg_csv(db,output_folder):
 	if not os.path.exists(os.path.join(output_folder,'data')):
 		os.makedirs(os.path.join(output_folder,'data'))
 
-	'''\\COPY {} TO {} FROM '''
+	tables_info = get_tables_info(db=db)
+
+
+	###### schema.sql ######
 
 	'''
-	\\copy "categories" ("category", "crates_cnt", "created_at", "description", "id", "path", "slug") FROM 'data/categories.csv' WITH CSV HEADER
+	COPY { table_name [ ( column [, ...] ) ] | ( query ) }
+    TO { 'filename' | STDOUT }
+    [ [ WITH ] ( option [, ...] ) ]
 	'''
-
-	# schema.sql
+	schema_str = ''
 	with open(os.path.join(output_folder,'schema.sql'),'w') as f:
 		f.write(schema_str)
-	# import.sql
+
+
+
+	###### import.sql ######
+
+	copy_tables_str ='''
+			\\copy "categories" ("category", "crates_cnt", "created_at", "description", "id", "path", "slug") FROM 'data/categories.csv' WITH CSV HEADER
+			'''
 
 	import_str = '''
 BEGIN;
@@ -216,11 +227,6 @@ COMMIT;
 	with open(os.path.join(output_folder,'import.sql'),'w') as f:
 		f.write(import_str)
 
-	# CSV
+	###### CSV files ######
 	# header, then each line.
-	'''
-	COPY { table_name [ ( column [, ...] ) ] | ( query ) }
-    TO { 'filename' | STDOUT }
-    [ [ WITH ] ( option [, ...] ) ]
-	'''
 
