@@ -1,6 +1,7 @@
 import string
 import random
 import sqlite3
+import os
 import psycopg2
 import psycopg2.extras
 from . import errors
@@ -147,13 +148,13 @@ def export(orig_db,dest_db):
 				dest_db.cursor.execute('''INSERT INTO _dbinfo(info_type,info_content) VALUES ('exported_from',:orig_uuid);''',{'orig_uuid':orig_uuid})
 			tables_info = get_tables_info(db=orig_db)
 			if dest_db.db_type == 'postgres':
-				db.cursor.execute(disable_triggers_cmd(db=dest_db,tables_info=tables_info))
+				dest_db.cursor.execute(disable_triggers_cmd(db=dest_db,tables_info=tables_info))
 			for t,columns in tables_info.items():
 				dest_db.logger.info('Exporting table {}'.format(t))
 				table_data = get_table_data(table=t,columns=columns,db=orig_db)
 				insert_table_data(table=t,columns=columns,db=dest_db,table_data=table_data)
 			if dest_db.db_type == 'postgres':
-				db.cursor.execute(enable_triggers_cmd(db=dest_db,tables_info=tables_info))
+				dest_db.cursor.execute(enable_triggers_cmd(db=dest_db,tables_info=tables_info))
 				fix_sequences(db=dest_db)
 			dest_db.connection.commit()
 
@@ -190,12 +191,7 @@ def dump_pg_csv(db,output_folder):
 
 	###### schema.sql ######
 
-	'''
-	COPY { table_name [ ( column [, ...] ) ] | ( query ) }
-    TO { 'filename' | STDOUT }
-    [ [ WITH ] ( option [, ...] ) ]
-	'''
-	schema_str = ''
+	schema_str = '' # from _dbinfo or from lib
 	with open(os.path.join(output_folder,'schema.sql'),'w') as f:
 		f.write(schema_str)
 
@@ -229,4 +225,9 @@ COMMIT;
 
 	###### CSV files ######
 	# header, then each line.
+	'''
+	COPY { table_name [ ( column [, ...] ) ] | ( query ) }
+    TO { 'filename' | STDOUT }
+    [ [ WITH ] ( option [, ...] ) ]
+	'''
 
