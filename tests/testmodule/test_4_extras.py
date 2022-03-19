@@ -104,3 +104,16 @@ def test_dump(testdb):
 			raise
 	if testdb.db_type == 'sqlite':
 		raise ValueError('Should have raised an error for dumping a SQLite DB')
+
+
+@pytest.mark.timeout(30)
+def test_dump_nopsql(testdb):
+	try:
+		exports.dump_pg_csv(db=testdb,output_folder=os.path.join(os.path.dirname(__file__),'dump_pg_nopsql'),csv_psql=False)
+	except errors.RepoToolsDumpSQLiteError:
+		if testdb.db_type == 'sqlite':
+			return
+		else:
+			raise
+	if testdb.db_type == 'sqlite':
+		raise ValueError('Should have raised an error for dumping a SQLite DB')

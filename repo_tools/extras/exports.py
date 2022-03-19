@@ -1,8 +1,9 @@
 import string
 import random
 import sqlite3
+import csv
 import os
-from sh import pg_dump
+from sh import pg_dump,psql
 import psycopg2
 import psycopg2.extras
 from . import errors
@@ -180,7 +181,7 @@ def clean(db):
 	pass
 
 
-def dump_pg_csv(db,output_folder):
+def dump_pg_csv(db,output_folder,import_dump=True,schema_dump=True,csv_dump=True,csv_psql=True):
 	'''
 	Dumping a postgres DB to schema.sql, import.sql and one CSV per table
 	'''
@@ -194,18 +195,27 @@ def dump_pg_csv(db,output_folder):
 
 
 	###### schema.sql ######
-
-	with open(os.path.join(output_folder,'schema.sql'),'w') as f:
-		pg_dump('-h', db.db_conninfo['host'], '-U', db.db_conninfo['db_user'], db.db_conninfo['db_name'],'-p',db.db_conninfo['port'],'-s', _out=f)
+	if schema_dump:
+		with open(os.path.join(output_folder,'schema.sql'),'w') as f:
+			pg_dump('-h', db.db_conninfo['host'],
+					'-U', db.db_conninfo['db_user'],
+					db.db_conninfo['db_name'],
+					'-p',db.db_conninfo['port'],
+					'--schema-only',
+					'--no-owner',
+					'--no-privileges',
+					'--no-security-labels',
+					'--no-tablespaces',
+					_out=f)
 
 
 
 	###### import.sql ######
-
-	copy_tables_str = '\n'.join(['''\\copy {table} ({columns}) FROM 'data/{table}.csv' WITH CSV HEADER;'''.format(table=t,columns=','.join(col)) 
+	if import_dump:
+		copy_tables_str = '\n'.join(['''\\copy {table} ({columns}) FROM 'data/{table}.csv' WITH CSV HEADER;'''.format(table=t,columns=','.join(col)) 
 				for t,col in sorted(tables_info.items())])
 
-	import_str = '''
+		import_str = '''
 BEGIN;
 
 -- Disabling Triggers
@@ -222,14 +232,25 @@ COMMIT;
 				enable_trig=enable_triggers_cmd(db=db,tables_info=tables_info),
 				copy_tables=copy_tables_str)
 
-	with open(os.path.join(output_folder,'import.sql'),'w') as f:
-		f.write(import_str)
+		with open(os.path.join(output_folder,'import.sql'),'w') as f:
+			f.write(import_str)
 
 	###### CSV files ######
 	# header, then each line.
-	'''
-	COPY { table_name [ ( column [, ...] ) ] | ( query ) }
-    TO { 'filename' | STDOUT }
-    [ [ WITH ] ( option [, ...] ) ]
-	'''
+	if csv_dump:
+		if csv_psql:
+			copy_tables_str = '\n'.join(['''\\copy {table} ({columns}) TO '{folder_table}.csv' WITH CSV HEADER;'''.format(table=t,
+																								columns=','.join(col),
+																								folder_table=os.path.join(output_folder,'data',t)) 
+				for t,col in sorted(tables_info.items())])
+			psql('-h', db.db_conninfo['host'], '-U', db.db_conninfo['db_user'], db.db_conninfo['db_name'],'-p',db.db_conninfo['port'],_in=copy_tables_str)
+		else:
+			for t,col in tables_info.items():
+				with open(os.path.join(output_folder,'data','{}.csv'.format(t)),'w') as f:
+					writer = csv.writer(f)
+					writer.writerow(col)
+					db.cursor.execute('SELECT {columns} FROM {table};'.format(table=t,columns=','.join(col)))
+					for r in db.cursor.fetchall():
+						writer.writerow(r)
+	
 
