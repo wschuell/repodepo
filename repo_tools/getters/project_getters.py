@@ -847,7 +847,7 @@ class ActiveDevelopers(ProjectGetter):
 		else:
 			db.cursor.execute('''
 				SELECT COUNT(*), time_stamp FROM
-				(SELECT date(datetime(created_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp,i.user_id,cc.repo_id FROM commits cc
+				(SELECT date(datetime(cc.created_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp,i.user_id,cc.repo_id FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
 				AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
@@ -879,7 +879,7 @@ class ActiveDevelopers(ProjectGetter):
 		else:
 			db.cursor.execute('''
 				SELECT COUNT(*), time_stamp FROM
-				(SELECT date(datetime(created_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp,i.user_id FROM commits cc
+				(SELECT date(datetime(cc.created_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp,i.user_id FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
 				AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
@@ -940,7 +940,7 @@ class ActiveDevelopers(ProjectGetter):
 		else:
 			db.cursor.execute('''
 				SELECT COUNT(*), time_stamp, repo_id FROM
-				(SELECT date(datetime(created_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp,i.user_id,cc.repo_id FROM commits cc
+				(SELECT date(datetime(cc.created_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp,i.user_id,cc.repo_id FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
 				AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
