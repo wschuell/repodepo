@@ -181,7 +181,7 @@ def clean(db):
 	pass
 
 
-def dump_pg_csv(db,output_folder,import_dump=True,schema_dump=True,csv_dump=True,csv_psql=True):
+def dump_pg_csv(db,output_folder,import_dump=True,schema_dump=True,csv_dump=True,csv_psql=True,force=False):
 	'''
 	Dumping a postgres DB to schema.sql, import.sql and one CSV per table
 	'''
@@ -192,6 +192,14 @@ def dump_pg_csv(db,output_folder,import_dump=True,schema_dump=True,csv_dump=True
 		os.makedirs(os.path.join(output_folder,'data'))
 
 	tables_info = get_tables_info(db=db)
+
+	for filename,bool_var in [('schema.sql',schema_dump),('import.sql',import_dump)]+[('data/{}.csv'.format(t),csv_dump) for t in sorted(tables_info.keys())]:
+		filepath = os.path.join(output_folder,filename)
+		if os.path.exists(filepath) and bool_var:
+			if force:
+				os.remove(filepath)
+			else:
+				raise errors.RepoToolsDumpPGError('Error while dumping: {} already exists. Use force=True to replace.'.format(filename))
 
 
 	###### schema.sql ######

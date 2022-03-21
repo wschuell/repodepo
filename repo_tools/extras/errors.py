@@ -8,3 +8,6 @@ class RepoToolsExportSameDBError(RepoToolsError):
 
 class RepoToolsDumpSQLiteError(RepoToolsError):
 	pass
+
+class RepoToolsDumpPGError(RepoToolsError):
+	pass

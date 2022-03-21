@@ -1,6 +1,3 @@
-# analysis dataset
-# comparison ghtorrent
-
 import psycopg2
 from collections import OrderedDict
 import oyaml as yaml
