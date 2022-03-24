@@ -106,7 +106,7 @@ class BotListFiller(BotFiller):
 			if isinstance(b,str):
 				new_botlist.append((self.identity_type,b))
 			elif len(b) == 1:
-				new_botlist.append((self.identity_type,b[1]))
+				new_botlist.append((self.identity_type,b[0]))
 			elif len(b) == 2:
 				new_botlist.append(b)
 			else:
