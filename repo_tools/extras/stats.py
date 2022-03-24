@@ -7,32 +7,32 @@ class Stats(object):
 	abstract class to be inherited from
 	'''
 
-	def get_results(self):
+	def get_result(self):
 		'''
 		sets self.results as an ordered dict, potentially nested
 		'''
 		raise NotImplementedError
 
-	def format_results(self):
+	def format_result(self):
 		'''
 		formats results in yml format
 		'''
 		if not hasattr(self,'results'):
-			self.get_results()
+			self.get_result()
 		return yaml.dump(self.results)
 
-	def print_results(self):
+	def print_result(self):
 		'''
 		prints results in yml format
 		'''
-		print(self.format_results())
+		print(self.format_result())
 
 	def save(self,filepath):
 		'''
 		saves output from format_resuts in a file
 		'''
 		with open(filepath,'w') as f:
-			f.write(self.format_results())
+			f.write(self.format_result())
 
 
 class DBStats(Stats):
@@ -47,7 +47,7 @@ class PackageStats(DBStats):
 	'''
 	packages stats
 	'''
-	def get_results(self):
+	def get_result(self):
 		results = OrderedDict()
 		results['nb_total'] = self.get_nb_packages()
 		# results['nb_url_repo'] = self.get_nb_url_repo()
@@ -67,7 +67,7 @@ class PackageStats(DBStats):
 		return self.db.cursor.fetchone()[0]
 
 class GlobalStats(DBStats):
-	def get_results(self):
+	def get_result(self):
 		results = OrderedDict()
 
 		for (name,cl) in [
@@ -75,7 +75,7 @@ class GlobalStats(DBStats):
 				]:
 
 			s = cl(db=self.db)
-			s.get_results()
+			s.get_result()
 			results[name] = s.results
 
 		self.results = results

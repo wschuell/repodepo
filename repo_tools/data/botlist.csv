@@ -1,14 +1,37 @@
-invalid-email-address
-github
-bors-servo
-bors
-amethyst-bors
-bors-libra
-bors-homu
-traviscibot
-rust-highfive
-minybot
-risqbot
-rustfixbot
-artichoke-ci
-nearprotocol-ci
+github_login,invalid-email-address
+github_login,github
+github_login,""
+github_login," "
+github_login,bors
+github_login,traviscibot
+github_login,rust-highfive
+github_login,minybot
+github_login,risqbot
+github_login,rustfixbot
+github_login,artichoke-ci
+github_login,nearprotocol-ci
+email,""
+email," "
+email,svcscm@fb.com
+email,travis@travis-ci.org
+email,support@dependabot.com
+email,localhost
+email,none
+email,=
+email,n/a
+email,N/A
+email,ci
+email,null
+email,travis
+email,gh-actions
+email,"gitlab ci"
+email,email
+email,"--global"
+email,=
+email,"doc bot"
+email,unknown
+email,gaming.bot.discord@gmail.com
+email,release+servo@mozilla.com
+email,gha@ci.invalid
+email,ci-build@calibra.com
+email,alsuren+quickinstall@gmail.com

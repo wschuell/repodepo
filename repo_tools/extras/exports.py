@@ -141,23 +141,36 @@ def export(orig_db,dest_db):
 		if exportedfrom_uuid is not None:
 			exportedfrom_uuid = exportedfrom_uuid[0]
 
-		if orig_uuid is not None and exportedfrom_uuid == orig_uuid:
+		if orig_uuid is None:
+			raise errors.RepoToolsError('No UUID for origin database')
+		elif exportedfrom_uuid == orig_uuid:
 			orig_db.logger.info('Export already done, skipping')
+		elif exportedfrom_uuid is not None:
+			raise errors.RepoToolsError('Trying to export in a non empty DB, already result of an export but from a different source DB')
 		else:
 			if dest_db.db_type == 'postgres':
 				dest_db.cursor.execute('''INSERT INTO _dbinfo(info_type,info_content) VALUES ('exported_from',%(orig_uuid)s);''',{'orig_uuid':orig_uuid})
 			else:
 				dest_db.cursor.execute('''INSERT INTO _dbinfo(info_type,info_content) VALUES ('exported_from',:orig_uuid);''',{'orig_uuid':orig_uuid})
 			tables_info = get_tables_info(db=orig_db)
+			tables_info_dest = get_tables_info(db=dest_db)
 			if dest_db.db_type == 'postgres':
-				dest_db.cursor.execute(disable_triggers_cmd(db=dest_db,tables_info=tables_info))
-			for t,columns in tables_info.items():
-				dest_db.logger.info('Exporting table {}'.format(t))
-				table_data = get_table_data(table=t,columns=columns,db=orig_db)
-				insert_table_data(table=t,columns=columns,db=dest_db,table_data=table_data)
-			if dest_db.db_type == 'postgres':
-				dest_db.cursor.execute(enable_triggers_cmd(db=dest_db,tables_info=tables_info))
-				fix_sequences(db=dest_db)
+				dest_db.cursor.execute(disable_triggers_cmd(db=dest_db,tables_info=tables_info_dest))
+				dest_db.cursor.execute('''SET SESSION idle_in_transaction_session_timeout = 0;''')
+			try:
+				for t,columns in tables_info.items():
+					if t in tables_info_dest.keys():
+						dest_db.logger.info('Exporting table {}'.format(t))
+						table_data = get_table_data(table=t,columns=columns,db=orig_db)
+						insert_table_data(table=t,columns=columns,db=dest_db,table_data=table_data)
+					else:
+						dest_db.logger.info('Skipping table {}, not in schema of destination DB'.format(t))
+				if dest_db.db_type == 'postgres':
+					dest_db.cursor.execute(enable_triggers_cmd(db=dest_db,tables_info=tables_info_dest))
+					fix_sequences(db=dest_db)
+			except:
+				# closing connection manually because idle_in_transaction_session_timeout is infinite
+				dest_db.connection.close()
 			dest_db.connection.commit()
 
 def disable_triggers_cmd(db,tables_info=None):
@@ -185,6 +198,7 @@ def dump_pg_csv(db,output_folder,import_dump=True,schema_dump=True,csv_dump=True
 	'''
 	Dumping a postgres DB to schema.sql, import.sql and one CSV per table
 	'''
+
 	if not db.db_type == 'postgres':
 		raise errors.RepoToolsDumpSQLiteError
 
@@ -201,6 +215,7 @@ def dump_pg_csv(db,output_folder,import_dump=True,schema_dump=True,csv_dump=True
 			else:
 				raise errors.RepoToolsDumpPGError('Error while dumping: {} already exists. Use force=True to replace.'.format(filename))
 
+	db.logger.info('Dumping DB to folder')
 
 	###### schema.sql ######
 	if schema_dump:
@@ -261,4 +276,5 @@ COMMIT;
 					for r in db.cursor.fetchall():
 						writer.writerow(r)
 	
+	db.logger.info('Dumped DB to folder')
 

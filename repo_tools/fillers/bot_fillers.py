@@ -100,19 +100,32 @@ class BotListFiller(BotFiller):
 		self.identity_type = identity_type
 		BotFiller.__init__(self,**kwargs)
 
+	def prepare(self):
+		new_botlist = []
+		for b in self.bot_list:
+			if isinstance(b,str):
+				new_botlist.append((self.identity_type,b))
+			elif len(b) == 1:
+				new_botlist.append((self.identity_type,b[1]))
+			elif len(b) == 2:
+				new_botlist.append(b)
+			else:
+				raise SyntaxError('In provided botlist, an element has more than 2 items (should be (<identity_type>,<bot>) or <bot> :{}'.format(b))
+		self.bot_list = new_botlist
+
 	def fill_bots(self):
 		if self.db.db_type == 'postgres':
 			extras.execute_batch(self.db.cursor,'''
 				UPDATE identities SET is_bot=true
 				WHERE identity_type_id = (SELECT id FROM identity_types WHERE name=%(identity_type)s)
 				AND identity = %(identity)s
-				''',({'identity_type':self.identity_type,'identity':i} for i in self.bot_list))
+				''',({'identity_type':self.identity_type,'identity':i} for i,it in self.bot_list))
 		else:
 			self.db.cursor.executemany('''
 				UPDATE identities SET is_bot=1
 				WHERE identity_type_id = (SELECT id FROM identity_types WHERE name=:identity_type)
 				AND identity = :identity
-				''',({'identity_type':self.identity_type,'identity':i} for i in self.bot_list))
+				''',({'identity_type':self.identity_type,'identity':i} for i,it in self.bot_list))
 		
 
 
@@ -137,7 +150,9 @@ class BotFileFiller(BotListFiller):
 			self.db.register_source(source=self.source)
 		
 		with open(filepath,'r') as f:
-			self.bot_list = f.read().split('\n')
+			self.bot_list = list(csv.reader(f))
+
+		BotListFiller.prepare(self)
 
 class MGBotFiller(BotFileFiller):
 	'''

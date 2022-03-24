@@ -54,11 +54,26 @@ class MetaBotFiller(fillers.Filler):
 	def prepare(self):
 		if self.data_folder is None:
 			self.data_folder = self.db.data_folder
+
+		# github logins
 		self.db.add_filler(bot_fillers.BotFiller(pattern='%[bot]'))
 		self.db.add_filler(bot_fillers.BotFiller(pattern='%-bot'))
 		self.db.add_filler(bot_fillers.BotFiller(pattern='%-bors'))
 		self.db.add_filler(bot_fillers.BotFiller(pattern='bors-%'))
+		self.db.add_filler(bot_fillers.BotFiller(pattern='dependabot-%'))
+
+		# emails
+		self.db.add_filler(bot_fillers.BotFiller(pattern='dependabot-%',identity_type='email'))
 		self.db.add_filler(bot_fillers.BotListFiller(bot_list=[''],identity_type='email')) # Marking as discarded empty email string in commits
+		for prefix in ['','%-','%.','%+']:
+			self.db.add_filler(bot_fillers.BotFiller(pattern=prefix+'bot@%'))
+			self.db.add_filler(bot_fillers.BotFiller(pattern=prefix+'docbot@%'))
+			self.db.add_filler(bot_fillers.BotFiller(pattern=prefix+'ghbot@%'))
+			self.db.add_filler(bot_fillers.BotFiller(pattern=prefix+'bors@%'))
+			self.db.add_filler(bot_fillers.BotFiller(pattern=prefix+'travis@%'))
+
+		# Global
 		self.db.add_filler(bot_fillers.BotFileFiller(os.path.join(os.path.dirname(rp.__file__),'data','botlist.csv')))
 		self.db.add_filler(bot_fillers.MGBotFiller(data_folder=self.data_folder)) # Golzadeh et al. paper
+
 		self.db.add_filler(bot_fillers.BotUserFiller()) # propagating from identities to users and connected identities
