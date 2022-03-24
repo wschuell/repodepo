@@ -1,7 +1,7 @@
 
 import repo_tools
 from repo_tools.fillers import generic,commit_info,github_gql,meta_fillers
-from repo_tools.extras import pseudonymize,exports,errors
+from repo_tools.extras import pseudonymize,exports,errors,stats
 import pytest
 import datetime
 import time
@@ -117,3 +117,23 @@ def test_dump_nopsql(testdb):
 			raise
 	if testdb.db_type == 'sqlite':
 		raise ValueError('Should have raised an error for dumping a SQLite DB')
+
+
+@pytest.mark.timeout(30)
+def test_dump_error(testdb):
+	try:
+		exports.dump_pg_csv(db=testdb,output_folder=os.path.join(os.path.dirname(__file__),'dump_pg'),force=False)
+	except errors.RepoToolsDumpSQLiteError:
+		if testdb.db_type == 'sqlite':
+			return
+		else:
+			raise
+	except errors.RepoToolsDumpPGError:
+		return
+	if testdb.db_type == 'sqlite':
+		raise ValueError('Should have raised an error for dumping a SQLite DB')
+	else:
+		raise ValueError('Should have raised an error for dumping in a folder already containing dumped files')
+
+def test_stats(testdb):
+	stats.GlobalStats(db=testdb)
