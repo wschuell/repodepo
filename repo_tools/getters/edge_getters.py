@@ -380,8 +380,9 @@ class DevToRepoAddDailyCommits(DevToRepoAddMax):
 
 
 class RepoToRepoDeps(Getter):
-	def __init__(self,db,ref_time=datetime.datetime.now(),**kwargs):
+	def __init__(self,db,ref_time=datetime.datetime.now(),filter_deps=True,**kwargs):
 		self.ref_time = ref_time
+		self.filter_deps = filter_deps
 		Getter.__init__(self,db=db,**kwargs)
 
 	def query(self):
@@ -404,8 +405,8 @@ class RepoToRepoDeps(Getter):
 						INNER JOIN packages p_do
 						ON pd.depending_on_package=p_do.id AND p_do.repo_id IS NOT NULL
 						AND p_do.repo_id != p.repo_id
-						AND pv.package_id NOT IN (SELECT package_id FROM filtered_deps_package)
-						AND p_do.repo_id NOT IN (SELECT repo_id FROM filtered_deps_repo)
+						AND (NOT %(filter_deps)s OR pv.package_id NOT IN (SELECT package_id FROM filtered_deps_package))
+						AND (NOT %(filter_deps)s OR p_do.repo_id NOT IN (SELECT repo_id FROM filtered_deps_repo))
 						-- AND pv.package_id NOT IN (17783,7853,13940,26887,17919,40409,24306,11011,27829,12177,
 						--	29576,16947,19570,3526,3807,12145,19400,31630,31059,33308,31275,29422,45659,20043,20283,41173)
 						-- AND p_do.repo_id NOT IN (27699)
@@ -433,7 +434,7 @@ class RepoToRepoDeps(Getter):
 				LEFT JOIN filtered_deps_repoedges fdre
 				ON fdre.repo_dest_id=dep_q.do_repo_id
 				AND fdre.repo_source_id=dep_q.repo_id
-				WHERE fdre.repo_source_id IS NULL
+				WHERE (NOT %(filter_deps)s OR fdre.repo_source_id IS NULL)
 			;'''
 		else:
 			return '''
@@ -454,8 +455,8 @@ class RepoToRepoDeps(Getter):
 						INNER JOIN packages p_do
 						ON pd.depending_on_package=p_do.id AND p_do.repo_id IS NOT NULL
 						AND p_do.repo_id != p.repo_id
-						AND pv.package_id NOT IN (SELECT package_id FROM filtered_deps_package)
-						AND p_do.repo_id NOT IN (SELECT repo_id FROM filtered_deps_repo)
+						AND (NOT :filter_deps OR pv.package_id NOT IN (SELECT package_id FROM filtered_deps_package))
+						AND (NOT :filter_deps OR p_do.repo_id NOT IN (SELECT repo_id FROM filtered_deps_repo))
 					) AS dep_q
 				INNER JOIN (
 					SELECT DISTINCT FIRST_VALUE(id) OVER (PARTITION BY package_id ORDER BY created_at DESC,version_str DESC) AS last_v_id
@@ -480,13 +481,14 @@ class RepoToRepoDeps(Getter):
 				LEFT JOIN filtered_deps_repoedges fdre
 				ON fdre.repo_dest_id=dep_q.do_repo_id
 				AND fdre.repo_source_id=dep_q.repo_id
-				WHERE fdre.repo_source_id IS NULL
+				WHERE (NOT :filter_deps OR fdre.repo_source_id IS NULL)
 			;'''
 
 
 	def query_attributes(self):
 		return {
 		'ref_time':self.ref_time,
+		'filter_deps':self.filter_deps,
 		}
 
 	def parse_results(self,query_result):

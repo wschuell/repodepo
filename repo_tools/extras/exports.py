@@ -80,7 +80,7 @@ def get_table_data(table,columns,db):
 			;'''.format(columns=','.join(columns),table=table))
 	return db.cursor.fetchall()
 
-def insert_table_data(table,columns,db,table_data):
+def insert_table_data(table,columns,db,table_data,page_size=10**5):
 	check_sqlname_safe(table)
 	for c in columns:
 		check_sqlname_safe(c)
@@ -88,7 +88,7 @@ def insert_table_data(table,columns,db,table_data):
 		psycopg2.extras.execute_batch(db.cursor,'''
 			INSERT INTO {table}({columns}) VALUES ({separators})
 			;'''.format(columns=','.join(columns),table=table,separators=','.join(['%s' for _ in columns]))
-			,table_data)
+			,table_data,page_size=page_size)
 	else:
 		db.cursor.executemany('''
 			INSERT INTO {table}({columns}) VALUES ({separators})
@@ -122,7 +122,7 @@ def fix_sequences(db):
 			db.cursor.execute(c)
 		db.connection.commit()
 
-def export(orig_db,dest_db):
+def export(orig_db,dest_db,page_size=10**5):
 	'''
 	Exporting data from one database to another, being SQLite or PostgreSQL for both
 	'''
@@ -162,7 +162,7 @@ def export(orig_db,dest_db):
 					if t in tables_info_dest.keys():
 						dest_db.logger.info('Exporting table {}'.format(t))
 						table_data = get_table_data(table=t,columns=columns,db=orig_db)
-						insert_table_data(table=t,columns=columns,db=dest_db,table_data=table_data)
+						insert_table_data(table=t,columns=columns,db=dest_db,table_data=table_data,page_size=page_size)
 					else:
 						dest_db.logger.info('Skipping table {}, not in schema of destination DB'.format(t))
 				if dest_db.db_type == 'postgres':
@@ -170,7 +170,8 @@ def export(orig_db,dest_db):
 					fix_sequences(db=dest_db)
 			except:
 				# closing connection manually because idle_in_transaction_session_timeout is infinite
-				dest_db.connection.close()
+				if dest_db.connection.closed == 0:
+					dest_db.connection.close()
 			dest_db.connection.commit()
 
 def disable_triggers_cmd(db,tables_info=None):

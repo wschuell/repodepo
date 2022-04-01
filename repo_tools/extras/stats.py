@@ -99,6 +99,8 @@ class PackageStats(DBStats):
 
 		if cloned:
 			self.db.cursor.execute('''SELECT COUNT(p.repo_id),'_all' AS sname FROM packages p
+										INNER JOIN repositories r
+										ON r.id=p.repo_id AND r.cloned
 									UNION
 									(SELECT COUNT(p.repo_id),s.name AS sname FROM packages p
 									INNER JOIN urls u
@@ -443,7 +445,8 @@ class UsersStats(DBStats):
 		results['nb_total'] = OrderedDict()
 		results['nb_total']['no_bots'] = self.get_nb_users(onlybots=False)
 		results['nb_total']['only_bots'] = self.get_nb_users(onlybots=True)
-
+		results['nb_total']['total'] = self.get_total()
+		results['github_gitlab'] = self.get_ghgl_users()
 		return results
 
 	def get_nb_users(self,onlybots=False):
@@ -467,6 +470,70 @@ class UsersStats(DBStats):
 		for cnt,s in self.db.cursor.fetchall():
 			ans[s] = cnt
 		return ans
+
+	def get_total(self,onlybots=False):
+		
+		ans = OrderedDict()
+		self.db.cursor.execute('''
+			SELECT COUNT(*) FROM users u
+			;''')
+		ans['total'] = self.db.cursor.fetchone()[0]
+
+		self.db.cursor.execute('''
+			SELECT (SELECT COUNT(*) FROM users u) - (SELECT COUNT(DISTINCT i.user_id) FROM identities i)
+			;''')
+		ans['no_identity'] = self.db.cursor.fetchone()[0]
+
+
+		return ans
+
+	def get_ghgl_users(self):
+		ans = OrderedDict()
+		self.db.cursor.execute('''
+			SELECT COUNT(*) FROM users u
+			INNER JOIN identities i
+			ON i.user_id = u.id
+			INNER JOIN identity_types it
+			ON it.id=i.identity_type_id AND it.name='github_login'
+			INNER JOIN identities i2
+			ON i2.user_id = u.id
+			INNER JOIN identity_types it2
+			ON it2.id=i2.identity_type_id AND it2.name='gitlab_login'
+			;''')
+		ans['common'] = self.db.cursor.fetchone()[0]
+
+
+		self.db.cursor.execute('''
+			SELECT COUNT(*) FROM users u
+			INNER JOIN identities i
+			ON i.user_id = u.id
+			INNER JOIN identity_types it
+			ON it.id=i.identity_type_id AND it.name='github_login'
+			INNER JOIN identities i2
+			ON i2.user_id = u.id
+			INNER JOIN identity_types it2
+			ON it2.id=i2.identity_type_id AND it2.name='gitlab_login'
+			AND i.identity=i2.identity
+			;''')
+		ans['common_samelogin'] = self.db.cursor.fetchone()[0]
+
+
+		self.db.cursor.execute('''
+			SELECT COUNT(*) FROM (
+				(SELECT DISTINCT i.user_id FROM identities i
+			EXCEPT
+				SELECT DISTINCT u.id FROM users u
+				INNER JOIN identities i
+				ON i.user_id = u.id
+				INNER JOIN identity_types it
+				ON it.id=i.identity_type_id AND it.name IN ('github_login','gitlab_login')
+				)
+			) sq
+			;''')
+		ans['no_gh_no_gl'] = self.db.cursor.fetchone()[0]
+
+		return ans
+
 
 class GlobalStats(DBStats):
 	def get(self,db,**kwargs):

@@ -22,5 +22,6 @@ setup(name='repo_tools',
       author_email='',
       description='',
       url='',
+      include_package_data=True,
       license='GNU AFFERO GENERAL PUBLIC LICENSE Version 3',
       )
