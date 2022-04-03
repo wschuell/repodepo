@@ -857,27 +857,49 @@ class CommitsFiller(fillers.Filler):
 								GROUP BY pt.child_id
 					;''')
 
-				self.db.cursor.execute('''
-					WITH RECURSIVE child_tree(parent_id,ref_time,offspring_id,offspring_time) AS (
-							SELECT tcp.child_id,tcp.child_timestamp,tcp.child_id,tcp.child_timestamp
-								FROM temp_conflict_pairs tcp
-						UNION
-							SELECT tcp.parent_id,tcp.parent_timestamp,tcp.parent_id,tcp.parent_timestamp
-								FROM temp_conflict_pairs tcp
-						UNION
-							SELECT ct.parent_id,ct.ref_time,cp.child_id,c.created_at FROM commit_parents cp
-							INNER JOIN child_tree ct
-							ON cp.parent_id=ct.offspring_id
-							INNER JOIN commits c
-							ON c.id=cp.child_id
-						)
-					UPDATE temp_conflict_levels
-						SET as_parent=children.cnt
-						FROM (SELECT ct.parent_id,SUM(CASE WHEN ct.ref_time > ct.offspring_time THEN 1 ELSE 0 END) AS cnt FROM child_tree ct
-								--WHERE ct.ref_time > ct.offspring_time
-								GROUP BY ct.parent_id) AS children
-						WHERE commit_id=children.parent_id
-					;''')
+				if self.db.db_type == 'postgres':
+					self.db.cursor.execute('''
+						WITH RECURSIVE child_tree(parent_id,ref_time,offspring_id,offspring_time) AS (
+								SELECT tcp.child_id,tcp.child_timestamp,tcp.child_id,tcp.child_timestamp
+									FROM temp_conflict_pairs tcp
+							UNION
+								SELECT tcp.parent_id,tcp.parent_timestamp,tcp.parent_id,tcp.parent_timestamp
+									FROM temp_conflict_pairs tcp
+							UNION
+								SELECT ct.parent_id,ct.ref_time,cp.child_id,c.created_at FROM commit_parents cp
+								INNER JOIN child_tree ct
+								ON cp.parent_id=ct.offspring_id
+								INNER JOIN commits c
+								ON c.id=cp.child_id
+							)
+						UPDATE temp_conflict_levels
+							SET as_parent=children.cnt
+							FROM (SELECT ct.parent_id,SUM(CASE WHEN ct.ref_time > ct.offspring_time THEN 1 ELSE 0 END) AS cnt FROM child_tree ct
+									--WHERE ct.ref_time > ct.offspring_time
+									GROUP BY ct.parent_id) AS children
+							WHERE commit_id=children.parent_id
+						;''')
+				else:
+					self.db.cursor.execute('''
+						WITH RECURSIVE child_tree(parent_id,ref_time,offspring_id,offspring_time) AS (
+								SELECT tcp.child_id,tcp.child_timestamp,tcp.child_id,tcp.child_timestamp
+									FROM temp_conflict_pairs tcp
+							UNION
+								SELECT tcp.parent_id,tcp.parent_timestamp,tcp.parent_id,tcp.parent_timestamp
+									FROM temp_conflict_pairs tcp
+							UNION
+								SELECT ct.parent_id,ct.ref_time,cp.child_id,c.created_at FROM commit_parents cp
+								INNER JOIN child_tree ct
+								ON cp.parent_id=ct.offspring_id
+								INNER JOIN commits c
+								ON c.id=cp.child_id
+							),
+						aggreg_children AS (SELECT ct.parent_id,SUM(CASE WHEN ct.ref_time > ct.offspring_time THEN 1 ELSE 0 END) AS cnt FROM child_tree ct
+									GROUP BY ct.parent_id)
+						UPDATE temp_conflict_levels
+							SET as_parent=(SELECT cnt FROM aggreg_children WHERE commit_id=aggreg_children.parent_id)
+							WHERE EXISTS (SELECT cnt FROM aggreg_children WHERE commit_id=aggreg_children.parent_id)
+						;''')
 
 				# Solve the conflicts
 
@@ -915,14 +937,25 @@ class CommitsFiller(fillers.Filler):
 					;''')
 
 				# Update
-
-				self.db.cursor.execute('''
-					UPDATE commits SET created_at=nv.created_at,original_created_at=COALESCE(original_created_at,commits.created_at)
-					FROM temp_conflict_new_values nv
-					WHERE commits.id=nv.commit_id
-					AND commits.created_at != nv.created_at
-					;
-					''')
+				if self.db.db_type == 'postgres':
+					self.db.cursor.execute('''
+						UPDATE commits SET created_at=nv.created_at,original_created_at=COALESCE(original_created_at,commits.created_at)
+						FROM temp_conflict_new_values nv
+						WHERE commits.id=nv.commit_id
+						AND commits.created_at != nv.created_at
+						;
+						''')
+				else:
+					self.db.cursor.execute('''
+						UPDATE commits SET created_at=(SELECT nv.created_at FROM temp_conflict_new_values nv
+													WHERE commits.id=nv.commit_id
+													AND commits.created_at != nv.created_at),
+										original_created_at=COALESCE(original_created_at,commits.created_at)
+						WHERE EXISTS (SELECT nv.created_at FROM temp_conflict_new_values nv
+										WHERE commits.id=nv.commit_id
+										AND commits.created_at != nv.created_at)
+						;
+						''')
 				updated_count_parents = self.db.cursor.rowcount
 				updated_count = updated_count_parents
 
