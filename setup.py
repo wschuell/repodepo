@@ -21,9 +21,9 @@ if os.path.exists(os.path.join(os.path.dirname(__file__),'README.md')):
 else:
     README = ''
 
-setup(name='repo_tools_test',
+setup(name='repo_tools',
       version=version(),
-      packages=['repo_tools_test'],#find_packages(),
+      packages=['repo_tools'],#find_packages(),
       install_requires=[requirements()],
       author='William Schueller',
       author_email='',
