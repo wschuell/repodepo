@@ -541,9 +541,14 @@ class RepositoriesFiller(fillers.Filler):
 			raise RepoSyntaxError('Repo {} has not expected source {}.'.format(repo,source_urlroot))
 
 		# Removing front elements
-		for start_str in ['http://','https://','http:/','https:/','www.','/',' ','\n','\t','\r']:
+		for start_str in ['http://','https://','http:/','https:/','www.','/',' ','\n','\t','\r','"',"'"]:
 			if repo.startswith(start_str):
 				return self.repo_formatting(repo=repo[len(start_str):],source_urlroot=source_urlroot,output_cleaned_url=output_cleaned_url,raise_error=raise_error)
+
+		# Remove end of url modifiers
+		for flagged_char in ['"',"'",'?',' ',' ','!',',',';']:
+			if flagged_char in repo:
+				return self.repo_formatting(repo=repo.split(flagged_char)[0],source_urlroot=source_urlroot,output_cleaned_url=output_cleaned_url,raise_error=raise_error)
 
 		# Removing back elements
 		for end_str in ['.git',' ','/','\n','\t','\r']:

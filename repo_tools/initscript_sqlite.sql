@@ -31,8 +31,8 @@
 				owner TEXT,
 				name TEXT,
 				url_id INTEGER REFERENCES urls(id) ON DELETE CASCADE,
-				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-				updated_at TIMESTAMP DEFAULT NULL,
+				created_at TIMESTAMP DEFAULT NULL,
+				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 				latest_commit_time TIMESTAMP DEFAULT NULL,
 				cloned BOOLEAN DEFAULT 0,
 				UNIQUE(source,owner,name)
@@ -92,6 +92,7 @@
 				author_id INTEGER REFERENCES identities(id) ON DELETE CASCADE,
 				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
 				created_at TIMESTAMP,
+				original_created_at TIMESTAMP,
 				insertions INTEGER,
 				deletions INTEGER,
 				UNIQUE(sha)
@@ -99,6 +100,7 @@
 
 				CREATE INDEX IF NOT EXISTS commits_ac_idx ON commits(author_id,created_at);
 				CREATE INDEX IF NOT EXISTS commits_rc_idx ON commits(repo_id,created_at);
+				CREATE INDEX IF NOT EXISTS commits_rc_idx ON commits(original_created_at) WHERE original_created_at IS NOT NULL;
 				CREATE INDEX IF NOT EXISTS commits_cra_idx ON commits(created_at,repo_id,author_id);
 
 				CREATE TABLE IF NOT EXISTS commit_repos(

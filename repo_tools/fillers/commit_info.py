@@ -22,11 +22,15 @@ class CommitsFiller(fillers.Filler):
 			all_commits=False,
 			force=False,
 			allbranches=True,
+			created_at_batchsize=1000,
+			fix_created_at=True,
 					**kwargs):
 		self.force = force
 		self.allbranches = allbranches
 		self.only_null_commit_origs = only_null_commit_origs
 		self.all_commits = all_commits
+		self.created_at_batchsize = created_at_batchsize
+		self.fix_created_at = fix_created_at
 		fillers.Filler.__init__(self,**kwargs)
 
 	def prepare(self):
@@ -43,6 +47,8 @@ class CommitsFiller(fillers.Filler):
 	def apply(self):
 		self.fill_commit_info(force=self.force,all_commits=self.all_commits)
 		self.fill_commit_orig_repo(only_null=self.only_null_commit_origs)
+		if self.fix_created_at:
+			self.fill_commit_created_at(batch_size=self.created_at_batchsize)
 		self.db.connection.commit()
 
 
@@ -757,5 +763,212 @@ class CommitsFiller(fillers.Filler):
 
 			self.db.cursor.execute('''INSERT INTO full_updates(update_type) VALUES('commits orig repos');''')
 
+			if autocommit:
+				self.db.connection.commit()
+
+	def fill_commit_created_at(self,force=False,autocommit=True,batch_size=1000):
+		'''
+		Setting the created_at field so that it respects the condition of always being after (in time) the timestamp(s) of the parent(s)
+		'''
+
+
+		self.db.cursor.execute('''SELECT MAX(updated_at) FROM full_updates WHERE update_type='commits created_at';''')
+		last_fu = self.db.cursor.fetchone()[0]
+		self.db.cursor.execute('''SELECT MAX(updated_at) FROM full_updates WHERE update_type='commits';''')
+		last_fu_commits = self.db.cursor.fetchone()[0]
+		if not force and last_fu is not None and last_fu_commits<=last_fu:
+			self.logger.info('Skipping commit created_at fix')
+		else:
+			self.logger.info('Fixing commits created_at')
+			updated_count = None
+			step = 1
+
+			self.db.cursor.execute('''
+					UPDATE commits SET created_at=CURRENT_TIMESTAMP,original_created_at=COALESCE(original_created_at,commits.created_at)
+					WHERE created_at>CURRENT_TIMESTAMP
+					;
+					''')
+			updated_count_currenttime = self.db.cursor.rowcount
+			self.logger.info('Fixed created_at field for {} commits (using current time)'.format(updated_count_currenttime))
+
+			self.db.cursor.execute('''
+					SELECT COUNT(*) FROM commits c
+							INNER JOIN commit_parents cp
+							ON cp.child_id =c.id
+							INNER JOIN commits c2
+							ON c2.id=cp.parent_id
+							AND c2.created_at >c.created_at
+					;''')
+
+
+			self.logger.info('Identified {} conflicting commit pairs concerning the created_at field (batch_size {})'.format(self.db.cursor.fetchone()[0],batch_size))
+			while updated_count != 0:
+				# Create table of conflictual parent/child pairs
+				self.db.cursor.execute('''
+					CREATE TEMPORARY TABLE temp_conflict_pairs(
+						child_id BIGINT,
+						child_timestamp TIMESTAMP,
+						parent_id BIGINT,
+						parent_timestamp TIMESTAMP,
+						PRIMARY KEY(child_id,parent_id)
+					)
+					;''')
+
+				self.db.cursor.execute('''
+					INSERT INTO temp_conflict_pairs(child_id,child_timestamp,parent_id,parent_timestamp)
+						SELECT c.id,c.created_at ,c2.id,c2.created_at  FROM commits c
+							INNER JOIN commit_parents cp
+							ON cp.child_id =c.id
+							INNER JOIN commits c2
+							ON c2.id=cp.parent_id
+							AND c2.created_at >c.created_at
+						LIMIT {batch_size}
+					;'''.format(batch_size=int(batch_size)))
+
+				conflicting_pairs = self.db.cursor.rowcount
+				self.logger.info('Identified {} conflicting commit pairs concerning the created_at field at step {} (batch_size {})'.format(conflicting_pairs,step,batch_size))
+
+				# Create table of conflict levels for all (parents and children)
+
+				self.db.cursor.execute('''
+					CREATE TEMPORARY TABLE temp_conflict_levels(
+						commit_id BIGINT PRIMARY KEY,
+						as_child INT,
+						as_parent INT
+					)
+					;''')
+
+				self.db.cursor.execute('''
+					WITH RECURSIVE parent_tree(child_id,ref_time,ancestor_id,ancestor_time) AS (
+							SELECT tcp.child_id,tcp.child_timestamp,tcp.child_id,tcp.child_timestamp
+								FROM temp_conflict_pairs tcp
+						UNION
+							SELECT tcp.parent_id,tcp.parent_timestamp,tcp.parent_id,tcp.parent_timestamp
+								FROM temp_conflict_pairs tcp
+						UNION
+							SELECT pt.child_id,pt.ref_time,cp.parent_id,c.created_at FROM commit_parents cp
+							INNER JOIN parent_tree pt
+							ON cp.child_id=pt.ancestor_id
+							INNER JOIN commits c
+							ON c.id=cp.parent_id
+						)
+					INSERT INTO temp_conflict_levels(commit_id,as_child)
+						SELECT pt.child_id,SUM(CASE WHEN pt.ref_time < pt.ancestor_time THEN 1 ELSE 0 END) AS cnt FROM parent_tree pt
+								GROUP BY pt.child_id
+					;''')
+
+				self.db.cursor.execute('''
+					WITH RECURSIVE child_tree(parent_id,ref_time,offspring_id,offspring_time) AS (
+							SELECT tcp.child_id,tcp.child_timestamp,tcp.child_id,tcp.child_timestamp
+								FROM temp_conflict_pairs tcp
+						UNION
+							SELECT tcp.parent_id,tcp.parent_timestamp,tcp.parent_id,tcp.parent_timestamp
+								FROM temp_conflict_pairs tcp
+						UNION
+							SELECT ct.parent_id,ct.ref_time,cp.child_id,c.created_at FROM commit_parents cp
+							INNER JOIN child_tree ct
+							ON cp.parent_id=ct.offspring_id
+							INNER JOIN commits c
+							ON c.id=cp.child_id
+						)
+					UPDATE temp_conflict_levels
+						SET as_parent=children.cnt
+						FROM (SELECT ct.parent_id,SUM(CASE WHEN ct.ref_time > ct.offspring_time THEN 1 ELSE 0 END) AS cnt FROM child_tree ct
+								--WHERE ct.ref_time > ct.offspring_time
+								GROUP BY ct.parent_id) AS children
+						WHERE commit_id=children.parent_id
+					;''')
+
+				# Solve the conflicts
+
+				self.db.cursor.execute('''
+					CREATE TEMPORARY TABLE temp_conflict_new_values(
+					commit_id BIGINT PRIMARY KEY,
+					created_at TIMESTAMP
+					)
+					;''')
+
+				self.db.cursor.execute('''
+					INSERT INTO temp_conflict_new_values(commit_id,created_at)
+						SELECT tcp.parent_id,MAX(tcp.child_timestamp)
+							FROM temp_conflict_pairs tcp
+							INNER JOIN temp_conflict_levels tclp
+							ON tclp.commit_id=tcp.parent_id
+							INNER JOIN temp_conflict_levels tclc
+							ON tclc.commit_id=tcp.child_id
+							AND tclp.as_parent+tclp.as_child > tclc.as_parent+tclc.as_child
+						GROUP BY tcp.parent_id
+					ON CONFLICT DO NOTHING
+					;''')
+
+				self.db.cursor.execute('''
+					INSERT INTO temp_conflict_new_values(commit_id,created_at)
+						SELECT tcp.child_id,MIN(tcp.parent_timestamp)
+							FROM temp_conflict_pairs tcp
+							INNER JOIN temp_conflict_levels tclp
+							ON tclp.commit_id=tcp.parent_id
+							INNER JOIN temp_conflict_levels tclc
+							ON tclc.commit_id=tcp.child_id
+							AND tclp.as_parent+tclp.as_child <= tclc.as_parent+tclc.as_child
+						GROUP BY tcp.child_id
+					ON CONFLICT DO NOTHING
+					;''')
+
+				# Update
+
+				self.db.cursor.execute('''
+					UPDATE commits SET created_at=nv.created_at,original_created_at=COALESCE(original_created_at,commits.created_at)
+					FROM temp_conflict_new_values nv
+					WHERE commits.id=nv.commit_id
+					AND commits.created_at != nv.created_at
+					;
+					''')
+				updated_count_parents = self.db.cursor.rowcount
+				updated_count = updated_count_parents
+
+				# Drop tables
+
+				self.db.cursor.execute('''
+					DROP TABLE temp_conflict_pairs
+					;''')
+
+				self.db.cursor.execute('''
+					DROP TABLE temp_conflict_levels
+					;''')
+
+				self.db.cursor.execute('''
+					DROP TABLE temp_conflict_new_values
+					;''')
+
+				self.logger.info('Fixed created_at field for {} commits on step {}'.format(updated_count,step))
+				step += 1
+
+				# Reset where original_created_at=created_at
+
+				self.db.cursor.execute('''
+					UPDATE commits SET original_created_at=NULL
+					WHERE original_created_at IS NOT NULL
+					AND created_at=original_created_at
+					;
+					''')
+				self.logger.info('Reset to NULL original_created_at for {} commits because matching created_at'.format(self.db.cursor.rowcount))
+
+
+				self.db.cursor.execute('''
+					SELECT COUNT(*) FROM commits c
+							INNER JOIN commit_parents cp
+							ON cp.child_id =c.id
+							INNER JOIN commits c2
+							ON c2.id=cp.parent_id
+							AND c2.created_at >c.created_at
+					;''')
+
+
+				self.logger.info('Remaining overall {} conflicting commit pairs concerning the created_at field (batch_size {})'.format(self.db.cursor.fetchone()[0],batch_size))
+
+
+			self.db.cursor.execute('''INSERT INTO full_updates(update_type) VALUES('commits created_at');''')
+
+			self.logger.info('Fixed commits created_at')
 			if autocommit:
 				self.db.connection.commit()

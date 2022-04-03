@@ -104,18 +104,22 @@ def fix_sequences(db):
 						', COALESCE(MAX(' ||quote_ident(C.attname)|| '), 1) ) FROM ' ||
 						quote_ident(PGT.schemaname)|| '.'||quote_ident(T.relname)|| ';'
 				FROM pg_class AS S,
+					pg_namespace AS NS,
 					pg_depend AS D,
 					pg_class AS T,
 					pg_attribute AS C,
 					pg_tables AS PGT
 				WHERE S.relkind = 'S'
+					AND S.relnamespace = NS.oid
+					AND NS.nspname = (SELECT current_schema())
 					AND S.oid = D.objid
 					AND D.refobjid = T.oid
 					AND D.refobjid = C.attrelid
 					AND D.refobjsubid = C.attnum
 					AND T.relname = PGT.tablename
+					AND PGT.schemaname=(SELECT current_schema())
 				ORDER BY S.relname;
-				--from https://wiki.postgresql.org/wiki/Fixing_Sequences
+				--adapted from https://wiki.postgresql.org/wiki/Fixing_Sequences
 			''')
 		commands = [r[0] for r in db.cursor.fetchall()]
 		for c in commands:
@@ -172,6 +176,7 @@ def export(orig_db,dest_db,page_size=10**5):
 				# closing connection manually because idle_in_transaction_session_timeout is infinite
 				if dest_db.connection.closed == 0:
 					dest_db.connection.close()
+				raise
 			dest_db.connection.commit()
 
 def disable_triggers_cmd(db,tables_info=None):

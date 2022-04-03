@@ -2,6 +2,7 @@
 
 import re
 import sys
+import os
 
 from setuptools import setup, find_packages
 
@@ -14,14 +15,22 @@ def requirements():
   with open('requirements.txt') as f:
     return f.readlines()
 
-setup(name='repo_tools',
+if os.path.exists(os.path.join(os.path.dirname(__file__),'README.md')):
+    with open(os.path.join(os.path.dirname(__file__),'README.md'),'r') as f:
+        README = f.read()
+else:
+    README = ''
+
+setup(name='repo_tools_test',
       version=version(),
-      packages=['repo_tools'],#find_packages(),
+      packages=['repo_tools_test'],#find_packages(),
       install_requires=[requirements()],
-      author='',
+      author='William Schueller',
       author_email='',
-      description='',
-      url='',
+      description='Set of tools to build datasets about repositories',
+      long_description_content_type="text/markdown",
+      long_description=README,
+      url='https://github.com/wschuell/repo_tools',
       include_package_data=True,
       license='GNU AFFERO GENERAL PUBLIC LICENSE Version 3',
       )
