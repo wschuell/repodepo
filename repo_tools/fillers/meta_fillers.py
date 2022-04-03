@@ -47,10 +47,10 @@ class DummyMetaFiller(fillers.Filler):
 		self.db.add_filler(generic.ClonesFiller()) # Clones after forks to have up-to-date repo URLS (detect redirects)
 		self.db.add_filler(commit_info.CommitsFiller()) # Commits after forks because fork info needed for repo commit ownership
 		self.db.add_filler(github_rest.GHLoginsFiller(fail_on_wait=self.fail_on_wait,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
-		self.db.add_filler(github_rest.StarsFiller(fail_on_wait=self.fail_on_wait,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
-		self.db.add_filler(github_rest.FollowersFiller(fail_on_wait=self.fail_on_wait,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
-		self.db.add_filler(github_rest.UserCreatedAtFiller(fail_on_wait=self.fail_on_wait,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
-		self.db.add_filler(github_rest.RepoCreatedAtFiller(fail_on_wait=self.fail_on_wait,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
+		self.db.add_filler(github_gql.StarsGQLFiller(fail_on_wait=self.fail_on_wait,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
+		self.db.add_filler(github_gql.FollowersGQLFiller(fail_on_wait=self.fail_on_wait,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
+		self.db.add_filler(github_gql.UserCreatedAtGQLFiller(fail_on_wait=self.fail_on_wait,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
+		self.db.add_filler(github_gql.RepoCreatedAtGQLFiller(fail_on_wait=self.fail_on_wait,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
 
 
 class MetaBotFiller(fillers.Filler):
