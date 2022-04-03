@@ -6,7 +6,7 @@ import time
 import random
 
 from repo_tools import fillers
-from repo_tools.fillers import generic,github_rest,commit_info,bot_fillers
+from repo_tools.fillers import generic,github_rest,commit_info,bot_fillers,github_gql
 import repo_tools as rp
 
 
