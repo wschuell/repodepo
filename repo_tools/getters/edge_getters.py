@@ -284,18 +284,24 @@ class DevToRepoAddDailyCommits(DevToRepoAddMax):
 					main_q.repo_id,
 					repo_q.repo_rank,
 					(GREATEST(0,main_q.cnt-CASE WHEN main_q.repo_id IN %(repo_list)s
-									THEN DATE_PART('day',%(end_time)s::timestamp-%(start_time)s::timestamp)*%(daily_commits)s
+									THEN DATE_PART('day',
+										%(end_time)s::timestamp- GREATEST(COALESCE(repo_q.repo_created_at,%(start_time)s::timestamp),%(start_time)s::timestamp)
+										)*%(daily_commits)s
 									ELSE 0
 									END)/COALESCE(
 								SUM(main_q.cnt) OVER (PARTITION BY main_q.repo_id)
 
 							,1))::REAL AS norm_value,
 					GREATEST(0,main_q.cnt-CASE WHEN main_q.repo_id IN %(repo_list)s
-									THEN DATE_PART('day',%(end_time)s::timestamp-%(start_time)s::timestamp)*%(daily_commits)s
+									THEN DATE_PART('day',
+										%(end_time)s::timestamp- GREATEST(COALESCE(repo_q.repo_created_at,%(start_time)s::timestamp),%(start_time)s::timestamp)
+										)*%(daily_commits)s
 									ELSE 0
 									END)::REAL AS abs_value,
 					(CASE WHEN main_q.repo_id IN %(repo_list)s
-									THEN DATE_PART('day',%(end_time)s::timestamp-%(start_time)s::timestamp)*%(daily_commits)s
+									THEN DATE_PART('day',
+											%(end_time)s::timestamp- GREATEST(COALESCE(repo_q.repo_created_at,%(start_time)s::timestamp),%(start_time)s::timestamp)
+										)*%(daily_commits)s
 										/(SUM(main_q.cnt) OVER (PARTITION BY main_q.repo_id)
 											)
 									ELSE 0
@@ -318,7 +324,8 @@ class DevToRepoAddDailyCommits(DevToRepoAddMax):
 				INNER JOIN (
 					SELECT id AS repo_id,
 					RANK() OVER
-						(ORDER BY id) AS repo_rank
+						(ORDER BY id) AS repo_rank,
+					created_at AS repo_created_at
 					FROM repositories rr
 					) AS repo_q
 				ON main_q.repo_id=repo_q.repo_id
@@ -330,18 +337,18 @@ class DevToRepoAddDailyCommits(DevToRepoAddMax):
 					main_q.repo_id,
 					repo_q.repo_rank,
 					(MAX(0,main_q.cnt-CASE WHEN main_q.repo_id IN {repo_list_str}
-									THEN CAST ((JulianDay(:end_time) - JulianDay(:start_time)) AS INTEGER)
+									THEN CAST ((JulianDay(:end_time) - JulianDay(MAX(COALESCE(repo_q.repo_created_at,:start_time),:start_time))) AS INTEGER)
 									ELSE 0
 									END)/COALESCE(
 								SUM(main_q.cnt) OVER (PARTITION BY main_q.repo_id)
 
 							,1)) AS norm_value,
 					MAX(0,main_q.cnt-CASE WHEN main_q.repo_id IN {repo_list_str}
-									THEN CAST ((JulianDay(:end_time) - JulianDay(:start_time)) AS INTEGER)
+									THEN CAST ((JulianDay(:end_time) - JulianDay(MAX(COALESCE(repo_q.repo_created_at,:start_time),:start_time))) AS INTEGER)
 									ELSE 0
 									END) AS abs_value,
 					CASE WHEN main_q.repo_id IN {repo_list_str}
-									THEN CAST ((JulianDay(:end_time) - JulianDay(:start_time)) AS INTEGER)
+									THEN CAST ((JulianDay(:end_time) - JulianDay(MAX(COALESCE(repo_q.repo_created_at,:start_time),:start_time))) AS INTEGER)
 										/(SUM(main_q.cnt) OVER (PARTITION BY main_q.repo_id)
 											)
 									ELSE 0
@@ -364,7 +371,8 @@ class DevToRepoAddDailyCommits(DevToRepoAddMax):
 				INNER JOIN (
 					SELECT id AS repo_id,
 					RANK() OVER
-						(ORDER BY id) AS repo_rank
+						(ORDER BY id) AS repo_rank,
+					created_at AS repo_created_at
 					FROM repositories rr
 					) AS repo_q
 				ON main_q.repo_id=repo_q.repo_id

@@ -228,7 +228,8 @@ class CommitsFiller(fillers.Filler):
 					yield {
 							'author_email':commit.author.email,
 							'author_name':commit.author.name,
-							'time':commit.commit_time,
+							'localtime':commit.commit_time,
+							'time':commit.commit_time-60*commit.commit_time_offset,
 							'time_offset':commit.commit_time_offset,
 							'sha':commit.hex,
 							'parents':[pid.hex for pid in commit.parent_ids],
@@ -247,7 +248,8 @@ class CommitsFiller(fillers.Filler):
 					yield {
 							'author_email':commit.author.email,
 							'author_name':commit.author.name,
-							'time':commit.commit_time,
+							'localtime':commit.commit_time,
+							'time':commit.commit_time-60*commit.commit_time_offset,
 							'time_offset':commit.commit_time_offset,
 							'sha':commit.hex,
 							'parents':[pid.hex for pid in commit.parent_ids],
@@ -822,6 +824,7 @@ class CommitsFiller(fillers.Filler):
 							INNER JOIN commits c2
 							ON c2.id=cp.parent_id
 							AND c2.created_at >c.created_at
+						ORDER BY c2.id,c.created_at DESC
 						LIMIT {batch_size}
 					;'''.format(batch_size=int(batch_size)))
 
@@ -901,6 +904,8 @@ class CommitsFiller(fillers.Filler):
 							WHERE EXISTS (SELECT cnt FROM aggreg_children WHERE commit_id=aggreg_children.parent_id)
 						;''')
 
+				self.db.cursor.execute('SELECT MAX(as_child),MAX(as_parent) FROM temp_conflict_levels;')
+				self.logger.info('Max depth of conflict in batch: {} as child, {} as parent'.format(*self.db.cursor.fetchone()))
 				# Solve the conflicts
 
 				self.db.cursor.execute('''
@@ -912,26 +917,28 @@ class CommitsFiller(fillers.Filler):
 
 				self.db.cursor.execute('''
 					INSERT INTO temp_conflict_new_values(commit_id,created_at)
-						SELECT tcp.parent_id,MAX(tcp.child_timestamp)
+						SELECT tcp.parent_id,MIN(tcp.child_timestamp)
 							FROM temp_conflict_pairs tcp
 							INNER JOIN temp_conflict_levels tclp
 							ON tclp.commit_id=tcp.parent_id
 							INNER JOIN temp_conflict_levels tclc
 							ON tclc.commit_id=tcp.child_id
-							AND tclp.as_parent+tclp.as_child > tclc.as_parent+tclc.as_child
+							--AND tclp.as_parent+tclp.as_child > tclc.as_parent+tclc.as_child
+							AND (tclp.as_parent > tclc.as_child OR tcp.parent_timestamp<'2000-01-01')
 						GROUP BY tcp.parent_id
 					ON CONFLICT DO NOTHING
 					;''')
 
 				self.db.cursor.execute('''
 					INSERT INTO temp_conflict_new_values(commit_id,created_at)
-						SELECT tcp.child_id,MIN(tcp.parent_timestamp)
+						SELECT tcp.child_id,MAX(tcp.parent_timestamp)
 							FROM temp_conflict_pairs tcp
 							INNER JOIN temp_conflict_levels tclp
 							ON tclp.commit_id=tcp.parent_id
 							INNER JOIN temp_conflict_levels tclc
 							ON tclc.commit_id=tcp.child_id
-							AND tclp.as_parent+tclp.as_child <= tclc.as_parent+tclc.as_child
+							--AND tclp.as_parent+tclp.as_child <= tclc.as_parent+tclc.as_child
+							AND (tclp.as_parent <= tclc.as_child OR tcp.child_timestamp<'2000-01-01')
 						GROUP BY tcp.child_id
 					ON CONFLICT DO NOTHING
 					;''')
@@ -986,6 +993,7 @@ class CommitsFiller(fillers.Filler):
 					''')
 				self.logger.info('Reset to NULL original_created_at for {} commits because matching created_at'.format(self.db.cursor.rowcount))
 
+				self.db.connection.commit()
 
 				self.db.cursor.execute('''
 					SELECT COUNT(*) FROM commits c
@@ -995,7 +1003,6 @@ class CommitsFiller(fillers.Filler):
 							ON c2.id=cp.parent_id
 							AND c2.created_at >c.created_at
 					;''')
-
 
 				self.logger.info('Remaining overall {} conflicting commit pairs concerning the created_at field (batch_size {})'.format(self.db.cursor.fetchone()[0],batch_size))
 
