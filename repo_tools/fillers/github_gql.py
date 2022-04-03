@@ -3228,7 +3228,7 @@ class RepoCreatedAtGQLFiller(GHGQLFiller):
 		try:
 			d['created_at'] = query_result['repository']['createdAt']
 		except (KeyError,TypeError) as err:
-			self.logger.info('Result triggering error: {} \nError when parsing creation date for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+			self.logger.info('Error when parsing creation date for {}/{}: {}'.format(repo_owner,repo_name,err))
 		else:
 			ans.append(d)
 		return ans
