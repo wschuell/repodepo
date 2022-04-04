@@ -50,7 +50,9 @@ def test_github_gql(testdb):
 	testdb.add_filler(github_gql.SponsorsUserFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.IssuesGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.BackwardsSponsorsUserFiller(fail_on_wait=True,workers=workers))
+	testdb.add_filler(github_gql.RepoCreatedAtGQLFiller(fail_on_wait=True,workers=workers))
+	testdb.add_filler(github_gql.UserCreatedAtGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(generic.RepoCommitOwnershipFiller()) # Clones after forks to have up-to-date repo URLS (detect redirects)
-	testdb.add_filler(snowball.UserSnowballFiller())
+	# testdb.add_filler(snowball.UserSnowballFiller())
 
 	testdb.fill_db()
