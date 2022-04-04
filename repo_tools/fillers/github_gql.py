@@ -3250,7 +3250,7 @@ class RepoCreatedAtGQLFiller(GHGQLFiller):
 			db.cursor.executemany('''
 					UPDATE repositories SET created_at=date(:created_at)
 				WHERE id=:repo_id
-						);''',(s for s in items_list))
+						;''',(s for s in items_list))
 
 		if commit:
 			db.connection.commit()
@@ -3481,7 +3481,7 @@ class UserCreatedAtGQLFiller(GHGQLFiller):
 					UPDATE identities SET created_at=date(:created_at)
 				WHERE id=:identity_id
 				AND identity_type_id=:identity_type_id
-						);''',(s for s in items_list))
+						;''',(s for s in items_list))
 
 		if commit:
 			db.connection.commit()
