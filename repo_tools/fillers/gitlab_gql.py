@@ -181,6 +181,58 @@ class LoginsFiller(GitlabGQLFiller):
 		github_gql.LoginsGQLFiller.set_element_list(self)
 
 
+class RepoCreatedAtFiller(GitlabGQLFiller):
+	'''
+	Querying logins through the GraphQL API using commits
+	'''
+	def __init__(self,**kwargs):
+		self.items_name = 'repo_createdat'
+		self.queried_obj = 'repo'
+		self.pageinfo_path = None
+		GitlabGQLFiller.__init__(self,**kwargs)
+
+
+	def query_string(self,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: python-formatable string representing the graphql query
+		'''
+		return ''' query {{
+						repository:project(fullPath:"{repo_owner}/{repo_name}" ) {{
+							nameWithOwner:fullPath
+    						createdAt
+    						}}
+    					}}
+		'''
+
+	def parse_query_result(self,query_result,repo_id,identity_id,repo_owner=None,repo_name=None,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: [ {'repo_id':r_id,'repo_owner':r_ow,'repo_name':r_na,'created_at':c_at} , ...]
+		'''
+		ans = []
+		if repo_owner is None:
+			repo_owner = query_result['repository']['nameWithOwner'].split('/')[0]
+			repo_name = '/'.join(query_result['repository']['nameWithOwner'].split('/')[1:])
+		d = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name}
+		try:
+			d['created_at'] = query_result['repository']['createdAt']
+		except (KeyError,TypeError) as err:
+			self.logger.info('Error when parsing creation date for {}/{}: {}'.format(repo_owner,repo_name,err))
+		else:
+			ans.append(d)
+		return ans
+
+	def insert_items(self,items_list,commit=True,db=None):
+		github_gql.RepoCreatedAtGQLFiller.insert_items(self,items_list=items_list,commit=commit,db=db)
+
+	def get_nb_items(self,query_result):
+		return 1
+
+	def set_element_list(self):
+		github_gql.RepoCreatedAtGQLFiller.set_element_list(self)
+
+
 
 class StarsGQLFiller(GitlabGQLFiller):
 	'''

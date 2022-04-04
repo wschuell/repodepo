@@ -62,7 +62,11 @@ def convert_timestamp(val):
 	if b' ' not in val:
 		val = val.replace(b'T',b' ')
 		val = val.replace(b'Z',b'')
-	datepart, timepart = val.split(b" ")
+	if len(val) == 10:
+		datepart = val
+		timepart = b'00:00:00.00'
+	else:
+		datepart, timepart = val.split(b" ")
 	year, month, day = map(int, datepart.split(b"-"))
 	timepart_full = timepart.split(b".")
 	hours, minutes, seconds = map(int, timepart_full[0].split(b":"))

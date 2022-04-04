@@ -3219,7 +3219,7 @@ class RepoCreatedAtGQLFiller(GHGQLFiller):
 	def parse_query_result(self,query_result,repo_id,identity_id,repo_owner=None,repo_name=None,**kwargs):
 		'''
 		In subclasses this has to be implemented
-		output: [ {'repo_id':r_id,'repo_owner':r_ow,'repo_name':r_na,'starrer_login':s_lo,'starred_at':st_at} , ...]
+		output: [ {'repo_id':r_id,'repo_owner':r_ow,'repo_name':r_na,'created_at':c_at} , ...]
 		'''
 		ans = []
 		if repo_owner is None:
