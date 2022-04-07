@@ -561,13 +561,22 @@ class CommitsFiller(fillers.Filler):
 
 		tracked_data = {'latest_commit_time':0,'empty':True}
 		def transformed_list(orig_gen):
-			for c in orig_gen:
-				tracked_data['last_commit'] = c
-				tracked_data['empty'] = False
-				tracked_data['latest_commit_time'] = max(tracked_data['latest_commit_time'],c['time'])
-				c_id = c['sha']
-				for r,p_id in enumerate(c['parents']):
-					yield (c_id,p_id,r)
+			while True:
+				try:
+					c = next(orig_gen)
+					tracked_data['last_commit'] = c
+					tracked_data['empty'] = False
+					tracked_data['latest_commit_time'] = max(tracked_data['latest_commit_time'],c['time'])
+					c_id = c['sha']
+					for r,p_id in enumerate(c['parents']):
+						yield (c_id,p_id,r)
+				except StopIteration:
+					return
+				except RuntimeError as e:
+					if str(e) == 'generator raised StopIteration':
+						return
+					else:
+						raise
 
 		if self.db.db_type == 'postgres':
 			extras.execute_batch(self.db.cursor,'''
