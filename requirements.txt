@@ -8,3 +8,4 @@ gitpython
 oyaml
 scipy
 sh
+psutil
