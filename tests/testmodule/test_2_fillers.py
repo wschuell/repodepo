@@ -17,10 +17,12 @@ def dbtype(request):
 
 workers_list = [
 	1,
-	2
+	2,
+	None
 	]
+
 @pytest.fixture(params=workers_list)
-def workers(request):
+def workers_count(request):
 	return request.param
 
 
@@ -130,12 +132,12 @@ def test_clones_https(testdb):
 	testdb.fill_db()
 
 @pytest.mark.timeout(100)
-def test_commits(testdb,workers):
+def test_commits(testdb,workers_count):
 	testdb.add_filler(generic.SourcesFiller(source=['GitHub',],source_urlroot=['github.com',]))
 	testdb.add_filler(generic.PackageFiller(package_list_file='packages.csv',data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))
 	testdb.add_filler(generic.RepositoriesFiller())
 	testdb.add_filler(generic.ClonesFiller(data_folder='dummy_clones'))
-	testdb.add_filler(commit_info.CommitsFiller(data_folder='dummy_clones',workers=workers))
+	testdb.add_filler(commit_info.CommitsFiller(data_folder='dummy_clones',workers=workers_count))
 	testdb.fill_db()
 
 @pytest.mark.timeout(100)
