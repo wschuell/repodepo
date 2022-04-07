@@ -26,7 +26,7 @@ class CommitsFiller(fillers.Filler):
 			allbranches=True,
 			created_at_batchsize=1000,
 			fix_created_at=False,
-			workers=None,
+			workers=1, # It does not seem that more workers speed up the process, IO seems to be the bottleneck.
 					**kwargs):
 		self.force = force
 		self.allbranches = allbranches
@@ -196,7 +196,8 @@ class CommitsFiller(fillers.Filler):
 		# repo_obj.walk(repo.head.target, pygit2.GIT_SORT_TOPOLOGICAL | pygit2.GIT_SORT_REVERSE)
 		# for commit in repo_obj.walk(repo_obj.head.target, pygit2.GIT_SORT_TIME | pygit2.GIT_SORT_REVERSE):
 
-		tracked_args = set() # When
+		# tracked_args = set() # When
+		tracked_args = mp.Manager().dict()
 
 		if not repo_obj.is_empty:
 			if allbranches:
@@ -213,26 +214,22 @@ class CommitsFiller(fillers.Filler):
 
 			else:
 				walker = repo_obj.walk(repo_obj.head.target, pygit2.GIT_SORT_TIME)
-			for commit in walker:
-				if after_time is not None and (not allbranches) and commit.commit_time<after_time:
-					break
-				if group_by == 'authors':
-					if commit.author.email in tracked_args:
-						continue
-					else:
-						tracked_args.add(commit.author.email)
-				elif group_by == 'sha':
-					if commit.hex in tracked_args:
-						continue
-					else:
-						tracked_args.add(commit.hex)
-				elif group_by is None:
-					pass
-				else:
-					raise ValueError('Unrecognized group_by value: {}'.format(group_by))
 
+			def process_commit(commit):
 				if basic_info_only:
-					yield {
+					if isinstance(commit,dict):
+						return {
+							'author_email':commit['author_email'],
+							'author_name':commit['author_name'],
+							#'localtime':commit['commit_time'],
+							'time':commit['time'],#-60*commit.commit_time_offset,
+							'time_offset':commit['time_offset'],
+							'sha':commit['sha'],
+							'parents':commit['parents'],
+							'repo_id':repo_id,
+							}
+					else:
+						return {
 							'author_email':commit.author.email,
 							'author_name':commit.author.name,
 							#'localtime':commit.commit_time,
@@ -243,6 +240,8 @@ class CommitsFiller(fillers.Filler):
 							'repo_id':repo_id,
 							}
 				else:
+					if isinstance(commit,dict):
+						commit = repo_obj.get(commit['sha'])
 					if commit.parents:
 						diff_obj = repo_obj.diff(commit.parents[0],commit)# Inverted order wrt the expected one, to have expected values for insertions and deletions
 						insertions = diff_obj.stats.insertions
@@ -252,7 +251,7 @@ class CommitsFiller(fillers.Filler):
 						# re-inverting insertions and deletions, to get expected values
 						deletions = diff_obj.stats.insertions
 						insertions = diff_obj.stats.deletions
-					yield {
+					return {
 							'author_email':commit.author.email,
 							'author_name':commit.author.name,
 							#'localtime':commit.commit_time,
@@ -265,6 +264,70 @@ class CommitsFiller(fillers.Filler):
 							'total':insertions+deletions,
 							'repo_id':repo_id,
 							}
+
+			# Wrapping the walker generator into another one to be able to deal with multiprocessing
+			def subgenerator(walker_gen):
+				for commit in walker_gen:
+					if after_time is not None and (not allbranches) and commit.commit_time<after_time:
+						break
+					if group_by == 'authors':
+						if commit.author.email in tracked_args.keys():
+							continue
+						else:
+							tracked_args[commit.author.email] = True
+					elif group_by == 'sha':
+						if commit.hex in tracked_args.keys():
+							continue
+						else:
+							tracked_args[commit.hex] = True
+					elif group_by is None:
+						pass
+					else:
+						raise ValueError('Unrecognized group_by value: {}'.format(group_by))
+					yield process_commit(commit)
+
+			if self.workers == 1:
+				wrapper_gen = subgenerator(walker)
+			else:
+				def mp_generator(subgen):
+					# inspired by https://stackoverflow.com/questions/43078980/python-multiprocessing-with-generator
+					# Probably does not work on Windows, better to stay at workers = 1
+					def gen_to_queue(in_gen,in_q):
+						for cmt in in_gen:
+							in_q.put(cmt)
+						for _ in range(self.workers):
+							in_q.put(None)
+
+					def process(in_q, out_q):
+						while True:
+							cmt = in_q.get()
+							if cmt is None:
+								out_q.put(None)
+								break
+							out_q.put(process_commit(cmt))
+
+					# this may be inefficient for small repos: pools and queues could be defined at a more global level and be reused
+					input_q = mp.Queue(maxsize=self.workers * 2)
+					output_q = mp.Queue(maxsize=self.workers * 2)
+
+					gen_pool = mp.Pool(1, initializer=gen_to_queue, initargs=(subgen,input_q))
+					pool = mp.Pool(self.workers, initializer=process, initargs=(input_q, output_q))
+
+					finished_workers = 0
+					while True:
+						cmt_data = output_q.get()
+						if cmt_data is None:
+							finished_workers += 1
+							if finished_workers == self.workers:
+								break
+						else:
+							yield cmt_data
+
+
+				wrapper_gen = mp_generator(subgenerator(walker))
+
+			while True:
+				yield next(wrapper_gen)
 
 	def get_repo(self,name,source,owner,engine='pygit2'):
 		'''
