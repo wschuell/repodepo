@@ -292,14 +292,23 @@ class CommitsFiller(fillers.Filler):
 
 		tracked_data = {'latest_commit_time':0,'empty':True}
 		def tracked_gen(orig_gen):
-			for c in orig_gen:
-				tracked_data['empty'] = False
-				tracked_data['last_commit'] = c
-				tracked_data['latest_commit_time'] = max(tracked_data['latest_commit_time'],c['time'])
-				yield c
+			while True:
+				try:
+					c = next(orig_gen)
+					tracked_data['empty'] = False
+					tracked_data['last_commit'] = c
+					tracked_data['latest_commit_time'] = max(tracked_data['latest_commit_time'],c['time'])
+					yield c
+				except StopIteration:
+					return
+				except RuntimeError as e:
+					if str(e) == 'generator raised StopIteration':
+						return
+					else:
+						raise
 
-		# tr_gen = tracked_gen(commit_info_list)
-		tr_gen = list(tracked_gen(commit_info_list)) # temporary solution, because the list is used twice: one to prefill users table, once for identities. For large number of commits this can trigger enormous memory consumption. Solution would be to call list_commits() twice.
+		tr_gen = tracked_gen(commit_info_list)
+		# tr_gen = list(tracked_gen(commit_info_list)) # temporary solution, because the list is used twice: one to prefill users table, once for identities. For large number of commits this can trigger enormous memory consumption. Solution would be to call list_commits() twice.
 
 
 		if self.db.db_type == 'postgres':
@@ -388,11 +397,20 @@ class CommitsFiller(fillers.Filler):
 
 		tracked_data = {'latest_commit_time':0,'empty':True}
 		def tracked_gen(orig_gen):
-			for c in orig_gen:
-				tracked_data['last_commit'] = c
-				tracked_data['empty'] = False
-				tracked_data['latest_commit_time'] = max(tracked_data['latest_commit_time'],c['time'])
-				yield c
+			while True:
+				try:
+					c = next(orig_gen)
+					tracked_data['last_commit'] = c
+					tracked_data['empty'] = False
+					tracked_data['latest_commit_time'] = max(tracked_data['latest_commit_time'],c['time'])
+					yield c
+				except StopIteration:
+					return
+				except RuntimeError as e:
+					if str(e) == 'generator raised StopIteration':
+						return
+					else:
+						raise
 
 		if self.db.db_type == 'postgres':
 			extras.execute_batch(self.db.cursor,'''
@@ -441,11 +459,20 @@ class CommitsFiller(fillers.Filler):
 
 		tracked_data = {'latest_commit_time':0,'empty':True}
 		def tracked_gen(orig_gen):
-			for c in orig_gen:
-				tracked_data['last_commit'] = c
-				tracked_data['empty'] = False
-				tracked_data['latest_commit_time'] = max(tracked_data['latest_commit_time'],c['time'])
-				yield c
+			while True:
+				try:
+					c = next(orig_gen)
+					tracked_data['last_commit'] = c
+					tracked_data['empty'] = False
+					tracked_data['latest_commit_time'] = max(tracked_data['latest_commit_time'],c['time'])
+					yield c
+				except StopIteration:
+					return
+				except RuntimeError as e:
+					if str(e) == 'generator raised StopIteration':
+						return
+					else:
+						raise
 
 		if self.db.db_type == 'postgres':
 			extras.execute_batch(self.db.cursor,'''
