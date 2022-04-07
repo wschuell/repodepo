@@ -314,24 +314,21 @@ class CommitsFiller(fillers.Filler):
 				INSERT INTO users(
 						creation_identity,
 						creation_identity_type_id)
-							SELECT %s,id FROM identity_types WHERE name='email'
+							SELECT %(email)s,id FROM identity_types WHERE name='email'
 					AND NOT EXISTS (SELECT 1 FROM identities i
 						INNER JOIN identity_types it
-						ON i.identity=%s AND i.identity_type_id=it.id AND it.name='email')
+						ON i.identity=%(email)s AND i.identity_type_id=it.id AND it.name='email')
 				ON CONFLICT DO NOTHING;
-				''',((c['author_email'],c['author_email'],) for c in tr_gen))
-			self.db.connection.commit()
-			extras.execute_batch(self.db.cursor,'''
 				INSERT INTO identities(
 						attributes,
 						identity,
 						user_id,
-						identity_type_id) SELECT %s,%s,u.id,it.id
+						identity_type_id) SELECT %(info)s,%(email)s,u.id,it.id
 						FROM users u
 						INNER JOIN identity_types it
-						ON it.name='email' AND u.creation_identity=%s AND u.creation_identity_type_id=it.id
+						ON it.name='email' AND u.creation_identity=%(email)s AND u.creation_identity_type_id=it.id
 				ON CONFLICT DO NOTHING;
-				''',((json.dumps({'name':c['author_name']}),c['author_email'],c['author_email']) for c in tr_gen))
+				''',({'info':json.dumps({'name':c['author_name']}),'email':c['author_email']} for c in tr_gen))
 			self.db.connection.commit()
 
 
@@ -341,30 +338,29 @@ class CommitsFiller(fillers.Filler):
 				INSERT OR IGNORE INTO identity_types(name) VALUES('email')
 				;''')
 			self.db.connection.commit()
-
-			self.db.cursor.executemany('''
-				INSERT OR IGNORE INTO users(
-						creation_identity,
-						creation_identity_type_id)
-							SELECT ?,id FROM identity_types WHERE name='email'
-					AND NOT EXISTS  (SELECT 1 FROM identities i
-						INNER JOIN identity_types it
-						ON i.identity=? AND i.identity_type_id=it.id AND it.name='email')
-				;
-				''',((c['author_email'],c['author_email'],) for c in tr_gen))
-			self.db.connection.commit()
-
-			self.db.cursor.executemany('''
-				INSERT OR IGNORE INTO identities(
-						attributes,
-						identity,
-						user_id,
-						identity_type_id) SELECT ?,?,u.id,it.id
-						FROM users u
-						INNER JOIN identity_types it
-						ON it.name='email' AND u.creation_identity=? AND u.creation_identity_type_id=it.id
-				;
-				''',((json.dumps({'name':c['author_name']}),c['author_email'],c['author_email']) for c in tr_gen))
+			for c in tr_gen:
+				info_dict = {'info':json.dumps({'name':c['author_name']}),'email':c['author_email']}
+				self.db.cursor.execute('''
+					INSERT OR IGNORE INTO users(
+							creation_identity,
+							creation_identity_type_id)
+								SELECT :email,id FROM identity_types WHERE name='email'
+						AND NOT EXISTS  (SELECT 1 FROM identities i
+							INNER JOIN identity_types it
+							ON i.identity='email' AND i.identity_type_id=it.id AND it.name='email')
+					;
+					''',info_dict)
+				self.db.cursor.execute('''
+					INSERT OR IGNORE INTO identities(
+							attributes,
+							identity,
+							user_id,
+							identity_type_id) SELECT :info,:email,u.id,it.id
+							FROM users u
+							INNER JOIN identity_types it
+							ON it.name='email' AND u.creation_identity=:email AND u.creation_identity_type_id=it.id
+					;
+					''',info_dict )
 			self.db.connection.commit()
 
 		# self.complete_id_users()
