@@ -19,12 +19,14 @@ class CratesFiller(generic.PackageFiller):
 			database='crates_db',
 			password=None,
 			host='localhost',
+			only_packages = False,
 			package_limit=None,
 			package_limit_is_global=False,
 			force=False,
 			deps_to_delete=[('juju','charmhelpers'),
 							('arraygen','arraygen-docfix'),
 							('expr-parent','expr-child'),],
+			page_size=10**4,
 					**kwargs):
 		self.source = source
 		self.source_urlroot = source_urlroot
@@ -36,6 +38,8 @@ class CratesFiller(generic.PackageFiller):
 						'password':password,
 						'host':host}
 		self.force = force
+		self.page_size = page_size
+		self.only_packages = only_packages
 
 		if deps_to_delete is None:
 			self.deps_to_delete = []
@@ -84,7 +88,7 @@ class CratesFiller(generic.PackageFiller):
 
 
 			self.db.connection.commit()
-			if self.force or len(self.package_list)>0:
+			if not self.only_packages and (self.force or len(self.package_list)>0):
 				self.package_version_list = list(self.get_package_versions_from_crates(conn=crates_conn))
 				self.db.connection.commit()
 				self.package_version_download_list = list(self.get_package_version_downloads_from_crates(conn=crates_conn))

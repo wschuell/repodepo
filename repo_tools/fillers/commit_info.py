@@ -26,7 +26,7 @@ class CommitsFiller(fillers.Filler):
 			allbranches=True,
 			created_at_batchsize=1000,
 			fix_created_at=False,
-			workers=None,
+			workers=1, # It does not seem that more workers speed up the process, IO seems to be the bottleneck.
 					**kwargs):
 		self.force = force
 		self.allbranches = allbranches
