@@ -15,6 +15,14 @@ dbtype_list = [
 def dbtype(request):
 	return request.param
 
+workers_list = [
+	1,
+	2
+	]
+@pytest.fixture(params=workers_list)
+def workers(request):
+	return request.param
+
 
 @pytest.fixture(params=dbtype_list)
 def testdb(request):
@@ -122,12 +130,12 @@ def test_clones_https(testdb):
 	testdb.fill_db()
 
 @pytest.mark.timeout(100)
-def test_commits(testdb):
+def test_commits(testdb,workers):
 	testdb.add_filler(generic.SourcesFiller(source=['GitHub',],source_urlroot=['github.com',]))
 	testdb.add_filler(generic.PackageFiller(package_list_file='packages.csv',data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))
 	testdb.add_filler(generic.RepositoriesFiller())
 	testdb.add_filler(generic.ClonesFiller(data_folder='dummy_clones'))
-	testdb.add_filler(commit_info.CommitsFiller(data_folder='dummy_clones'))
+	testdb.add_filler(commit_info.CommitsFiller(data_folder='dummy_clones',workers=workers))
 	testdb.fill_db()
 
 @pytest.mark.timeout(100)
