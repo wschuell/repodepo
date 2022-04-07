@@ -7,9 +7,7 @@ from sh import pg_dump,psql
 import psycopg2
 import psycopg2.extras
 from . import errors
-
-def check_sqlname_safe(s):
-	assert s == ''.join( c for c in s if c.isalnum() or c in ('_',) )
+from . import check_sqlname_safe
 
 def check_db_equal(db,other_db):
 	'''

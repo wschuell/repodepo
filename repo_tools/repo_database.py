@@ -262,6 +262,7 @@ class Database(object):
 			self.cursor.execute('DROP TABLE IF EXISTS table_updates;')
 			self.cursor.execute('DROP TABLE IF EXISTS merged_identities;')
 			self.cursor.execute('DROP TABLE IF EXISTS merged_repositories;')
+			self.cursor.execute('DROP TABLE IF EXISTS user_languages;')
 			self.cursor.execute('DROP TABLE IF EXISTS identities;')
 			self.cursor.execute('DROP TABLE IF EXISTS users;')
 			self.cursor.execute('DROP TABLE IF EXISTS identity_types;')

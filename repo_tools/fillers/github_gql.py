@@ -2943,11 +2943,48 @@ class LanguagesGQLFiller(GHGQLFiller):
 	'''
 	Querying repository languages through the GraphQL API
 	'''
-	def __init__(self,**kwargs):
+	def __init__(self,reset_shares=False,**kwargs):
 		self.items_name = 'repo_languages'
 		self.queried_obj = 'repo'
 		self.pageinfo_path = ['repository','languages','pageInfo']
+		self.reset_shares = reset_shares
 		GHGQLFiller.__init__(self,**kwargs)
+
+	def apply(self):
+		GHGQLFiller.apply(self)
+		self.compute_shares()
+
+	def compute_shares(self):
+		if self.reset_shares:
+			self.db.cursor.execute('''
+				UPDATE repo_languages SET share=NULL;
+				;''')
+
+		if self.db.db_type == 'postgres':
+			self.db.cursor.execute('''
+				WITH repo_list AS (SELECT DISTINCT repo_id FROM repo_languages WHERE share IS NULL),
+					shares AS (SELECT r.repo_id,rl.language,rl.size::REAL/(SUM(rl.size::REAL) OVER (PARTITION BY r.repo_id)) AS share FROM repo_list r
+								INNER JOIN repo_languages rl
+								ON rl.repo_id=r.repo_id
+								)
+				UPDATE repo_languages
+				SET share=s.share
+				FROM shares s
+				WHERE s.repo_id=repo_languages.repo_id AND s.language=repo_languages.language
+				;''')
+		else:
+			self.db.cursor.execute('''
+				WITH repo_list AS (SELECT DISTINCT repo_id FROM repo_languages WHERE share IS NULL),
+					shares AS (SELECT r.repo_id,rl.language,rl.size*1.0/(SUM(rl.size*1.0) OVER (PARTITION BY r.repo_id)) AS share FROM repo_list r
+								INNER JOIN repo_languages rl
+								ON rl.repo_id=r.repo_id
+								)
+				UPDATE repo_languages
+				SET share= (SELECT s.share FROM shares s
+							WHERE s.repo_id=repo_languages.repo_id AND s.language=repo_languages.language)
+				WHERE EXISTS (SELECT s.share FROM shares s
+							WHERE s.repo_id=repo_languages.repo_id AND s.language=repo_languages.language)
+				;''')
 
 	def query_string(self,**kwargs):
 		'''
@@ -3652,6 +3689,310 @@ class UserCreatedAtGQLFiller(GHGQLFiller):
 
 		if self.start_offset is not None:
 			self.elt_list = [r for r in self.elt_list if r[1]>=self.start_offset]
+
+
+
+class UserLanguagesGQLFiller(GHGQLFiller):
+	'''
+	Querying languages of repositories of users through the GraphQL API
+	'''
+	def __init__(self,reset_shares=False,**kwargs):
+		self.items_name = 'user_languages'
+		self.queried_obj = 'user'
+		self.pageinfo_path = None
+		self.reset_shares = reset_shares
+		GHGQLFiller.__init__(self,**kwargs)
+
+	def apply(self):
+		GHGQLFiller.apply(self)
+		self.compute_shares()
+
+	def compute_shares(self):
+		if self.reset_shares:
+			self.db.cursor.execute('''
+				UPDATE user_languages SET share=NULL;
+				;''')
+
+		if self.db.db_type == 'postgres':
+			self.db.cursor.execute('''
+				WITH user_list AS (SELECT DISTINCT user_identity FROM user_languages WHERE share IS NULL),
+					shares AS (SELECT r.user_identity,rl.language,rl.size::REAL/(SUM(rl.size::REAL) OVER (PARTITION BY r.user_identity)) AS share FROM user_list r
+								INNER JOIN user_languages rl
+								ON rl.user_identity=r.user_identity
+								)
+				UPDATE user_languages
+				SET share=s.share
+				FROM shares s
+				WHERE s.user_identity=user_languages.user_identity AND s.language=user_languages.language
+				;''')
+		else:
+			self.db.cursor.execute('''
+				WITH user_list AS (SELECT DISTINCT repo_id FROM user_languages WHERE share IS NULL),
+					shares AS (SELECT r.user_identity,rl.language,rl.size::REAL/(SUM(rl.size::REAL) OVER (PARTITION BY r.user_identity)) AS share FROM user_list r
+								INNER JOIN user_languages rl
+								ON rl.user_identity=r.user_identity
+								)
+				UPDATE user_languages
+				SET share= (SELECT s.share FROM shares s
+							WHERE s.user_identity=user_languages.user_identity AND s.language=user_languages.language)
+				WHERE EXISTS (SELECT s.share FROM shares s
+							WHERE s.user_identity=user_languages.user_identity AND s.language=user_languages.language)
+				;''')
+
+	def query_string(self,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: python-formatable string representing the graphql query
+		'''
+		return '''query {{
+  					user(login: "{user_login}") {{
+  							login
+  							contributionsCollection {{
+      							totalCommitContributions
+      							commitContributionsByRepository {{
+        							contributions{{
+        								totalCount
+        								}}
+       								repository{{
+       									nameWithOwner
+      									languages(first:100){{
+      										totalSize
+        									edges{{
+        										size
+        										node {{
+        											name}}
+        										}}
+        									}}
+        								}}
+        							}}
+        						}}
+  							}}
+						}}'''
+
+
+
+	def parse_query_result(self,query_result,identity_id,identity_type_id,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: [ {'user_identity':identity_id,'language':languagename,'size':size,'identity_type_id':it_id,'user_login':user_login} , ...]
+		'''
+		ans_dict = dict()
+		user_login = query_result['user']['login']
+		for r in query_result['user']['contributionsCollection']['commitContributionsByRepository']:
+			nb_commits_repo = r['contributions']['totalCount']
+			total_size = sum([e['size'] for e in r['repository']['languages']['edges']])
+			for e in r['repository']['languages']['edges']:
+				lang = e['node']['name']
+				size = e['size']
+				if lang in ans_dict.keys():
+					ans_dict[lang] += nb_commits_repo*size*1./total_size
+				else:
+					ans_dict[lang] = nb_commits_repo*size*1./total_size
+		return [{'user_identity':identity_id,'user_login':user_login,'language_name':lang,'language_size':size,'identity_type_id':identity_type_id} for lang,size in ans_dict.items()]
+
+	def insert_items(self,items_list,commit=True,db=None):
+		'''
+		In subclasses this has to be implemented
+		inserts results in the DB
+		'''
+		if db is None:
+			db = self.db
+		if db.db_type == 'postgres':
+			extras.execute_batch(db.cursor,'''
+				INSERT INTO user_languages(user_identity,language,size)
+				VALUES(%s,
+						%s,
+						%s
+						)
+
+				ON CONFLICT DO NOTHING
+				;''',((s['user_identity'],s['language_name'],s['language_size']) for s in items_list))
+		else:
+			db.cursor.executemany('''
+					INSERT OR IGNORE INTO user_languages(user_identity,language,size)
+					VALUES(?,
+							?,
+							?
+							)
+				;''',((s['user_identity'],s['language_name'],s['language_size']) for s in items_list))
+
+
+		if commit:
+			db.connection.commit()
+
+	def get_nb_items(self,query_result):
+		'''
+		In subclasses this has to be implemented
+		output: nb_items or None if not relevant
+		'''
+		ans = set()
+		for r in query_result['user']['contributionsCollection']['commitContributionsByRepository']:
+			ans |= set(
+				[e['node']['name']
+					for e in r['repository']['languages']['edges'] ])
+		return len(ans)
+
+
+	def set_element_list(self):
+		'''
+		In subclasses this has to be implemented
+		sets self.elt_list to be used in self.fill_items
+		'''
+
+		#if force: all elts
+		#if retry: all without success false or null on last update
+		#else: all with success is null on lats update
+
+		if self.db.db_type == 'postgres':
+			if self.force:
+				self.db.cursor.execute('''
+						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
+							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='user_languages'
+								ORDER BY i.identity,tu.updated_at ) as t1
+							INNER JOIN
+								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='user_languages'
+								GROUP BY i.identity,i.id,it.id ) AS t2
+						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
+						ORDER BY t1.itid,t1.identity
+				;''')
+			elif self.retry:
+				self.db.cursor.execute('''
+						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
+							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='user_languages'
+								ORDER BY i.identity,tu.updated_at ) as t1
+							INNER JOIN
+								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='user_languages'
+								GROUP BY i.identity,i.id,it.id ) AS t2
+						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
+						AND ((NOT t1.success) OR t1.succ IS NULL)
+						ORDER BY t1.itid,t1.identity
+				;''')
+			else:
+				self.db.cursor.execute('''
+						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
+							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='user_languages'
+								ORDER BY i.identity,tu.updated_at ) as t1
+							INNER JOIN
+								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='user_languages'
+								GROUP BY i.identity,i.id,it.id ) AS t2
+						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
+						AND t1.succ IS NULL
+						ORDER BY t1.itid,t1.identity
+				;''')
+
+			self.elt_list = list(self.db.cursor.fetchall())
+
+		else:
+			if self.force:
+				self.db.cursor.execute('''
+						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
+							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='user_languages'
+								ORDER BY i.identity,tu.updated_at ) as t1
+							INNER JOIN
+								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='user_languages'
+								GROUP BY i.identity,i.id,it.id ) AS t2
+						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
+						ORDER BY t1.itid,t1.identity
+				;''')
+			elif self.retry:
+				self.db.cursor.execute('''
+						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
+							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='user_languages'
+								ORDER BY i.identity,tu.updated_at ) as t1
+							INNER JOIN
+								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='user_languages'
+								GROUP BY i.identity,i.id,it.id ) AS t2
+						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
+						AND ((NOT t1.success) OR t1.succ IS NULL)
+						ORDER BY t1.itid,t1.identity
+				;''')
+			else:
+				self.db.cursor.execute('''
+						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
+							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='user_languages'
+								ORDER BY i.identity,tu.updated_at ) as t1
+							INNER JOIN
+								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
+								FROM identities i
+								INNER JOIN identity_types it
+								ON it.id=i.identity_type_id AND it.name='github_login'
+								LEFT OUTER JOIN table_updates tu
+								ON tu.identity_id=i.id AND tu.table_name='user_languages'
+								GROUP BY i.identity,i.id,it.id ) AS t2
+						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
+						AND t1.succ IS NULL
+						ORDER BY t1.itid,t1.identity
+				;''')
+
+
+			elt_list = list(self.db.cursor.fetchall())
+
+			# specific to sqlite because no internal json parsing implemented in query
+			self.elt_list = []
+			for (identity_type_id,login,identity_id,end_cursor_info) in elt_list:
+				try:
+					self.elt_list.append((identity_type_id,login,identity_id,json.loads(end_cursor_info)['end_cursor']))
+				except:
+					self.elt_list.append((identity_type_id,login,identity_id,None))
+
+		if self.start_offset is not None:
+			self.elt_list = [r for r in self.elt_list if r[1]>=self.start_offset]
+
 
 
 

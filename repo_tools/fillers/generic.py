@@ -30,7 +30,7 @@ class PackageFiller(fillers.Filler):
 	or
 	name,created_at,repository
 	"""
-	def __init__(self,package_list=None,package_list_file=None,package_version_list=None,package_deps_list=None,package_version_download_list=None,force=False,deps_to_delete=None,package_limit=None,**kwargs):
+	def __init__(self,package_list=None,package_list_file=None,package_version_list=None,package_deps_list=None,package_version_download_list=None,force=False,deps_to_delete=None,package_limit=None,page_size=10**4,**kwargs):
 		self.package_list = package_list
 		self.package_list_file = package_list_file
 		self.package_limit = package_limit
@@ -51,6 +51,7 @@ class PackageFiller(fillers.Filler):
 		else:
 			self.deps_to_delete = deps_to_delete
 		self.force = force
+		self.page_size = page_size
 		fillers.Filler.__init__(self,**kwargs)
 
 	def prepare(self):
@@ -169,7 +170,8 @@ got: {}'''.format(headers))
 					-- WHERE p.source_id=%(package_source_id)s
 					VALUES((SELECT id FROM packages WHERE source_id=%(package_source_id)s AND insource_id=%(package_insource_id)s),%(version_str)s,%(created_at)s)
 					ON CONFLICT DO NOTHING
-					;''',({'version_str':v_str,'package_insource_id':p_id,'package_source_id':self.source_id,'created_at':created_at} for (p_id,v_str,created_at) in package_version_list))
+					;''',({'version_str':v_str,'package_insource_id':p_id,'package_source_id':self.source_id,'created_at':created_at} for (p_id,v_str,created_at) in package_version_list),
+					page_size=self.page_size)
 			else:
 				self.db.cursor.executemany('''
 					INSERT OR IGNORE INTO package_versions(package_id,version_str,created_at)
@@ -243,7 +245,8 @@ got: {}'''.format(headers))
 							AND p.id=v.package_id AND v.version_str=%(version_str)s)
 						,%(downloaded_at)s,%(nb_downloads)s)
 					ON CONFLICT DO NOTHING
-					;''',({'version_str':v_str,'package_insource_id':p_id,'package_source_id':self.source_id,'downloaded_at':dl_at,'nb_downloads':nb_dl} for (p_id,v_str,nb_dl,dl_at) in package_version_download_list))
+					;''',({'version_str':v_str,'package_insource_id':p_id,'package_source_id':self.source_id,'downloaded_at':dl_at,'nb_downloads':nb_dl} for (p_id,v_str,nb_dl,dl_at) in package_version_download_list),
+					page_size=self.page_size)
 			else:
 				self.db.cursor.executemany('''
 					INSERT OR IGNORE INTO package_version_downloads(package_version,downloaded_at,downloads)
@@ -305,7 +308,8 @@ got: {}'''.format(headers))
 						(SELECT id FROM packages WHERE source_id=%(package_source_id)s AND insource_id=%(depending_on_package)s),
 						%(semver_str)s)
 					ON CONFLICT DO NOTHING
-					;''',({'version_package_id':vp_id,'version_str':v_str,'depending_on_package':dop_id,'package_source_id':self.source_id,'semver_str':semver_str} for (vp_id,v_str,dop_id,semver_str) in package_deps_list))
+					;''',({'version_package_id':vp_id,'version_str':v_str,'depending_on_package':dop_id,'package_source_id':self.source_id,'semver_str':semver_str} for (vp_id,v_str,dop_id,semver_str) in package_deps_list),
+					page_size=self.page_size)
 
 				for (dep_p,dep_on_p) in self.deps_to_delete:
 					self.db.cursor.execute('''
@@ -607,7 +611,7 @@ class ClonesFiller(fillers.Filler):
 	'''
 	Tries to clone all repositories present in the DB
 	'''
-	def __init__(self,precheck_cloned=False,force=False,update=False,failed=False,ssh_sources=None,ssh_key=os.path.join(os.environ['HOME'],'.ssh','id_rsa'),sources=None,rm_first=False,**kwargs):
+	def __init__(self,precheck_cloned=False,force=False,update=True,failed=False,ssh_sources=None,ssh_key=os.path.join(os.environ['HOME'],'.ssh','id_rsa'),sources=None,rm_first=False,**kwargs):
 		'''
 		if sources is None, repositories of all sources are cloned. Otherwise, considered as a whitelist of sources to batch-clone.
 
@@ -692,8 +696,16 @@ class ClonesFiller(fillers.Filler):
 			self.clone(source=source,name=name,owner=owner,source_urlroot=source_urlroot,update=self.update)
 
 	def get_repo_list(self):
+		'''
+		force: all repos
+		failed: all failed repos
+		not force and not failed: all repos not having an entry in table_updates
 
-		if self.force or self.update:
+		update does not matter here, it is only the policy when encountering a folder already existing for one element of the list.
+		update can be combined with force; or alternatively table_updates can be emptied of all 'clones' entries so that all repos are updated once.
+		'''
+
+		if self.force: # or self.update:
 			self.db.cursor.execute('''
 				SELECT s.name,s.url_root,r.owner,r.name
 				FROM repositories r
@@ -798,6 +810,12 @@ class ClonesFiller(fillers.Filler):
 			except pygit2.GitError as e:
 				self.logger.info('Git Error for repo {}/{}/{}'.format(source,owner,name))
 				success = False
+			except ValueError as e:
+				if str(e).startswith('malformed URL'):
+					self.logger.info('Error for repo {}/{}/{}: {}'.format(source,owner,name,e))
+					success = False
+				else:
+					raise
 			self.db.submit_download_attempt(success=success,source=source,repo=name,owner=owner)
 			# else:
 			# 	self.logger.info('Skipping repo {}/{}/{}, already failed to download'.format(source,owner,name))
@@ -817,9 +835,10 @@ class ClonesFiller(fillers.Filler):
 			except KeyError:
 				callbacks = None
 			cmd = 'git pull'
-			cmd_output = subprocess.check_output(cmd.split(' '),cwd=repo_folder)
+			cmd_output = subprocess.check_output(cmd.split(' '),cwd=repo_folder, env=os.environ.update(dict(GIT_TERMINAL_PROMPT='0')))
 			### NB: pygit2 is complex for a simple 'git pull', a solution would be to test such an implementation: https://github.com/MichaelBoselowitz/pygit2-examples/blob/master/examples.py
 			# repo_obj.remotes["origin"].fetch(callbacks=callbacks)
+			## NB: GIT_TERMINAL_PROMPT=0 forces failure when credentials asked instead of prompt
 			success = True
 		# except pygit2.GitError as e:
 		except subprocess.CalledProcessError as e:

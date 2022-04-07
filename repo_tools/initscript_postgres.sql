@@ -310,11 +310,23 @@
 					repo_id BIGSERIAL REFERENCES repositories(id) ON DELETE CASCADE,
 					language TEXT NOT NULL,
 					size INT,
+					share REAL,
 					queried_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 					PRIMARY KEY(repo_id,language)
 					);
 
 				CREATE INDEX IF NOT EXISTS lang_idx ON repo_languages(language,repo_id);
+
+				CREATE TABLE IF NOT EXISTS user_languages(
+					user_identity BIGSERIAL REFERENCES identities(id) ON DELETE CASCADE,
+					language TEXT NOT NULL,
+					size REAL,
+					share REAL,
+					queried_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+					PRIMARY KEY(user_identity,language)
+					);
+
+				CREATE INDEX IF NOT EXISTS lang_id_idx ON user_languages(language,user_identity);
 
 				CREATE TABLE IF NOT EXISTS filtered_deps_package(
 					package_id BIGINT PRIMARY KEY REFERENCES packages(id) ON DELETE CASCADE,

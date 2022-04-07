@@ -6,10 +6,12 @@ import pygit2
 import json
 import git
 import itertools
+import psutil
 
 from repo_tools import fillers
 from repo_tools.fillers import generic
 import repo_tools as rp
+import multiprocessing as mp
 
 class CommitsFiller(fillers.Filler):
 	"""
@@ -23,7 +25,8 @@ class CommitsFiller(fillers.Filler):
 			force=False,
 			allbranches=True,
 			created_at_batchsize=1000,
-			fix_created_at=True,
+			fix_created_at=False,
+			workers=None,
 					**kwargs):
 		self.force = force
 		self.allbranches = allbranches
@@ -31,6 +34,10 @@ class CommitsFiller(fillers.Filler):
 		self.all_commits = all_commits
 		self.created_at_batchsize = created_at_batchsize
 		self.fix_created_at = fix_created_at
+		if workers is None:
+			self.workers = len(psutil.Process().cpu_affinity())
+		else:
+			self.workers = workers
 		fillers.Filler.__init__(self,**kwargs)
 
 	def prepare(self):
@@ -228,8 +235,8 @@ class CommitsFiller(fillers.Filler):
 					yield {
 							'author_email':commit.author.email,
 							'author_name':commit.author.name,
-							'localtime':commit.commit_time,
-							'time':commit.commit_time-60*commit.commit_time_offset,
+							#'localtime':commit.commit_time,
+							'time':commit.commit_time,#-60*commit.commit_time_offset,
 							'time_offset':commit.commit_time_offset,
 							'sha':commit.hex,
 							'parents':[pid.hex for pid in commit.parent_ids],
@@ -248,8 +255,8 @@ class CommitsFiller(fillers.Filler):
 					yield {
 							'author_email':commit.author.email,
 							'author_name':commit.author.name,
-							'localtime':commit.commit_time,
-							'time':commit.commit_time-60*commit.commit_time_offset,
+							#'localtime':commit.commit_time,
+							'time':commit.commit_time,#-60*commit.commit_time_offset,
 							'time_offset':commit.commit_time_offset,
 							'sha':commit.hex,
 							'parents':[pid.hex for pid in commit.parent_ids],
