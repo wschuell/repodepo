@@ -11,3 +11,6 @@ class RepoToolsDumpSQLiteError(RepoToolsError):
 
 class RepoToolsDumpPGError(RepoToolsError):
 	pass
+
+class RepoToolsDBStructError(RepoToolsError):
+	pass

@@ -284,24 +284,24 @@ class DevToRepoAddDailyCommits(DevToRepoAddMax):
 					main_q.repo_id,
 					repo_q.repo_rank,
 					(GREATEST(0,main_q.cnt-CASE WHEN main_q.repo_id IN %(repo_list)s
-									THEN DATE_PART('day',
+									THEN GREATEST(DATE_PART('day',
 										%(end_time)s::timestamp- GREATEST(COALESCE(repo_q.repo_created_at,%(start_time)s::timestamp),%(start_time)s::timestamp)
-										)*%(daily_commits)s
+										),1.)*%(daily_commits)s
 									ELSE 0
 									END)/COALESCE(
 								SUM(main_q.cnt) OVER (PARTITION BY main_q.repo_id)
 
-							,1))::REAL AS norm_value,
+							,1.))::REAL AS norm_value,
 					GREATEST(0,main_q.cnt-CASE WHEN main_q.repo_id IN %(repo_list)s
-									THEN DATE_PART('day',
+									THEN GREATEST(DATE_PART('day',
 										%(end_time)s::timestamp- GREATEST(COALESCE(repo_q.repo_created_at,%(start_time)s::timestamp),%(start_time)s::timestamp)
-										)*%(daily_commits)s
+										),1.)*%(daily_commits)s
 									ELSE 0
 									END)::REAL AS abs_value,
 					(CASE WHEN main_q.repo_id IN %(repo_list)s
-									THEN DATE_PART('day',
+									THEN GREATEST(DATE_PART('day',
 											%(end_time)s::timestamp- GREATEST(COALESCE(repo_q.repo_created_at,%(start_time)s::timestamp),%(start_time)s::timestamp)
-										)*%(daily_commits)s
+										),1.)*%(daily_commits)s
 										/(SUM(main_q.cnt) OVER (PARTITION BY main_q.repo_id)
 											)
 									ELSE 0
@@ -337,18 +337,18 @@ class DevToRepoAddDailyCommits(DevToRepoAddMax):
 					main_q.repo_id,
 					repo_q.repo_rank,
 					(MAX(0,main_q.cnt-CASE WHEN main_q.repo_id IN {repo_list_str}
-									THEN CAST ((JulianDay(:end_time) - JulianDay(MAX(COALESCE(repo_q.repo_created_at,:start_time),:start_time))) AS INTEGER)
+									THEN MAX(CAST ((JulianDay(:end_time) - JulianDay(MAX(COALESCE(repo_q.repo_created_at,:start_time),:start_time))) AS INTEGER),1.)
 									ELSE 0
 									END)/COALESCE(
 								SUM(main_q.cnt) OVER (PARTITION BY main_q.repo_id)
 
-							,1)) AS norm_value,
+							,1.)) AS norm_value,
 					MAX(0,main_q.cnt-CASE WHEN main_q.repo_id IN {repo_list_str}
-									THEN CAST ((JulianDay(:end_time) - JulianDay(MAX(COALESCE(repo_q.repo_created_at,:start_time),:start_time))) AS INTEGER)
+									THEN MAX(CAST ((JulianDay(:end_time) - JulianDay(MAX(COALESCE(repo_q.repo_created_at,:start_time),:start_time))) AS INTEGER),1.)
 									ELSE 0
 									END) AS abs_value,
 					CASE WHEN main_q.repo_id IN {repo_list_str}
-									THEN CAST ((JulianDay(:end_time) - JulianDay(MAX(COALESCE(repo_q.repo_created_at,:start_time),:start_time))) AS INTEGER)
+									THEN MAX(CAST ((JulianDay(:end_time) - JulianDay(MAX(COALESCE(repo_q.repo_created_at,:start_time),:start_time))) AS INTEGER),1.)
 										/(SUM(main_q.cnt) OVER (PARTITION BY main_q.repo_id)
 											)
 									ELSE 0

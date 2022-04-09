@@ -1,12 +1,13 @@
 
 import repo_tools
-from repo_tools.fillers import generic,commit_info,github_gql,meta_fillers
-from repo_tools.extras import pseudonymize,exports,errors,stats,pseudonymization
+from repo_tools.fillers import generic,commit_info,github_gql,meta_fillers,bot_fillers
+from repo_tools.extras import anonymize,exports,errors,stats,anonymization
 import pytest
 import datetime
 import time
 import os
 import re
+import sqlite3
 
 #### Parameters
 dbtype_list = [
@@ -23,6 +24,9 @@ def testdb(request):
 	db = repo_tools.repo_database.Database(db_name='travis_ci_test_repo_tools',db_type=request.param,data_folder='dummy_clones')
 	# db.clean_db()
 	db.init_db()
+	db.add_filler(bot_fillers.BotFiller(identity_type='email',pattern='%@gmail.com'))
+	db.add_filler(bot_fillers.BotUserFiller())
+	db.fill_db()
 	yield db
 	db.connection.close()
 	del db
@@ -35,6 +39,33 @@ def dest_db(request):
 	yield db
 	db.connection.close()
 	del db
+
+@pytest.fixture(params=dbtype_list)
+def dest_db_exported(request):
+	orig_db = repo_tools.repo_database.Database(db_name='travis_ci_test_repo_tools',db_type=request.param,data_folder='dummy_clones')
+	db = repo_tools.repo_database.Database(db_name='travis_ci_test_repo_tools_export',db_type=request.param,data_folder='dummy_clones')
+	db.clean_db()
+	db.init_db()
+	exports.export(orig_db=orig_db,dest_db=db)
+	yield db
+	db.connection.close()
+	orig_db.connection.close()
+	del db
+	del orig_db
+
+@pytest.fixture(params=dbtype_list)
+def dest_db_anon(request):
+	orig_db = repo_tools.repo_database.Database(db_name='travis_ci_test_repo_tools',db_type=request.param,data_folder='dummy_clones')
+	db = repo_tools.repo_database.Database(db_name='travis_ci_test_repo_tools_export',db_type=request.param,data_folder='dummy_clones')
+	db.clean_db()
+	db.init_db()
+	exports.export(orig_db=orig_db,dest_db=db)
+	anonymize(db=db)
+	yield db
+	db.connection.close()
+	orig_db.connection.close()
+	del db
+	del orig_db
 
 workers = 5
 
@@ -112,17 +143,13 @@ def test_stats(testdb):
 	stats.GlobalStats(db=testdb)
 
 @pytest.mark.timeout(20)
-def test_pseudonymize(dest_db):
-	pseudonymize(db=dest_db)
-
-@pytest.mark.timeout(20)
-def test_pseudonymize_emails(dest_db):
-	pseudonymization.pseudonymize_emails(db=dest_db)
-	dest_db.cursor.execute('''SELECT i.identity FROM identities i
+def test_anonymize_emails(dest_db_exported):
+	anonymization.anonymize_emails(db=dest_db_exported)
+	dest_db_exported.cursor.execute('''SELECT i.identity FROM identities i
 						INNER JOIN identity_types it
 						ON it.id=i.identity_type_id AND it.name='email'
 						AND NOT i.is_bot;''')
-	res = [r[0] for r in dest_db.cursor.fetchall()]
+	res = [r[0] for r in dest_db_exported.cursor.fetchall()]
 	ans = []
 	for r in res:
 		prefix = r.split('@')[0]
@@ -130,14 +157,26 @@ def test_pseudonymize_emails(dest_db):
 			ans.append(('identity',r))
 
 
-	dest_db.cursor.execute('''SELECT u.creation_identity FROM users u
+	dest_db_exported.cursor.execute('''SELECT u.creation_identity FROM users u
 						INNER JOIN identity_types it
 						ON it.id=u.creation_identity_type_id AND it.name='email'
 						AND NOT u.is_bot;''')
-	res = [r[0] for r in dest_db.cursor.fetchall()]
+	res = [r[0] for r in dest_db_exported.cursor.fetchall()]
 	for r in res:
 		prefix = r.split('@')[0]
-		if re.match(r'^[a-fA-F\d]{32}$',prefix) is None or not r.endswith('_HASHED'):
+		if re.match(r'^[a-fA-F\d]{32}$',prefix) is None:# or not r.endswith('_HASHED'):
 			ans.append(('user',r))
 
 	assert ans == []
+
+@pytest.mark.timeout(20)
+def test_anonymize(dest_db_exported):
+	anonymize(db=dest_db_exported)
+
+@pytest.mark.timeout(20)
+def test_clean_table(dest_db_anon):
+	exports.clean_table(db=dest_db_anon,table='stars')
+
+@pytest.mark.timeout(20)
+def test_clean_attr(dest_db_anon):
+	exports.clean_attr(db=dest_db_anon,table='stars',attr='inserted_at')

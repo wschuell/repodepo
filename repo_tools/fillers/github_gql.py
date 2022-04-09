@@ -2939,7 +2939,7 @@ class SponsorablesGQLFiller(GHGQLFiller):
 				raise Exception('Exception in {}'.format(self.items_name)) from e
 
 
-class LanguagesGQLFiller(GHGQLFiller):
+class RepoLanguagesGQLFiller(GHGQLFiller):
 	'''
 	Querying repository languages through the GraphQL API
 	'''

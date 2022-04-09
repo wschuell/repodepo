@@ -1,8 +1,11 @@
 import string
 import random
 import sqlite3
+import copy
 import csv
 import os
+from collections import OrderedDict
+import oyaml as yaml
 from sh import pg_dump,psql
 import psycopg2
 import psycopg2.extras
@@ -38,11 +41,11 @@ def check_db_equal(db,other_db):
 
 	return ans
 
-def get_tables_info(db):
+def get_tables_info(db,as_yml=False,keep_dbinfo=False):
 	'''
 	Returns a dict {tablename:[attr_list]} from either postgres or sqlite DB
 	'''
-	ans = {}
+	ans = OrderedDict()
 	if db.db_type == 'postgres':
 		db.cursor.execute('''SELECT c.table_name,c.column_name FROM information_schema.columns c
 							WHERE c.table_schema = (SELECT current_schema())
@@ -62,9 +65,13 @@ def get_tables_info(db):
 			db.cursor.execute('''PRAGMA table_info({table_name});'''.format(table_name=t))
 			ans[t] = [r[1] for r in db.cursor.fetchall()]
 
-	if '_dbinfo' in ans.keys():
+	if not keep_dbinfo and '_dbinfo' in ans.keys():
 		del ans['_dbinfo']
-	return ans
+	if as_yml:
+		return yaml.dump(ans)
+	else:
+		return ans
+
 
 def get_table_data(table,columns,db):
 	'''
@@ -132,14 +139,17 @@ def export(orig_db,dest_db,page_size=10**5):
 		# orig_db.logger.info('Cannot export to self, skipping')
 		raise errors.RepoToolsExportSameDBError
 	else:
-		if len(get_tables_info(dest_db)) == 0:
+		dest_t_info = get_tables_info(dest_db,keep_dbinfo=True)
+		if len(dest_t_info) == 0:
 			dest_db.init_db()
+		elif '_dbinfo' not in dest_t_info.keys():
+			raise errors.RepoToolsDBStructError('The destination database does not have the proper structure.')
 
 		orig_db.cursor.execute('''SELECT info_content FROM _dbinfo WHERE info_type='uuid';''')
 		orig_uuid = orig_db.cursor.fetchone()[0]
 
 		dest_db.cursor.execute('''SELECT info_content FROM _dbinfo WHERE info_type='exported_from';''')
-		exportedfrom_uuid = orig_db.cursor.fetchone()
+		exportedfrom_uuid = dest_db.cursor.fetchone()
 		if exportedfrom_uuid is not None:
 			exportedfrom_uuid = exportedfrom_uuid[0]
 
@@ -191,12 +201,119 @@ def enable_triggers_cmd(db,tables_info=None):
 		check_sqlname_safe(t)
 	return '\n'.join(['''ALTER TABLE {table} ENABLE TRIGGER ALL;\n'''.format(table=t) for t in tables_info.keys()])
 
-def clean(db):
+
+def clean_table(db,table,autocommit=True):
+	check_sqlname_safe(table)
+	db.cursor.execute('''DROP TABLE IF EXISTS {table} ;'''.format(table=table))
+	if autocommit:
+		db.connection.commit()
+
+def attr_script_removal(sql_script,attr):
+	if isinstance(attr,str):
+		attr_list = [attr]
+	else:
+		attr_list = attr
+	prefix = sql_script.split('(')[0]
+	suffix = sql_script.split(')')[-1]
+	main = '('.join(')'.join(sql_script.split(')')[:-1]).split('(')[1:])
+	lines = main.split(',')
+	new_lines = []
+	for l in lines:
+		flagged = False
+		for a in attr_list:
+			trimmed_l = l.replace('\n','').replace('\t','')
+			while trimmed_l.startswith(' '):
+				trimmed_l = trimmed_l[1:]
+			if trimmed_l.startswith('{} '.format(a)):
+				flagged = True
+				break
+		if not flagged:
+			new_lines.append(l)
+	return '{prefix}({middle}){suffix}'.format(prefix=prefix,suffix=suffix,middle=','.join(new_lines))
+
+
+def clean_attr(db,table,attr,autocommit=True):
+	check_sqlname_safe(table)
+	if isinstance(attr,str):
+		attr_list = [attr]
+	else:
+		attr_list = attr
+	for a in attr_list:
+		check_sqlname_safe(a)
+
+	t_info = get_tables_info(db=db)
+	to_remove = (set(attr_list) & set(t_info[table]))
+	if table in t_info.keys() and to_remove:
+		if db.db_type == 'sqlite' and sqlite3.sqlite_version < '3.37':
+			# raise NotImplementedError('ALTER TABLE t DROP COLUMN not implemented for this version of SQLite, upgrade to >=3.37.0, drop whole tables, or clean in postgres and export')
+
+			db.cursor.execute('''SELECT sql FROM sqlite_master WHERE tbl_name = '{table}';'''.format(table=table))
+			table_sql = db.cursor.fetchone()[0]
+
+			db.cursor.execute('''SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name='{table}' AND sql IS NOT NULL;'''.format(table=table))
+			idx_list = [r[0] for r in db.cursor.fetchall()]
+
+			db.cursor.execute('''ALTER TABLE {table} RENAME TO __old__{table};'''.format(table=table))
+
+			clean_table_sql = table_sql
+			for a in attr_list:
+				clean_table_sql = attr_script_removal(sql_script=clean_table_sql,attr=a) # spot and remove target attribute
+
+			db.cursor.execute(clean_table_sql)
+
+			orig_attr_list = copy.deepcopy(t_info[table])
+			remaining_attr_list = [a for a in orig_attr_list if a not in to_remove]
+			db.cursor.execute('''INSERT INTO {table}({attr_list}) SELECT {attr_list} FROM __old__{table};'''.format(table=table,attr_list=','.join(remaining_attr_list)))
+
+			db.cursor.execute('''DROP TABLE __old__{table};'''.format(table=table))
+
+			for idx_sql in idx_list:
+				cleaned_idx_sql = idx_sql
+				to_discard = False
+				for a in attr_list:
+					cleaned_idx_sql = cleaned_idx_sql.replace('{},'.format(a),'').replace(',{}'.format(a),'')
+					if '({})'.format(a) in cleaned_idx_sql:
+						to_discard = True
+				if to_discard:
+					db.logger.info('Skipping index: {}'.format(idx_sql))
+				else:
+					db.cursor.execute(cleaned_idx_sql)
+
+		else:
+			for a in attr_list:
+				db.cursor.execute('''ALTER TABLE {table} DROP COLUMN {attr} ;'''.format(table=table,attr=a))
+	if autocommit:
+		db.connection.commit()
+
+def clean(db,*,inclusion_list=None,exclusion_list=None,autocommit=False):
 	'''
 	Certain number of steps to prepare the dataset for release, not including pseudonymization
 	'''
-	pass
+	if autocommit is False:
+		db.cursor.execute('BEGIN TRANSACTION;')
+	if exclusion_list is not None and inclusion_list is not None:
+		raise SyntaxError('Both exclusion_list and inclusion_list args cannot be provided, pick one method')
+	t_info = get_tables_info(db=db,keep_dbinfo=True)
 
+	if exclusion_list is not None:
+		for t in exclusion_list.keys():
+			if t in t_info.keys():
+				if len(set(t_info[t]) - set(exclusion_list[t])) == 0 or len(exclusion_list[t]) == 0:
+					clean_table(db=db,table=t,autocommit=autocommit)
+				else:
+					clean_attr(db=db,table=t,attr=exclusion_list[t],autocommit=autocommit)
+
+	elif inclusion_list is not None:
+		for t in set(t_info.keys())-set(inclusion_list.keys()):
+			clean_table(db=db,table=t,autocommit=autocommit)
+		for t in inclusion_list.keys():
+			if t in t_info.keys():
+				if len(inclusion_list[t]) != 0:
+					clean_attr(db=db,table=t,attr=set(t_info[t])-set(inclusion_list[t]),autocommit=autocommit)
+
+	if not autocommit:
+		# db.cursor.execute('COMMIT;')
+		db.connection.commit()
 
 def dump_pg_csv(db,output_folder,import_dump=True,schema_dump=True,csv_dump=True,csv_psql=True,force=False):
 	'''

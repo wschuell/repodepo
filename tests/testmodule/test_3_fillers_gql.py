@@ -41,12 +41,14 @@ def test_github_gql(testdb):
 	testdb.add_filler(github_gql.ForksGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(generic.ClonesFiller(data_folder='dummy_clones')) # Clones after forks to have up-to-date repo URLS (detect redirects)
 	testdb.add_filler(commit_info.CommitsFiller(data_folder='dummy_clones',force=True,allbranches=True)) # Commits after forks because fork info needed for repo commit ownership
+	testdb.add_filler(generic.GithubNoreplyEmailMerger())
 	# testdb.add_filler(github_gql.LoginsGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.RandomCommitLoginsGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.StarsGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.ReleasesGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.FollowersGQLFiller(fail_on_wait=True,workers=workers))
-	testdb.add_filler(github_gql.LanguagesGQLFiller(fail_on_wait=True,workers=workers))
+	testdb.add_filler(github_gql.RepoLanguagesGQLFiller(fail_on_wait=True,workers=workers))
+	testdb.add_filler(github_gql.UserLanguagesGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.SponsorsUserFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.IssuesGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.BackwardsSponsorsUserFiller(fail_on_wait=True,workers=workers))
@@ -54,5 +56,6 @@ def test_github_gql(testdb):
 	testdb.add_filler(github_gql.UserCreatedAtGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(generic.RepoCommitOwnershipFiller()) # Clones after forks to have up-to-date repo URLS (detect redirects)
 	# testdb.add_filler(snowball.UserSnowballFiller())
+
 
 	testdb.fill_db()
