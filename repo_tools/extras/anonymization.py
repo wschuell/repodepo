@@ -282,7 +282,7 @@ class EmptyTableFiller(AnonymizationFiller):
 			self.db.cursor.execute(psycopg2.sql.SQL('DELETE FROM {table};').format(table=psycopg2.sql.Identifier(self.table)))
 		else:
 			check_sqlname_safe(self.table)
-			self.db.cursor.execute('DELETE FROM {table};'.format(table))
+			self.db.cursor.execute('DELETE FROM {table};'.format(table=self.table))
 
 class NullifyFiller(AnonymizationFiller):
 
