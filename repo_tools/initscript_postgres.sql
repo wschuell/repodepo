@@ -148,6 +148,9 @@
 				CREATE INDEX IF NOT EXISTS table_updates_idx2 ON table_updates(table_name,success,updated_at);
 				CREATE INDEX IF NOT EXISTS table_updates_idx3 ON table_updates(table_name,updated_at);
 				CREATE INDEX IF NOT EXISTS table_updates_idx4 ON table_updates(table_name,success,repo_id,identity_id);
+				CREATE INDEX IF NOT EXISTS table_updates_idx5 ON table_updates(table_name,success,identity_id,repo_id);
+				CREATE INDEX IF NOT EXISTS table_updates_idx6 ON table_updates(table_name,identity_id);
+				CREATE INDEX IF NOT EXISTS table_updates_idx7 ON table_updates(table_name,repo_id);
 				CREATE INDEX IF NOT EXISTS table_updates_identity_idx ON table_updates(identity_id,table_name,updated_at);
 
 				CREATE TABLE IF NOT EXISTS full_updates(

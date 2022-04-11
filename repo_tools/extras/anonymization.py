@@ -13,7 +13,7 @@ import psycopg2
 import psycopg2.sql
 
 from . import check_sqlname_safe
-
+from . import errors
 
 def modify(old_id,salt):
 	parts = old_id.split('@')
@@ -25,9 +25,15 @@ def modify(old_id,salt):
 
 
 
-def anonymize(db,salt=None,keep_email_suffixes=True):
-	db.add_filler(AnonymizationMetaFiller(salt=salt,keep_email_suffixes=keep_email_suffixes))
-	db.fill_db()
+def anonymize(db,salt=None,keep_email_suffixes=True,ignore_error=False):
+	try:
+		db.add_filler(AnonymizationMetaFiller(salt=salt,keep_email_suffixes=keep_email_suffixes))
+		db.fill_db()
+	except errors.RepoToolsDBStructError:
+		if ignore_error:
+			db.logger.info('Skipping anonymization step, DB seems to have already be cleaned (_dbinfo table missing)')
+		else:
+			raise
 
 
 
@@ -139,6 +145,7 @@ class AnonymizationFiller(fillers.Filler):
 		return 'anonymization__{}__{}'.format(table,field)
 
 	def prepare(self):
+		self.db.check_structure()
 		self.set_salt()
 		self.set_where_clause()
 		update_name = self.get_update_name()

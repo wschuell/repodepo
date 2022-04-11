@@ -10,6 +10,9 @@ import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
 import json
 import logging
+import dateutil
+from dateutil.relativedelta import relativedelta
+import asyncio
 
 from repo_tools import fillers
 from repo_tools.fillers import generic
@@ -34,8 +37,9 @@ class Requester(object):
 	Class implementing the Request
 	Caching rate limit information, updating at each query, or requerying after <refresh_time in sec> without update
 	'''
-	def __init__(self,api_key,refresh_time=120,schema=None,fetch_schema=False,url="https://api.github.com/graphql",auth_header_prefix='token '):
+	def __init__(self,api_key,refresh_time=120,schema=None,fetch_schema=False,url="https://api.github.com/graphql",auth_header_prefix='token ',retries=20):
 		self.logger = logger
+		self.retries = retries
 		self.api_key = api_key
 		self.remaining = 0
 		self.reset_at = datetime.datetime.now() # Like on the API, reset time is last reset time, not future reset time
@@ -76,7 +80,9 @@ class Requester(object):
 				''')
 		return self.remaining
 
-	def query(self,gql_query,params=None):
+	def query(self,gql_query,params=None,retries=None):
+		if retries is None:
+			retries = self.retries
 		if params is not None:
 			gql_query = gql_query.format(**params)
 		RL_query = '''
@@ -91,7 +97,18 @@ class Requester(object):
 			gql_query = '}'.join(splitted_string[:-1])+RL_query+'}'+splitted_string[-1]
 
 		try:
-			result = self.client.execute(gql(gql_query))
+			retries_left = retries
+			result_found = False
+			while not result_found:
+				try:
+					result = self.client.execute(gql(gql_query))
+					result_found = True
+				except asyncio.exceptions.TimeoutError:
+					if retries_left>0:
+						retries_left -= 1
+					else:
+						raise asyncio.exceptions.TimeoutError('''TimeoutError happened more times than the set retries: {}. Rerun, maybe with higher value.
+Original error message: {}'''.format(retries,e))
 		except Exception as e:
 			if hasattr(e,'data'):
 				result = e.data
@@ -108,7 +125,7 @@ class Requester(object):
 
 		return result
 
-	def paginated_query(self,gql_query,params=None,pageinfo_path=[]):
+	def paginated_query(self,gql_query,params=None,pageinfo_path=[],retries=None):
 		pageinfo_path = copy.deepcopy(pageinfo_path)
 		EC_var = 'after_end_cursor'
 		if params is None:
@@ -121,7 +138,7 @@ class Requester(object):
 			params[EC_var] = ', after:"{}"'.format(params[EC_var])
 		has_next_page = True
 		while has_next_page:
-			result = self.query(gql_query=gql_query,params=params)
+			result = self.query(gql_query=gql_query,params=params,retries=retries)
 			if pageinfo_path is None:
 				page_info = {'hasNextPage':False,'endCursor':None}
 				has_next_page = False
@@ -214,6 +231,12 @@ class GHGQLFiller(github_rest.GithubFiller):
 		'''
 		raise NotImplementedError
 
+	def additional_query_attributes(self):
+		'''
+		Possibility to add specific parameters for the query formatting
+		'''
+		return {}
+
 	def parse_query_result(self,query_result,**kwargs):
 		'''
 		In subclasses this has to be implemented
@@ -300,7 +323,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 					requester = next(requester_gen)
 
 					params = {'repo_owner':owner,'repo_name':repo_name,'user_login':login,'commit_sha':commit_sha,'after_end_cursor':end_cursor}
-
+					params.update(self.additional_query_attributes())
 					# first request (with endcursor)
 					paginated_query = requester.paginated_query(gql_query=self.query_string(),params=params,pageinfo_path=self.pageinfo_path)
 					result,pageinfo = next(paginated_query)
@@ -2103,7 +2126,7 @@ class LoginsGQLFiller(GHGQLFiller):
 				ans['login'] = query_result['repository']['object']['author']['user']['login']
 				ans['created_at'] = query_result['repository']['object']['author']['user']['createdAt']
 			ans['commit_sha'] = query_result['repository']['object']['oid']
-		print(ans['login'])
+
 		return [ans]
 
 
@@ -2718,7 +2741,6 @@ class SponsorablesGQLFiller(GHGQLFiller):
 				ans.append(elt)
 		return ans
 
-
 	def insert_items(self,items_list,commit=True,db=None):
 		'''
 		In subclasses this has to be implemented
@@ -2889,6 +2911,7 @@ class SponsorablesGQLFiller(GHGQLFiller):
 				requester = next(requester_gen)
 
 				params = {'after_end_cursor':end_cursor}
+				params.update(self.additional_query_attributes())
 
 				paginated_query = requester.paginated_query(gql_query=self.query_string(),params=params,pageinfo_path=self.pageinfo_path)
 				result,pageinfo = next(paginated_query)
@@ -3692,7 +3715,7 @@ class UserCreatedAtGQLFiller(GHGQLFiller):
 
 
 
-class UserLanguagesGQLFiller(GHGQLFiller):
+class SingleQueryUserLanguagesGQLFiller(GHGQLFiller):
 	'''
 	Querying languages of repositories of users through the GraphQL API
 	'''
@@ -3727,8 +3750,8 @@ class UserLanguagesGQLFiller(GHGQLFiller):
 				;''')
 		else:
 			self.db.cursor.execute('''
-				WITH user_list AS (SELECT DISTINCT repo_id FROM user_languages WHERE share IS NULL),
-					shares AS (SELECT r.user_identity,rl.language,rl.size::REAL/(SUM(rl.size::REAL) OVER (PARTITION BY r.user_identity)) AS share FROM user_list r
+				WITH user_list AS (SELECT DISTINCT user_identity FROM user_languages WHERE share IS NULL),
+					shares AS (SELECT r.user_identity,rl.language,rl.size*1./(SUM(rl.size) OVER (PARTITION BY r.user_identity)) AS share FROM user_list r
 								INNER JOIN user_languages rl
 								ON rl.user_identity=r.user_identity
 								)
@@ -3779,15 +3802,18 @@ class UserLanguagesGQLFiller(GHGQLFiller):
 		ans_dict = dict()
 		user_login = query_result['user']['login']
 		for r in query_result['user']['contributionsCollection']['commitContributionsByRepository']:
-			nb_commits_repo = r['contributions']['totalCount']
-			total_size = sum([e['size'] for e in r['repository']['languages']['edges']])
-			for e in r['repository']['languages']['edges']:
-				lang = e['node']['name']
-				size = e['size']
-				if lang in ans_dict.keys():
-					ans_dict[lang] += nb_commits_repo*size*1./total_size
-				else:
-					ans_dict[lang] = nb_commits_repo*size*1./total_size
+			try:
+				nb_commits_repo = r['contributions']['totalCount']
+				total_size = sum([e['size'] for e in r['repository']['languages']['edges']])
+				for e in r['repository']['languages']['edges']:
+					lang = e['node']['name']
+					size = e['size']
+					if lang in ans_dict.keys():
+						ans_dict[lang] += nb_commits_repo*size*1./total_size
+					else:
+						ans_dict[lang] = nb_commits_repo*size*1./total_size
+			except (KeyError,TypeError) as err:
+				self.logger.info('KeyError when parsing languages for {}: {}'.format(user_login,err))
 		return [{'user_identity':identity_id,'user_login':user_login,'language_name':lang,'language_size':size,'identity_type_id':identity_type_id} for lang,size in ans_dict.items()]
 
 	def insert_items(self,items_list,commit=True,db=None):
@@ -3993,6 +4019,137 @@ class UserLanguagesGQLFiller(GHGQLFiller):
 		if self.start_offset is not None:
 			self.elt_list = [r for r in self.elt_list if r[1]>=self.start_offset]
 
+
+
+
+
+class UserLanguagesGQLFiller(SingleQueryUserLanguagesGQLFiller):
+	'''
+	Querying languages of repositories of users through the GraphQL API
+	'''
+	def __init__(self,start=None,end=None,**kwargs):
+		if isinstance(end,str):
+			self.end = dateutil.parser.parse(end)
+		else:
+			self.end = end
+		if isinstance(start,str):
+			self.start = dateutil.parser.parse(start)
+		else:
+			self.start = start
+		SingleQueryUserLanguagesGQLFiller.__init__(self,**kwargs)
+
+	def get_startend_attr(self,end,start):
+		'''
+		returns a string to be put as argument of contributionsCollection in the GraphQL queries for time window selection
+		'''
+
+		if start is None and end is None:
+			return ''
+		else:
+			if start is not None:
+				start_str = 'from: "{}"'.format(start.strftime('%Y-%m-%dT%H:%M:%SZ'))
+			else:
+				start_str = ''
+			if end is not None:
+				end_str = 'to: "{}"'.format(end.strftime('%Y-%m-%dT%H:%M:%SZ'))
+			else:
+				end_str = ''
+			return '({} {})'.format(start_str,end_str)
+
+
+	def query_string(self,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: python-formatable string representing the graphql query
+		'''
+		if self.start is None or self.end is None:
+			tw_info = [self.get_startend_attr(end=self.end,start=self.start)]
+		else:
+			tw_info = []
+			delta = relativedelta(months=11)
+			current_max = self.end
+			current_min = max(self.end - delta,self.start)
+			while current_min > self.start:
+				tw_info.append(self.get_startend_attr(end=current_max,start=current_min))
+				current_max = current_min
+				current_min = max(current_max - delta,self.start)
+			tw_info.append(self.get_startend_attr(end=current_max,start=current_min)) # case current_min = start
+
+		query = 'query {{'
+		for i,tw in enumerate(tw_info):
+			query += self.query_string_element(query_name=('q{}'.format(i) if i>0 else 'user'),time_window_info=tw)
+		query += ' }}'
+
+		return query
+
+
+
+	def query_string_element(self,query_name,time_window_info,**kwargs):
+		return '''{query_name}:user(login: "{user_login}") {{
+  							login
+  							contributionsCollection{time_window_info} {{
+      							totalCommitContributions
+      							commitContributionsByRepository {{
+        							contributions{{
+        								totalCount
+        								}}
+       								repository{{
+       									nameWithOwner
+      									languages(first:100){{
+      										totalSize
+        									edges{{
+        										size
+        										node {{
+        											name}}
+        										}}
+        									}}
+        								}}
+        							}}
+        						}}
+  							}}
+'''.replace('{query_name}',query_name).replace('{time_window_info}',time_window_info) # Not using classic format for clarity: {{ }} would become {{{{ }}}}
+
+
+
+	def parse_query_result(self,query_result,identity_id,identity_type_id,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: [ {'user_identity':identity_id,'language':languagename,'size':size,'identity_type_id':it_id,'user_login':user_login} , ...]
+		'''
+		dict_res = dict()
+
+		for qname,q in query_result.items():
+			if qname == 'rateLimit' or q is None:
+				continue
+			for elt in SingleQueryUserLanguagesGQLFiller.parse_query_result(self,
+															query_result={'user':q},
+															identity_id=identity_id,
+															identity_type_id=identity_type_id,
+															**kwargs):
+				lang = elt['language_name']
+				size = elt['language_size']
+				if lang in dict_res.keys():
+					dict_res[lang]['language_size'] += size
+				else:
+					dict_res[lang] = elt
+
+		return list(dict_res.values())
+
+
+	def get_nb_items(self,query_result):
+		'''
+		In subclasses this has to be implemented
+		output: nb_items or None if not relevant
+		'''
+		ans = set()
+		for qname,q in query_result.items():
+			if qname == 'rateLimit' or q is None:
+				continue
+			for r in q['contributionsCollection']['commitContributionsByRepository']:
+				ans |= set(
+					[e['node']['name']
+						for e in r['repository']['languages']['edges'] ])
+		return len(ans)
 
 
 

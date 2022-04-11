@@ -789,7 +789,9 @@ class ClonesFiller(fillers.Filler):
 				if clean_symlinks:
 					shutil.rmtree(repo_folder)
 				else:
-					raise OSError('Symlink broken: {} -> {}'.format(repo_folder,os.readlink(repo_folder)))
+					err_txt = 'Symlink broken: {} -> {}'.format(repo_folder,os.readlink(repo_folder))
+					self.db.log_error(err_txt)
+					raise OSError(err_txt)
 			repo_id = self.db.get_repo_id(source=source,name=name,owner=owner)
 			# if self.db.db_type == 'postgres':
 			# 	self.db.cursor.execute('SELECT * FROM download_attempts WHERE repo_id=%s LIMIT 1;',(repo_id,))
@@ -808,11 +810,15 @@ class ClonesFiller(fillers.Filler):
 				pygit2.clone_repository(url=self.build_url(source_urlroot=source_urlroot,name=name,owner=owner,ssh_mode=ssh_mode),path=repo_folder,callbacks=callbacks)
 				success = True
 			except pygit2.GitError as e:
-				self.logger.info('Git Error for repo {}/{}/{}'.format(source,owner,name))
+				err_txt = 'Git Error for repo {}/{}/{}'.format(source,owner,name)
+				self.logger.info(err_txt)
+				self.db.log_error(err_txt)
 				success = False
 			except ValueError as e:
 				if str(e).startswith('malformed URL'):
-					self.logger.info('Error for repo {}/{}/{}: {}'.format(source,owner,name,e))
+					err_txt = 'Error for repo {}/{}/{}: {}'.format(source,owner,name,e)
+					self.logger.info(err_txt)
+					self.db.log_error(err_txt)
 					success = False
 				else:
 					raise
@@ -834,7 +840,7 @@ class ClonesFiller(fillers.Filler):
 				callbacks = self.callbacks[source]
 			except KeyError:
 				callbacks = None
-			cmd = 'git pull'
+			cmd = 'git pull --force'
 			cmd_output = subprocess.check_output(cmd.split(' '),cwd=repo_folder, env=os.environ.update(dict(GIT_TERMINAL_PROMPT='0')))
 			### NB: pygit2 is complex for a simple 'git pull', a solution would be to test such an implementation: https://github.com/MichaelBoselowitz/pygit2-examples/blob/master/examples.py
 			# repo_obj.remotes["origin"].fetch(callbacks=callbacks)
@@ -842,7 +848,9 @@ class ClonesFiller(fillers.Filler):
 			success = True
 		# except pygit2.GitError as e:
 		except subprocess.CalledProcessError as e:
-			self.logger.info('Git Error for repo {}/{}/{}: {}'.format(source,owner,name,e))
+			err_txt = 'Git Error for repo {}/{}/{}: {}'.format(source,owner,name,e)
+			self.logger.info(err_txt)
+			self.db.log_error(err_txt)
 			success = False
 
 		self.db.submit_download_attempt(success=success,source=source,repo=name,owner=owner)

@@ -13,6 +13,8 @@ import json
 import numpy as np
 import io
 
+from .extras import errors
+
 logger = logging.getLogger(__name__)
 ch = logging.StreamHandler()
 ch.setLevel(logging.DEBUG)
@@ -187,6 +189,25 @@ class Database(object):
 			d['connection'] = None
 			d['cursor'] = None
 			self.__dict__ = d
+
+	def check_structure(self):
+		'''
+		Checks whether _dbinfo table exists and raises error if not
+		'''
+
+		if self.db_type == 'postgres':
+			self.cursor.execute('''SELECT 1 FROM information_schema.columns c
+								WHERE c.table_schema = (SELECT current_schema())
+								AND c.table_name='_dbinfo'
+								LIMIT 1 ;''')
+		else:
+			self.cursor.execute('''SELECT 1 FROM sqlite_master
+				WHERE type='table' AND name='_dbinfo';
+				''')
+		ans = list(self.cursor.fetchall())
+		if len(ans) == 0:
+			raise errors.RepoToolsDBStructError('DB structure is not right: table _dbinfo missing')
+
 
 
 	def get_computation_db(self):

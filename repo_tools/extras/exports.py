@@ -131,7 +131,7 @@ def fix_sequences(db):
 			db.cursor.execute(c)
 		db.connection.commit()
 
-def export(orig_db,dest_db,page_size=10**5):
+def export(orig_db,dest_db,page_size=10**5,ignore_error=False):
 	'''
 	Exporting data from one database to another, being SQLite or PostgreSQL for both
 	'''
@@ -143,7 +143,15 @@ def export(orig_db,dest_db,page_size=10**5):
 		if len(dest_t_info) == 0:
 			dest_db.init_db()
 		elif '_dbinfo' not in dest_t_info.keys():
-			raise errors.RepoToolsDBStructError('The destination database does not have the proper structure.')
+			if ignore_error:
+				dest_db.logger.info('''Skipping export from {orig_db}({orig_db_type}) to {destdb}({destdb_type}):
+destination is not empty but has no _dbinfo table'''.format(orig_db=orig_db.db_name,
+															orig_db_type=orig_db.db_type,
+															destdb=dest_db.db_name,
+															destdb_type=dest_db.db_type))
+				return
+			else:
+				raise errors.RepoToolsDBStructError('The destination database does not have the proper structure.')
 
 		orig_db.cursor.execute('''SELECT info_content FROM _dbinfo WHERE info_type='uuid';''')
 		orig_uuid = orig_db.cursor.fetchone()[0]
@@ -315,13 +323,13 @@ def clean(db,*,inclusion_list=None,exclusion_list=None,autocommit=False):
 		# db.cursor.execute('COMMIT;')
 		db.connection.commit()
 
-def dump_pg_csv(db,output_folder,import_dump=True,schema_dump=True,csv_dump=True,csv_psql=True,force=False):
+def dump_pg_csv(db,output_folder,import_dump=True,schema_dump=True,csv_dump=True,csv_psql=True,force=False,quiet_error=True):
 	'''
 	Dumping a postgres DB to schema.sql, import.sql and one CSV per table
 	'''
 
 	if not db.db_type == 'postgres':
-		raise errors.RepoToolsDumpSQLiteError
+		raise errors.RepoToolsDumpSQLiteError('Trying to dump to schema and CSV from a SQLite DB, should be PostgreSQL')
 
 	if not os.path.exists(os.path.join(output_folder,'data')):
 		os.makedirs(os.path.join(output_folder,'data'))
@@ -332,7 +340,11 @@ def dump_pg_csv(db,output_folder,import_dump=True,schema_dump=True,csv_dump=True
 		filepath = os.path.join(output_folder,filename)
 		if os.path.exists(filepath) and bool_var:
 			if force:
+				db.logger.warning('Removing {} for replacement'.format(filename))
 				os.remove(filepath)
+			elif quiet_error:
+				db.logger.warning('While dumping: {} already exists. Use force=True to replace existing files.'.format(filename))
+				return
 			else:
 				raise errors.RepoToolsDumpPGError('Error while dumping: {} already exists. Use force=True to replace.'.format(filename))
 
