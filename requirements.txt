@@ -9,4 +9,4 @@ oyaml
 scipy
 sh
 psutil
-dateutil
+python-dateutil
