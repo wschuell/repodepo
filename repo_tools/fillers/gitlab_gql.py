@@ -10,6 +10,7 @@ import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
 import json
 import logging
+import asyncio
 
 from repo_tools import fillers
 from repo_tools.fillers import generic
@@ -54,7 +55,9 @@ class RequesterGitlab(github_gql.Requester):
 		self.remaining = 2000
 		return self.remaining
 
-	def query(self,gql_query,params=None):
+	def query(self,gql_query,params=None,retries=None):
+		if retries is None:
+			retries = self.retries
 		if params is not None:
 			gql_query = gql_query.format(**params)
 		# RL_query = '''
@@ -69,7 +72,18 @@ class RequesterGitlab(github_gql.Requester):
 		# 	gql_query = '}'.join(splitted_string[:-1])+RL_query+'}'+splitted_string[-1]
 
 		try:
-			result = self.client.execute(gql(gql_query))
+			retries_left = retries
+			result_found = False
+			while not result_found:
+				try:
+					result = self.client.execute(gql(gql_query))
+					result_found = True
+				except asyncio.TimeoutError as e:
+					if retries_left>0:
+						retries_left -= 1
+					else:
+						raise e.__class__('''TimeoutError happened more times than the set retries: {}. Rerun, maybe with higher value.
+Original error message: {}'''.format(retries,e))
 		except Exception as e:
 			if hasattr(e,'data'):
 				result = e.data

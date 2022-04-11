@@ -420,8 +420,11 @@ class GHGQLFiller(github_rest.GithubFiller):
 							# continue query
 							result,pageinfo = next(paginated_query)
 							parsed_result = self.parse_query_result(result,repo_id=repo_id,identity_id=identity_id,identity_type_id=identity_type_id)
-
+			except KeyboardInterrupt:
+				raise
 			except Exception as e:
+				if e.__class__ == RuntimeError and 'cannot schedule new futures after shutdown' in str(e):
+					raise
 				if in_thread:
 					self.logger.error('Exception in {} {}: \n {}: {}'.format(self.items_name,elt_name,e.__class__.__name__,e))
 				db.log_error('Exception in {} {}: \n {}: {}'.format(self.items_name,elt_name,e.__class__.__name__,e))
@@ -437,7 +440,11 @@ class GHGQLFiller(github_rest.GithubFiller):
 				for i,elt in enumerate(elt_list):
 					futures.append(executor.submit(self.fill_items,elt_list=[elt],workers=1,in_thread=True,incremental_update=incremental_update,elt_nb=i+1,total_elt=total_elt))
 				for future in futures:
-					future.result()
+					try:
+						future.result()
+					except KeyboardInterrupt:
+						executor.shutdown(wait=False)
+						break
 
 
 class StarsGQLFiller(GHGQLFiller):
