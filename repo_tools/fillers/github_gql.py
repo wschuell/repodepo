@@ -103,11 +103,11 @@ class Requester(object):
 				try:
 					result = self.client.execute(gql(gql_query))
 					result_found = True
-				except asyncio.exceptions.TimeoutError:
+				except asyncio.TimeoutError as e:
 					if retries_left>0:
 						retries_left -= 1
 					else:
-						raise asyncio.exceptions.TimeoutError('''TimeoutError happened more times than the set retries: {}. Rerun, maybe with higher value.
+						raise e.__class__('''TimeoutError happened more times than the set retries: {}. Rerun, maybe with higher value.
 Original error message: {}'''.format(retries,e))
 		except Exception as e:
 			if hasattr(e,'data'):
@@ -3805,13 +3805,18 @@ class SingleQueryUserLanguagesGQLFiller(GHGQLFiller):
 			try:
 				nb_commits_repo = r['contributions']['totalCount']
 				total_size = sum([e['size'] for e in r['repository']['languages']['edges']])
+				nb_lang_repo = len(r['repository']['languages']['edges'])
 				for e in r['repository']['languages']['edges']:
 					lang = e['node']['name']
 					size = e['size']
-					if lang in ans_dict.keys():
-						ans_dict[lang] += nb_commits_repo*size*1./total_size
+					if total_size != 0:
+						factor = size*1./total_size
 					else:
-						ans_dict[lang] = nb_commits_repo*size*1./total_size
+						factor = 1./nb_lang_repo
+					if lang in ans_dict.keys():
+						ans_dict[lang] += nb_commits_repo*factor
+					else:
+						ans_dict[lang] = nb_commits_repo*factor
 			except (KeyError,TypeError) as err:
 				self.logger.info('KeyError when parsing languages for {}: {}'.format(user_login,err))
 		return [{'user_identity':identity_id,'user_login':user_login,'language_name':lang,'language_size':size,'identity_type_id':identity_type_id} for lang,size in ans_dict.items()]
