@@ -11,6 +11,8 @@ from concurrent.futures import ThreadPoolExecutor
 import json
 import logging
 import asyncio
+import time
+import random
 
 from repo_tools import fillers
 from repo_tools.fillers import generic
@@ -80,6 +82,7 @@ class RequesterGitlab(github_gql.Requester):
 					result_found = True
 				except asyncio.TimeoutError as e:
 					if retries_left>0:
+						time.sleep(0.1*(retries-retries_left)*random.random())
 						retries_left -= 1
 					else:
 						raise e.__class__('''TimeoutError happened more times than the set retries: {}. Rerun, maybe with higher value.

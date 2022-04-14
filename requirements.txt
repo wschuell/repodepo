@@ -10,3 +10,4 @@ scipy
 sh
 psutil
 python-dateutil
+networkx

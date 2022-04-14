@@ -13,6 +13,8 @@ import logging
 import dateutil
 from dateutil.relativedelta import relativedelta
 import asyncio
+import time
+import random
 
 from repo_tools import fillers
 from repo_tools.fillers import generic
@@ -37,7 +39,7 @@ class Requester(object):
 	Class implementing the Request
 	Caching rate limit information, updating at each query, or requerying after <refresh_time in sec> without update
 	'''
-	def __init__(self,api_key,refresh_time=120,schema=None,fetch_schema=False,url="https://api.github.com/graphql",auth_header_prefix='token ',retries=20):
+	def __init__(self,api_key,refresh_time=120,schema=None,fetch_schema=False,url="https://api.github.com/graphql",auth_header_prefix='token ',retries=50):
 		self.logger = logger
 		self.retries = retries
 		self.api_key = api_key
@@ -105,6 +107,7 @@ class Requester(object):
 					result_found = True
 				except asyncio.TimeoutError as e:
 					if retries_left>0:
+						time.sleep(0.1*(retries-retries_left)*random.random())
 						retries_left -= 1
 					else:
 						raise e.__class__('''TimeoutError happened more times than the set retries: {}. Rerun, maybe with higher value.
@@ -170,12 +173,13 @@ class GHGQLFiller(github_rest.GithubFiller):
 	class to be inherited from, contains github credentials management
 	"""
 
-	def __init__(self,requester_class=None,source_name='GitHub',target_identity_type='github_login',**kwargs):
+	def __init__(self,requester_class=None,source_name='GitHub',target_identity_type='github_login',retry_fails_permanent=False,**kwargs):
 		if requester_class is None:
 			self.Requester = Requester
 		else:
 			self.Requester = requester_class
 		self.source_name = source_name
+		self.retry_fails_permanent = retry_fails_permanent
 		self.target_identity_type = target_identity_type
 		github_rest.GithubFiller.__init__(self,identity_type=target_identity_type,**kwargs)
 
@@ -326,7 +330,20 @@ class GHGQLFiller(github_rest.GithubFiller):
 					params.update(self.additional_query_attributes())
 					# first request (with endcursor)
 					paginated_query = requester.paginated_query(gql_query=self.query_string(),params=params,pageinfo_path=self.pageinfo_path)
-					result,pageinfo = next(paginated_query)
+					try:
+						result,pageinfo = next(paginated_query)
+					except asyncio.TimeoutError as e:
+						if self.retry_fails_permanent:
+							err_text = 'Timeout threshold reached {}, marking query as to be discarded {}: {}'.format(requester.retries,e.__class__,e)
+							self.logger.error(err_text)
+							db.log_error(err_text)
+							db.insert_update(identity_id=identity_id,repo_id=repo_id,table=self.items_name,success=False)
+							elt_list.pop(0)
+							new_elt = True
+							elt_nb += 1
+							continue
+						else:
+							raise
 
 					# catch non existent
 					if (self.queried_obj=='repo' and result['repository'] is None) or (self.queried_obj=='user' and result['user'] is None):
@@ -418,17 +435,34 @@ class GHGQLFiller(github_rest.GithubFiller):
 							db.insert_update(identity_id=identity_id,repo_id=repo_id,table=self.items_name,success=None,info=end_cursor_json)
 							db.connection.commit()
 							# continue query
-							result,pageinfo = next(paginated_query)
+							try:
+								result,pageinfo = next(paginated_query)
+							except asyncio.TimeoutError as e:
+								if self.retry_fails_permanent:
+									err_text = 'Timeout threshold reached {}, marking query as to be discarded {}: {}'.format(requester.retries,e.__class__,e)
+									self.logger.error(err_text)
+									db.log_error(err_text)
+									db.insert_update(identity_id=identity_id,repo_id=repo_id,table=self.items_name,success=False)
+									elt_list.pop(0)
+									new_elt = True
+									elt_nb += 1
+									break
+								else:
+									raise
 							parsed_result = self.parse_query_result(result,repo_id=repo_id,identity_id=identity_id,identity_type_id=identity_type_id)
 			except KeyboardInterrupt:
 				raise
 			except Exception as e:
+				err_text = 'Exception in {} {}: \n {}: {}'.format(self.items_name,elt_name,e.__class__.__name__,e)
 				if e.__class__ == RuntimeError and 'cannot schedule new futures after shutdown' in str(e):
 					raise
+				elif e.__class__ == asyncio.TimeoutError and self.retry_fails_permanent:
+					db.insert_update(identity_id=identity_id,repo_id=repo_id,table=self.items_name,success=False,info=end_cursor_json)
+					self.logger.error(err_text+' retry_fails_permanent is set to True')
 				if in_thread:
-					self.logger.error('Exception in {} {}: \n {}: {}'.format(self.items_name,elt_name,e.__class__.__name__,e))
-				db.log_error('Exception in {} {}: \n {}: {}'.format(self.items_name,elt_name,e.__class__.__name__,e))
-				raise Exception('Exception in {} {}'.format(self.items_name,elt_name)) from e
+					self.logger.error(err_text)
+				db.log_error(err_text)
+				raise Exception(err_text) from e
 			finally:
 				if in_thread and 'db' in locals():
 					db.cursor.close()
@@ -2919,9 +2953,19 @@ class SponsorablesGQLFiller(GHGQLFiller):
 
 				params = {'after_end_cursor':end_cursor}
 				params.update(self.additional_query_attributes())
-
 				paginated_query = requester.paginated_query(gql_query=self.query_string(),params=params,pageinfo_path=self.pageinfo_path)
-				result,pageinfo = next(paginated_query)
+				try:
+					result,pageinfo = next(paginated_query)
+				except asyncio.TimeoutError as e:
+					if self.retry_fails_permanent:
+						err_text = 'Timeout threshold reached {}, marking query as to be discarded {}: {}'.format(requester.retries,e.__class__,e)
+						self.logger.error(err_text)
+						db.log_error(err_text)
+						db.insert_update(table=self.items_name,success=False)
+						elt_list.pop(0)
+						return
+					else:
+						raise
 
 				# detect 0 elts
 				parsed_result = self.parse_query_result(result,)
@@ -2959,7 +3003,18 @@ class SponsorablesGQLFiller(GHGQLFiller):
 								db.insert_update(table=self.items_name,success=None,info=end_cursor_json)
 								db.connection.commit()
 								# continue query
-								result,pageinfo = next(paginated_query)
+								try:
+									result,pageinfo = next(paginated_query)
+								except asyncio.TimeoutError as e:
+									if self.retry_fails_permanent:
+										err_text = 'Timeout threshold reached {}, marking query as to be discarded {}: {}'.format(requester.retries,e.__class__,e)
+										self.logger.error(err_text)
+										db.log_error(err_text)
+										db.insert_update(table=self.items_name,success=True,info=end_cursor_json)
+										elt_list.pop(0)
+										break
+									else:
+										raise
 								parsed_result = self.parse_query_result(result,)
 						if pageinfo['hasNextPage']:
 							requester = next(requester_gen)

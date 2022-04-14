@@ -696,10 +696,11 @@ class Developers(ProjectGetter):
 				(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
-				AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
+				--AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
 				AND cc.repo_id=%(project_id)s
 				AND ( %(include_bots)s OR NOT i.is_bot)
 				GROUP BY i.user_id,cc.repo_id
+				HAVING %(start_date)s <= MIN(cc.created_at) AND MIN(cc.created_at) < %(end_date)s
 				) AS c
 				GROUP BY time_stamp
 				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
@@ -709,10 +710,11 @@ class Developers(ProjectGetter):
 				(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
-				AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
+				--AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
 				AND cc.repo_id=:project_id
 				AND ( :include_bots OR NOT i.is_bot)
 				GROUP BY i.user_id,cc.repo_id
+				HAVING datetime(:start_date) <= MIN(cc.created_at) AND MIN(cc.created_at) < datetime(:end_date)
 				) AS c
 				GROUP BY time_stamp
 				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
@@ -726,29 +728,61 @@ class Developers(ProjectGetter):
 		if db.db_type == 'postgres':
 			db.cursor.execute('''
 				SELECT COUNT(*),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval AS time_stamp FROM
-				(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
+				(SELECT MIN(cc.created_at) AS created_at,i.user_id--,cc.repo_id
+				FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
-				AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
 				AND cc.repo_id IS NOT NULL
 				AND ( %(include_bots)s OR NOT i.is_bot)
-				GROUP BY i.user_id,cc.repo_id
+				GROUP BY i.user_id--,cc.repo_id
+				HAVING %(start_date)s <= MIN(cc.created_at) AND MIN(cc.created_at) < %(end_date)s
 				) AS c
 				GROUP BY time_stamp
 				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
 		else:
 			db.cursor.execute('''
 				SELECT COUNT(*),date(datetime(created_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp FROM
-				(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
+				(SELECT MIN(cc.created_at) AS created_at,i.user_id--,cc.repo_id
+				FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
-				AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
 				AND cc.repo_id IS NOT NULL
 				AND ( :include_bots OR NOT i.is_bot)
-				GROUP BY i.user_id,cc.repo_id
+				GROUP BY i.user_id--,cc.repo_id
+				HAVING datetime(:start_date) <= MIN(cc.created_at) AND MIN(cc.created_at) < datetime(:end_date)
 				) AS c
 				GROUP BY time_stamp
 				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
+
+
+
+		### Previous version: number of new links dev->repo
+		# if db.db_type == 'postgres':
+		# 	db.cursor.execute('''
+		# 		SELECT COUNT(*),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval AS time_stamp FROM
+		# 		(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
+		# 		INNER JOIN identities i
+		# 		ON i.id=cc.author_id
+		# 		AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
+		# 		AND cc.repo_id IS NOT NULL
+		# 		AND ( %(include_bots)s OR NOT i.is_bot)
+		# 		GROUP BY i.user_id,cc.repo_id
+		# 		) AS c
+		# 		GROUP BY time_stamp
+		# 		''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
+		# else:
+		# 	db.cursor.execute('''
+		# 		SELECT COUNT(*),date(datetime(created_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp FROM
+		# 		(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
+		# 		INNER JOIN identities i
+		# 		ON i.id=cc.author_id
+		# 		AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
+		# 		AND cc.repo_id IS NOT NULL
+		# 		AND ( :include_bots OR NOT i.is_bot)
+		# 		GROUP BY i.user_id,cc.repo_id
+		# 		) AS c
+		# 		GROUP BY time_stamp
+		# 		''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
 		query_result = list(db.cursor.fetchall())
 		#correcting for datetime issue in sqlite:
 		if db.db_type == 'sqlite':
@@ -762,10 +796,11 @@ class Developers(ProjectGetter):
 				(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
-				AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
+				--AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
 				AND cc.repo_id IS NOT NULL
 				AND ( %(include_bots)s OR NOT i.is_bot)
 				GROUP BY i.user_id,cc.repo_id
+				HAVING %(start_date)s <= MIN(cc.created_at) AND MIN(cc.created_at) < %(end_date)s
 				) AS c
 				GROUP BY repo_id
 				''',{'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
@@ -775,10 +810,11 @@ class Developers(ProjectGetter):
 				(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
-				AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
+				--AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
 				AND cc.repo_id IS NOT NULL
 				AND ( :include_bots OR NOT i.is_bot)
 				GROUP BY i.user_id,cc.repo_id
+				HAVING datetime(:start_date) <= MIN(cc.created_at) AND MIN(cc.created_at) < datetime(:end_date)
 				) AS c
 				GROUP BY repo_id
 				''',{'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
@@ -791,10 +827,11 @@ class Developers(ProjectGetter):
 				(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
-				AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
+				--AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
 				AND cc.repo_id IS NOT NULL
 				AND ( %(include_bots)s OR NOT i.is_bot)
 				GROUP BY i.user_id,cc.repo_id
+				HAVING %(start_date)s <= MIN(cc.created_at) AND MIN(cc.created_at) < %(end_date)s
 				) AS c
 				GROUP BY time_stamp,repo_id
 				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
@@ -804,10 +841,11 @@ class Developers(ProjectGetter):
 				(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
-				AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
-				GROUP BY i.user_id,cc.repo_id
 				AND cc.repo_id IS NOT NULL
+				--AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
 				AND ( :include_bots OR NOT i.is_bot)
+				GROUP BY i.user_id,cc.repo_id
+				HAVING datetime(:start_date) <= MIN(cc.created_at) AND MIN(cc.created_at) < datetime(:end_date)
 				) AS c
 				GROUP BY time_stamp,repo_id
 				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
@@ -897,7 +935,7 @@ class ActiveDevelopers(ProjectGetter):
 	def query_notimeinfo(self,db,start_date,end_date,project_id=None,time_window=None):
 		if db.db_type == 'postgres':
 			db.cursor.execute('''
-				SELECT COUNT(*),repo_id FROM
+				SELECT COUNT(DISTINCT user_id),repo_id FROM
 				(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
@@ -910,7 +948,7 @@ class ActiveDevelopers(ProjectGetter):
 				''',{'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),repo_id FROM
+				SELECT COUNT(DISTINCT user_id),repo_id FROM
 				(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id

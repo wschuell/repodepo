@@ -840,15 +840,23 @@ class ClonesFiller(fillers.Filler):
 				callbacks = self.callbacks[source]
 			except KeyError:
 				callbacks = None
-			cmd = 'git pull --force'
+			cmd = 'git fetch --force --all'
 			cmd_output = subprocess.check_output(cmd.split(' '),cwd=repo_folder, env=os.environ.update(dict(GIT_TERMINAL_PROMPT='0')))
+			try:
+				cmd2 = 'git pull --force --all'
+				cmd_output2 = subprocess.check_output(cmd2.split(' '),cwd=repo_folder, env=os.environ.update(dict(GIT_TERMINAL_PROMPT='0')))
+			except subprocess.CalledProcessError as e:
+				err_txt = 'Git pull Error (fetch worked) for repo {}/{}/{}: {}, {}'.format(source,owner,name,e,e.output)
+				self.logger.info(err_txt)
+				self.db.log_error(err_txt)
+
 			### NB: pygit2 is complex for a simple 'git pull', a solution would be to test such an implementation: https://github.com/MichaelBoselowitz/pygit2-examples/blob/master/examples.py
 			# repo_obj.remotes["origin"].fetch(callbacks=callbacks)
 			## NB: GIT_TERMINAL_PROMPT=0 forces failure when credentials asked instead of prompt
 			success = True
 		# except pygit2.GitError as e:
 		except subprocess.CalledProcessError as e:
-			err_txt = 'Git Error for repo {}/{}/{}: {}'.format(source,owner,name,e)
+			err_txt = 'Git Error (fetch) for repo {}/{}/{}: {}, {}'.format(source,owner,name,e,e.output)
 			self.logger.info(err_txt)
 			self.db.log_error(err_txt)
 			success = False

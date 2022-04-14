@@ -544,9 +544,10 @@ class Projects(UserGetter):
 				(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
-				AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
+				--AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
 				AND i.user_id=%(user_id)s
 				GROUP BY i.user_id,cc.repo_id
+				HAVING %(start_date)s <= MIN(cc.created_at) AND MIN(cc.created_at) < %(end_date)s
 				) AS c
 				GROUP BY time_stamp
 				''',{'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
@@ -556,9 +557,10 @@ class Projects(UserGetter):
 				(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
-				AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
+				--AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
 				AND i.user_id=:user_id
 				GROUP BY i.user_id,cc.repo_id
+				HAVING datetime(:start_date) <= MIN(cc.created_at) AND MIN(cc.created_at) < datetime(:end_date)
 				) AS c
 				GROUP BY time_stamp
 				''',{'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
@@ -572,22 +574,26 @@ class Projects(UserGetter):
 		if db.db_type == 'postgres':
 			db.cursor.execute('''
 				SELECT COUNT(*),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM
-				(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
+				(SELECT MIN(cc.created_at) AS created_at,cc.repo_id--,i.user_id
+				FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
-				AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
-				GROUP BY i.user_id,cc.repo_id
+				--AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
+				GROUP BY cc.repo_id--,i.user_id
+				HAVING %(start_date)s <= MIN(cc.created_at) AND MIN(cc.created_at) < %(end_date)s
 				) AS c
 				GROUP BY time_stamp
 				''',{'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
 				SELECT COUNT(*),date(datetime(created_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp FROM
-				(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
+				(SELECT MIN(cc.created_at) AS created_at,cc.repo_id--,i.user_id
+				FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
-				AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
-				GROUP BY i.user_id,cc.repo_id
+				--AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
+				GROUP BY cc.repo_id--,i.user_id
+				HAVING datetime(:start_date) <= MIN(cc.created_at) AND MIN(cc.created_at) < datetime(:end_date)
 				) AS c
 				GROUP BY time_stamp
 				''',{'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
@@ -604,8 +610,9 @@ class Projects(UserGetter):
 				(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
 				INNER JOIN identities i
 				ON cc.author_id=i.id
-				AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
+				--AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
 				GROUP BY i.user_id,cc.repo_id
+				HAVING %(start_date)s <= MIN(cc.created_at) AND MIN(cc.created_at) < %(end_date)s
 				) AS c
 				GROUP BY user_id
 				''',{'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
@@ -615,8 +622,9 @@ class Projects(UserGetter):
 				(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
 				INNER JOIN identities i
 				ON cc.author_id=i.id
-				AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
+				--AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
 				GROUP BY i.user_id,cc.repo_id
+				HAVING datetime(:start_date) <= MIN(cc.created_at) AND MIN(cc.created_at) < datetime(:end_date)
 				) AS c
 				GROUP BY user_id
 				''',{'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
@@ -629,8 +637,9 @@ class Projects(UserGetter):
 				(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
-				AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
+				--AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
 				GROUP BY i.user_id,cc.repo_id
+				HAVING %(start_date)s <= MIN(cc.created_at) AND MIN(cc.created_at) < %(end_date)s
 				) AS c
 				GROUP BY time_stamp,user_id
 				''',{'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
@@ -640,8 +649,9 @@ class Projects(UserGetter):
 				(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
-				AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
+				--AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
 				GROUP BY i.user_id,cc.repo_id
+				HAVING datetime(:start_date) <= MIN(cc.created_at) AND MIN(cc.created_at) < datetime(:end_date)
 				) AS c
 				GROUP BY time_stamp,user_id
 				''',{'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
@@ -1155,6 +1165,8 @@ class CoWorkers(UserGetter):
 	Coworkers per time (when not cumulative; new coworkers)
 
 	When time_window needs to be used, the default value None is replaced by 'month'
+
+	Still experimental
 	'''
 	measure_name = 'coworkers'
 
@@ -1168,7 +1180,7 @@ class CoWorkers(UserGetter):
 				AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
 				AND i.user_id=%(user_id)s
 				INNER JOIN commits cccw
-				ON %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
+				ON %(start_date)s <= cccw.created_at AND cccw.created_at < %(end_date)s
 				AND cc.repo_id=cccw.repo_id
 				INNER JOIN identities icw
 				ON cccw.author_id=icw.id
@@ -1187,7 +1199,7 @@ class CoWorkers(UserGetter):
 				AND :start_date <= cc.created_at AND cc.created_at < :end_date
 				AND i.user_id=:user_id
 				INNER JOIN commits cccw
-				ON :start_date <= cc.created_at AND cc.created_at < :end_date
+				ON :start_date <= cccw.created_at AND cccw.created_at < :end_date
 				AND cc.repo_id=cccw.repo_id
 				INNER JOIN identities icw
 				ON cccw.author_id=icw.id
@@ -1212,7 +1224,7 @@ class CoWorkers(UserGetter):
 				ON i.id=cc.author_id
 				AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
 				INNER JOIN commits cccw
-				ON %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
+				ON %(start_date)s <= cccw.created_at AND cccw.created_at < %(end_date)s
 				AND cc.repo_id=cccw.repo_id
 				INNER JOIN identities icw
 				ON cccw.author_id=icw.id
@@ -1230,7 +1242,7 @@ class CoWorkers(UserGetter):
 				ON i.id=cc.author_id
 				AND :start_date <= cc.created_at AND cc.created_at < :end_date
 				INNER JOIN commits cccw
-				ON :start_date <= cc.created_at AND cc.created_at < :end_date
+				ON :start_date <= cccw.created_at AND cccw.created_at < :end_date
 				AND cc.repo_id=cccw.repo_id
 				INNER JOIN identities icw
 				ON cccw.author_id=icw.id
@@ -1255,7 +1267,7 @@ class CoWorkers(UserGetter):
 				ON i.id=cc.author_id
 				AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
 				INNER JOIN commits cccw
-				ON %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
+				ON %(start_date)s <= cccw.created_at AND cccw.created_at < %(end_date)s
 				AND cc.repo_id=cccw.repo_id
 				INNER JOIN identities icw
 				ON cccw.author_id=icw.id
@@ -1273,7 +1285,7 @@ class CoWorkers(UserGetter):
 				ON i.id=cc.author_id
 				AND :start_date <= cc.created_at AND cc.created_at < :end_date
 				INNER JOIN commits cccw
-				ON :start_date <= cc.created_at AND cc.created_at < :end_date
+				ON :start_date <= cccw.created_at AND cccw.created_at < :end_date
 				AND cc.repo_id=cccw.repo_id
 				INNER JOIN identities icw
 				ON cccw.author_id=icw.id
@@ -1294,7 +1306,7 @@ class CoWorkers(UserGetter):
 				ON i.id=cc.author_id
 				AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
 				INNER JOIN commits cccw
-				ON %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
+				ON %(start_date)s <= cccw.created_at AND cccw.created_at < %(end_date)s
 				AND cc.repo_id=cccw.repo_id
 				INNER JOIN identities icw
 				ON cccw.author_id=icw.id
@@ -1312,7 +1324,7 @@ class CoWorkers(UserGetter):
 				ON i.id=cc.author_id
 				AND :start_date <= cc.created_at AND cc.created_at < :end_date
 				INNER JOIN commits cccw
-				ON :start_date <= cc.created_at AND cc.created_at < :end_date
+				ON :start_date <= cccw.created_at AND cccw.created_at < :end_date
 				AND cc.repo_id=cccw.repo_id
 				INNER JOIN identities icw
 				ON cccw.author_id=icw.id
@@ -1335,6 +1347,8 @@ class ActiveCoWorkers(CoWorkers):
 	Active coworkers per time
 
 	When time_window needs to be used, the default value None is replaced by 'month'
+
+	Still experimental
 	'''
 	measure_name = 'active_coworkers'
 
@@ -1348,7 +1362,7 @@ class ActiveCoWorkers(CoWorkers):
 				AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
 				AND i.user_id=%(user_id)s
 				INNER JOIN commits cccw
-				ON %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
+				ON %(start_date)s <= cccw.created_at AND cccw.created_at < %(end_date)s
 				AND cc.repo_id=cccw.repo_id
 				INNER JOIN identities icw
 				ON cccw.author_id=icw.id
@@ -1367,7 +1381,7 @@ class ActiveCoWorkers(CoWorkers):
 				AND :start_date <= cc.created_at AND cc.created_at < :end_date
 				AND i.user_id=:user_id
 				INNER JOIN commits cccw
-				ON :start_date <= cc.created_at AND cc.created_at < :end_date
+				ON :start_date <= cccw.created_at AND cccw.created_at < :end_date
 				AND cc.repo_id=cccw.repo_id
 				INNER JOIN identities icw
 				ON cccw.author_id=icw.id
@@ -1392,7 +1406,7 @@ class ActiveCoWorkers(CoWorkers):
 				ON i.id=cc.author_id
 				AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
 				INNER JOIN commits cccw
-				ON %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
+				ON %(start_date)s <= cccw.created_at AND cccw.created_at < %(end_date)s
 				AND cc.repo_id=cccw.repo_id
 				INNER JOIN identities icw
 				ON cccw.author_id=icw.id
@@ -1410,7 +1424,7 @@ class ActiveCoWorkers(CoWorkers):
 				ON i.id=cc.author_id
 				AND :start_date <= cc.created_at AND cc.created_at < :end_date
 				INNER JOIN commits cccw
-				ON :start_date <= cc.created_at AND cc.created_at < :end_date
+				ON :start_date <= cccw.created_at AND cccw.created_at < :end_date
 				AND cc.repo_id=cccw.repo_id
 				INNER JOIN identities icw
 				ON cccw.author_id=icw.id
@@ -1435,7 +1449,7 @@ class ActiveCoWorkers(CoWorkers):
 				ON i.id=cc.author_id
 				AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
 				INNER JOIN commits cccw
-				ON %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
+				ON %(start_date)s <= cccw.created_at AND cccw.created_at < %(end_date)s
 				AND cc.repo_id=cccw.repo_id
 				INNER JOIN identities icw
 				ON cccw.author_id=icw.id
@@ -1453,7 +1467,7 @@ class ActiveCoWorkers(CoWorkers):
 				ON i.id=cc.author_id
 				AND :start_date <= cc.created_at AND cc.created_at < :end_date
 				INNER JOIN commits cccw
-				ON :start_date <= cc.created_at AND cc.created_at < :end_date
+				ON :start_date <= cccw.created_at AND cccw.created_at < :end_date
 				AND cc.repo_id=cccw.repo_id
 				INNER JOIN identities icw
 				ON cccw.author_id=icw.id

@@ -126,7 +126,7 @@ def test_dump_nopsql(testdb):
 @pytest.mark.timeout(30)
 def test_dump_error(testdb):
 	try:
-		exports.dump_pg_csv(db=testdb,output_folder=os.path.join(os.path.dirname(__file__),'dump_pg'),force=False)
+		exports.dump_pg_csv(db=testdb,output_folder=os.path.join(os.path.dirname(__file__),'dump_pg'),force=False,quiet_error=False)
 	except errors.RepoToolsDumpSQLiteError:
 		if testdb.db_type == 'sqlite':
 			return
