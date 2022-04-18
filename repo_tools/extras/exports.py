@@ -176,7 +176,10 @@ destination is not empty but has no _dbinfo table'''.format(orig_db=orig_db.db_n
 			tables_info_dest = get_tables_info(db=dest_db)
 			if dest_db.db_type == 'postgres':
 				dest_db.cursor.execute(disable_triggers_cmd(db=dest_db,tables_info=tables_info_dest))
-				dest_db.cursor.execute('''SET SESSION idle_in_transaction_session_timeout = 0;''')
+				if dest_db.connection.server_version >= 90600:
+					dest_db.cursor.execute('''SET SESSION idle_in_transaction_session_timeout = 0;''')
+				else:
+					dest_db.logger.warning('You may experience failure of export due to parameter idle_in_transaction_session_timeout not existing in PostgreSQL<9.6')
 			try:
 				for t,columns in tables_info.items():
 					if t in tables_info_dest.keys():
@@ -411,3 +414,77 @@ COMMIT;
 	
 	db.logger.info('Dumped DB to folder')
 
+
+
+def export_filters(db,folder=None):
+	if folder is None:
+		folder = db.data_folder
+
+	if not os.path.exists(folder):
+		os.makedirs(folder)
+
+	# packages
+	db.cursor.execute('''
+		SELECT s.name,p.name FROM filtered_deps_package fdp
+		INNER JOIN packages p
+		ON p.id=fdp.package_id
+		INNER JOIN sources s
+		ON s.id=p.source_id
+		;''')
+
+	with open(os.path.join(folder,'filtered_packages.csv'),'w') as f:
+		f.write('source,package\n')
+		for s,p in db.cursor.fetchall():
+			f.write('"{}","{}"\n'.format(s,p))
+
+	# repos
+	db.cursor.execute('''
+		SELECT s.name,r.owner,r.name FROM filtered_deps_repo fdr
+		INNER JOIN repositories r
+		ON r.id=fdr.repo_id
+		INNER JOIN sources s
+		ON s.id=r.source
+		;''')
+
+	with open(os.path.join(folder,'filtered_repos.csv'),'w') as f:
+		f.write('source,repo\n')
+		for s,o,n in db.cursor.fetchall():
+			f.write('"{}","{}/{}"\n'.format(s,o,n))
+
+	# repo_edges
+	db.cursor.execute('''
+		SELECT ss.name,rs.owner,rs.name,sd.name,rd.owner,rd.name FROM filtered_deps_repoedges fdre
+		INNER JOIN repositories rs
+		ON rs.id=fdre.repo_source_id 
+		INNER JOIN sources ss
+		ON ss.id=rs.source
+		INNER JOIN repositories rd
+		ON rd.id=fdre.repo_dest_id 
+		INNER JOIN sources sd
+		ON sd.id=rd.source
+		;''')
+
+	with open(os.path.join(folder,'filtered_repoedges.csv'),'w') as f:
+		f.write('source,repo,source,repo\n')
+		for s,o,n,s2,o2,n2 in db.cursor.fetchall():
+			f.write('"{}","{}/{}","{}","{}/{}"\n'.format(s,o,n,s2,o2,n2))
+
+
+def export_bots(db,folder=None):
+	if folder is None:
+		folder = db.data_folder
+
+	if not os.path.exists(folder):
+		os.makedirs(folder)
+
+	db.cursor.execute('''
+		SELECT it.name,i.identity FROM identities i
+		INNER JOIN identity_types it
+		ON it.id=i.identity_type_id
+		AND i.is_bot
+		;''')
+
+	with open(os.path.join(folder,'bots.csv'),'w') as f:
+		f.write('identity_type,identity\n')
+		for s,p in db.cursor.fetchall():
+			f.write('"{}","{}"\n'.format(s,p))

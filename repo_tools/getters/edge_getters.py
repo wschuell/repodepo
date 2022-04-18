@@ -415,9 +415,9 @@ class RepoToRepoDeps(Getter):
 						AND p_do.repo_id != p.repo_id
 						AND (NOT %(filter_deps)s OR pv.package_id NOT IN (SELECT package_id FROM filtered_deps_package))
 						AND (NOT %(filter_deps)s OR p_do.repo_id NOT IN (SELECT repo_id FROM filtered_deps_repo))
-						-- AND pv.package_id NOT IN (17783,7853,13940,26887,17919,40409,24306,11011,27829,12177,
-						--	29576,16947,19570,3526,3807,12145,19400,31630,31059,33308,31275,29422,45659,20043,20283,41173)
-						-- AND p_do.repo_id NOT IN (27699)
+						LEFT OUTER JOIN filtered_deps_packageedges fdpe
+						ON (NOT %(filter_deps)s OR (pv.package_id=fdpe.package_source_id AND p_do.id=fdpe.package_des_id))
+						WHERE fdpe.package_id IS NULL
 					) AS dep_q
 				INNER JOIN (
 					SELECT DISTINCT FIRST_VALUE(id) OVER (PARTITION BY package_id ORDER BY created_at DESC,version_str DESC) AS last_v_id
@@ -465,6 +465,9 @@ class RepoToRepoDeps(Getter):
 						AND p_do.repo_id != p.repo_id
 						AND (NOT :filter_deps OR pv.package_id NOT IN (SELECT package_id FROM filtered_deps_package))
 						AND (NOT :filter_deps OR p_do.repo_id NOT IN (SELECT repo_id FROM filtered_deps_repo))
+						LEFT OUTER JOIN filtered_deps_packageedges fdpe
+						ON (NOT :filter_deps OR (pv.package_id=fdpe.package_source_id AND p_do.id=fdpe.package_des_id))
+						WHERE fdpe.package_id IS NULL
 					) AS dep_q
 				INNER JOIN (
 					SELECT DISTINCT FIRST_VALUE(id) OVER (PARTITION BY package_id ORDER BY created_at DESC,version_str DESC) AS last_v_id

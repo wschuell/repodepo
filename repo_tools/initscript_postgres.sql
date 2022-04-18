@@ -350,3 +350,13 @@
 					created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 					PRIMARY KEY(repo_source_id,repo_dest_id)
 					);
+				CREATE INDEX IF NOT EXISTS reverse_fdre ON filtered_deps_repoedges(repo_dest_id,repo_source_id);
+
+				CREATE TABLE IF NOT EXISTS filtered_deps_packageedges(
+					package_source_id BIGINT REFERENCES packages(id) ON DELETE CASCADE,
+					package_dest_id BIGINT REFERENCES packages(id) ON DELETE CASCADE,
+					reason TEXT,
+					created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+					PRIMARY KEY(package_source_id,package_dest_id)
+					);
+				CREATE INDEX IF NOT EXISTS reverse_fdpe ON filtered_deps_packageedges(package_dest_id,package_source_id);

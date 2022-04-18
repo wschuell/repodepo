@@ -180,3 +180,15 @@ def test_clean_table(dest_db_anon):
 @pytest.mark.timeout(20)
 def test_clean_attr(dest_db_anon):
 	exports.clean_attr(db=dest_db_anon,table='stars',attr='inserted_at')
+
+@pytest.mark.timeout(20)
+def test_stats(dest_db_anon):
+	stats.GlobalStats(db=dest_db_anon).get_result()
+
+@pytest.mark.timeout(20)
+def test_export_filters(dest_db_anon):
+	exports.export_filters(db=dest_db_anon)
+
+@pytest.mark.timeout(20)
+def test_export_bots(dest_db_anon):
+	exports.export_bots(db=dest_db_anon)

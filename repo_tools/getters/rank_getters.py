@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 class RepoRankGetter(Getter):
+	values_dtype = np.float64
 
 	def query(self):
 		return '''SELECT id AS repo_id,
@@ -35,7 +36,7 @@ class RepoRankGetter(Getter):
 		db.cursor.execute(self.query(),self.query_attributes())
 		parsed_results = self.parse_results(query_result=db.cursor.fetchall())
 		ans_direct = np.zeros(shape=(r_max,),dtype=np.int64)
-		ans_values = np.zeros(shape=(r_max,),dtype=np.float64)
+		ans_values = np.zeros(shape=(r_max,),dtype=self.values_dtype)
 		ans_indirect = {}
 		for r_id,rk,val in parsed_results:
 			ans_indirect[r_id] = rk
@@ -52,6 +53,29 @@ class RepoRankGetter(Getter):
 		for i,v in enumerate(prev_values):
 			reord_values[orig_indirect[prev_direct[i]]] = v
 		return orig_direct,orig_indirect,reord_values
+
+class RepoRankNameGetter(RepoRankGetter):
+	values_dtype = np.object_
+
+	def query(self):
+		if self.db.db_type == 'postgres':
+			return '''SELECT rr.id AS repo_id,
+					RANK() OVER
+						(ORDER BY rr.id) AS repo_rank,
+					CONCAT(s.name,'/',rr.owner,'/',rr.name) AS value
+					FROM repositories rr
+					INNER JOIN sources s
+					ON s.id=rr.source
+			;'''
+		else:			
+			return '''SELECT rr.id AS repo_id,
+					RANK() OVER
+						(ORDER BY rr.id) AS repo_rank,
+					s.name || '/' || rr.owner || '/' || rr.name AS value
+					FROM repositories rr
+					INNER JOIN sources s
+					ON s.id=rr.source
+			;'''
 
 class UserRankGetter(RepoRankGetter):
 	def __init__(self,no_bots=False,**kwargs):

@@ -19,15 +19,24 @@ class PackagesDepsFilter(fillers.Filler):
 	fills from a string list
 	'''
 	default_source = 'crates'
-	def __init__(self,input_list=None,input_file=None,reason='filter from list',source=None,**kwargs):
+	def __init__(self,input_list=None,input_file=None,reason='filter from list',source=None,header=True,**kwargs):
+		fillers.Filler.__init__(self,**kwargs)
 		if source is None:
 			self.info_source = self.default_source
 		else:
 			self.info_source = source
-		if input_list is not None:
-			self.input_list = input_list
-		elif input_file is not None:
-			filepath = os.path.join(self.data_folder,self.bot_file)
+		self.header = header
+		self.reason = reason
+		self.input_list = input_list
+		self.input_file = input_file
+
+	def prepare(self):
+		fillers.Filler.prepare(self)
+
+		if self.input_list is not None:
+			self.input_list = self.input_list
+		elif self.input_file is not None:
+			filepath = os.path.join(self.data_folder,self.input_file)
 
 			with open(filepath,"rb") as f:
 				filehash = hashlib.sha256(f.read()).hexdigest()
@@ -35,28 +44,56 @@ class PackagesDepsFilter(fillers.Filler):
 				self.db.register_source(source=self.source)
 
 			with open(filepath,'r') as f:
-				self.input_list = f.read().split('\n')
+				reader = csv.reader(f)
+				if self.header:
+					next(reader)
+				self.input_list = list(reader)
 		else:
 			raise ValueError('input_list and input_file cannot both be None')
-		self.reason = reason
-		fillers.Filler.__init__(self,**kwargs)
+		self.input_list = [self.parse_element(e) for e in self.input_list]
 
 	def apply(self):
 		self.fill_filters()
 		self.db.connection.commit()
 
+	def parse_element(self,elt):
+		'''
+		output (source,packagename)
+		'''
+		if isinstance(elt,str):
+			elt = (elt,)
+		if len(elt) == 2:
+			return elt
+		elif len(elt) == 1:
+			if '/' in elt[0]:
+				return (elt[0].split('/')[0],'/'.join(elt[0].split('/')[1:]))
+			else:
+				return (self.info_source,elt[0])
+		else:
+			raise ValueError('{} not parsable'.format(elt))
+
 	def fill_filters(self):
 		if self.db.db_type == 'postgres':
 			extras.execute_batch(self.db.cursor,'''
 				INSERT INTO filtered_deps_package(package_id,reason)
-				VALUES((SELECT id FROM packages WHERE name=%(pname)s AND source=(SELECT id FROM sources WHERE name=%(psource)s)),%(reason)s)
+				--VALUES((SELECT id FROM packages WHERE name=%(pname)s AND source_id=(SELECT id FROM sources WHERE name=%(psource)s)),%(reason)s)
+				SELECT p.id,%(reason)s FROM packages p
+				INNER JOIN sources s
+				ON p.name=%(pname)s
+				AND s.id=p.source_id
+				AND s.name=%(psource)s
 				 ON CONFLICT DO NOTHING;
-				''',({'pname':pname,'reason':self.reason,'psource':self.info_source} for pname in self.input_list))
+				''',({'pname':pname,'reason':self.reason,'psource':s} for s,pname in self.input_list))
 		else:
 			self.db.cursor.executemany('''
 				INSERT OR IGNORE INTO filtered_deps_package(package_id,reason)
-				VALUES((SELECT id FROM packages WHERE name=:pname AND source=(SELECT id FROM sources WHERE name=:psource) ),:reason)
-				''',({'pname':pname,'reason':self.reason,'psource':self.info_source} for pname in self.input_list))
+				--VALUES((SELECT id FROM packages WHERE name=:pname AND source_id=(SELECT id FROM sources WHERE name=:psource) ),:reason)
+				SELECT p.id,:reason FROM packages p
+				INNER JOIN sources s
+				ON p.name=:pname
+				AND p.source_id=s.id
+				AND s.name=:psource
+				''',({'pname':pname,'reason':self.reason,'psource':s} for s,pname in self.input_list))
 
 class RepoDepsFilter(PackagesDepsFilter):
 
@@ -65,14 +102,48 @@ class RepoDepsFilter(PackagesDepsFilter):
 		if self.db.db_type == 'postgres':
 			extras.execute_batch(self.db.cursor,'''
 				INSERT INTO filtered_deps_repo(repo_id,reason)
-				VALUES((SELECT id FROM repositories WHERE name=%(rname)s AND owner=%(rowner)s AND source=(SELECT id FROM sources WHERE name=%(psource)s)),%(reason)s)
+				--VALUES((SELECT id FROM repositories WHERE name=%(rname)s AND owner=%(rowner)s AND source=(SELECT id FROM sources WHERE name=%(psource)s)),%(reason)s)
+				SELECT r.id,%(reason)s FROM repositories r
+				INNER JOIN sources s
+				ON r.name=%(rname)s
+				AND r.owner=%(rowner)s
+				AND r.source=s.id
+				AND s.name=%(psource)s
 				 ON CONFLICT DO NOTHING;
-				 ''',({'rname':rname,'rowner':rowner,'reason':self.reason,'psource':self.info_source} for rowner,rname in [i.split('/') for i in self.input_list]))
+				 ''',({'rname':rname,'rowner':rowner,'reason':self.reason,'psource':s} for s,rowner,rname in [(s,i.split('/')[0],i.split('/')[1]) for s,i in self.input_list]))
 		else:
 			self.db.cursor.executemany('''
 				INSERT OR IGNORE INTO filtered_deps_repo(repo_id,reason)
-				VALUES((SELECT id FROM repositories WHERE name=:rname AND owner=:rowner AND source=(SELECT id FROM sources WHERE name=:psource) ),:reason)
-				''',({'rname':rname,'rowner':rowner,'reason':self.reason,'psource':self.info_source} for rowner,rname in [i.split('/') for i in self.input_list]))
+				--VALUES((SELECT id FROM repositories WHERE name=:rname AND owner=:rowner AND source=(SELECT id FROM sources WHERE name=:psource) ),:reason)
+				SELECT r.id,:reason FROM repositories r
+				INNER JOIN sources s
+				ON r.name=:rname
+				AND r.owner=:rowner
+				AND r.source=s.id
+				AND s.name=:psource
+				''',({'rname':rname,'rowner':rowner,'reason':self.reason,'psource':s} for s,rowner,rname in [(s,i.split('/')[0],i.split('/')[1]) for s,i in self.input_list]))
+
+	def parse_element(self,elt):
+		'''
+		output (sourcename,owner/reponame)
+		'''
+		if isinstance(elt,str):
+			elt = (elt,)
+		if len(elt) == 2:
+			if '/' not in elt[1]:
+				return (self.info_source,'/'.join(elt))
+			else:
+				# return (elt[0],elt[1].split('/')[0],'/'.join(elt[1].split('/')[1:]))
+				return elt
+		elif len(elt) == 3:
+			return (elt[0],'/'.join([elt[1:]]))
+		elif len(elt) == 1:
+			if len(elt[0].split('/')) == 3:
+				return (elt[0].split('/')[0],'/'.join(elt[0].split('/')[1:]))
+			elif len(elt[0].split('/')) == 2:
+				return (self.info_source,elt[0])
+
+		raise ValueError('{} not parsable'.format(elt))
 
 
 class RepoEdgesDepsFilter(PackagesDepsFilter):
@@ -82,30 +153,73 @@ class RepoEdgesDepsFilter(PackagesDepsFilter):
 		if self.db.db_type == 'postgres':
 			extras.execute_batch(self.db.cursor,'''
 				INSERT INTO filtered_deps_repoedges(repo_source_id,repo_dest_id,reason)
-				VALUES((SELECT id FROM repositories WHERE name=%(rname1)s AND owner=%(rowner1)s
-					AND source=(SELECT id FROM sources WHERE name=%(psource1)s)),
-				(SELECT id FROM repositories WHERE name=%(rname2)s AND owner=%(rowner2)s
-					AND source=(SELECT id FROM sources WHERE name=%(psource2)s))
-				,%(reason)s) ON CONFLICT DO NOTHING;
-				''',({'rname1':rname1,'rowner1':rowner1,'rname2':rname2,'rowner2':rowner2,'reason':self.reason,'psource1':psource1,'psource2':psource2} for psource1,rowner1,rname1,psource2,rowner2,rname2 in [i.replace('/',',').split(',') for i in self.input_list]))
+					--VALUES((SELECT id FROM repositories WHERE name=%(rname1)s AND owner=%(rowner1)s
+					--	AND source=(SELECT id FROM sources WHERE name=%(psource1)s)),
+					--(SELECT id FROM repositories WHERE name=%(rname2)s AND owner=%(rowner2)s
+					--	AND source=(SELECT id FROM sources WHERE name=%(psource2)s))
+					--,%(reason)s)
+				SELECT rs.id,rd.id,%(reason)s
+				FROM repositories rs
+				INNER JOIN sources ss
+				ON rs.name=%(rname1)s
+				AND rs.owner=%(rowner1)s
+				AND ss.id=rs.source
+				AND ss.name=%(psource1)s
+				INNER JOIN repositories rd
+				ON rd.name=%(rname2)s
+				AND rd.owner=%(rowner2)s
+				INNER JOIN sources sd
+				ON sd.id=rd.source
+				AND sd.name=%(psource2)s
+				ON CONFLICT DO NOTHING;
+				''',({'rname1':rname1,'rowner1':rowner1,'rname2':rname2,'rowner2':rowner2,'reason':self.reason,'psource1':psource1,'psource2':psource2} for psource1,rowner1,rname1,psource2,rowner2,rname2 in [(s1,r1.split('/')[0],r1.split('/')[1],s2,r2.split('/')[0],r2.split('/')[1]) for s1,r1,s2,r2 in self.input_list]))
 		else:
 			self.db.cursor.executemany('''
 				INSERT OR IGNORE INTO filtered_deps_repoedges(repo_source_id,repo_dest_id,reason)
-				VALUES((SELECT id FROM repositories WHERE name=:rname1 AND owner=:rowner1
-					AND source=(SELECT id FROM sources WHERE name=:psource1)),
-				(SELECT id FROM repositories WHERE name=:rname2 AND owner=:rowner2
-					AND source=(SELECT id FROM sources WHERE name=:psource2))
-				,:reason)
-				''',({'rname1':rname1,'rowner1':rowner1,'rname2':rname2,'rowner2':rowner2,'reason':self.reason,'psource1':psource1,'psource2':psource2} for psource1,rowner1,rname1,psource2,rowner2,rname2 in [i.replace('/',',').split(',') for i in self.input_list]))
+					--VALUES((SELECT id FROM repositories WHERE name=:rname1 AND owner=:rowner1
+					--	AND source=(SELECT id FROM sources WHERE name=:psource1)),
+					--(SELECT id FROM repositories WHERE name=:rname2 AND owner=:rowner2
+					--	AND source=(SELECT id FROM sources WHERE name=:psource2))
+					--,:reason)
+				SELECT rs.id,rd.id,:reason
+				FROM repositories rs
+				INNER JOIN sources ss
+				ON rs.name=:rname1
+				AND rs.owner=:rowner1
+				AND ss.id=rs.source
+				AND ss.name=:psource1
+				INNER JOIN repositories rd
+				ON rd.name=:rname2
+				AND rd.owner=:rowner2
+				INNER JOIN sources sd
+				ON sd.id=rd.source
+				AND sd.name=:psource2
+				''',({'rname1':rname1,'rowner1':rowner1,'rname2':rname2,'rowner2':rowner2,'reason':self.reason,'psource1':psource1,'psource2':psource2} for psource1,rowner1,rname1,psource2,rowner2,rname2 in [(s1,r1.split('/')[0],r1.split('/')[1],s2,r2.split('/')[0],r2.split('/')[1]) for s1,r1,s2,r2 in self.input_list]))
+
+	def parse_element(self,elt):
+		'''
+		output (sourcename,owner/reponame,s2,o2/rn2)
+		'''
+		if isinstance(elt,str):
+			elt = (elt,)
+		if len(elt) == 2:
+			return tuple(list(RepoDepsFilter.parse_element(self,elt[0]))+list(RepoDepsFilter.parse_element(self,elt[1])))
+		elif len(elt) == 4:
+			return tuple(list(RepoDepsFilter.parse_element(self,elt[:2]))+list(RepoDepsFilter.parse_element(self,elt[2:])))
+		elif len(elt) == 6:
+			return tuple(list(RepoDepsFilter.parse_element(self,elt[:3]))+list(RepoDepsFilter.parse_element(self,elt[3:])))
+		raise ValueError('{} not parsable'.format(elt))
+
 
 
 class AutoRepoEdges2Cycles(RepoEdgesDepsFilter):
 
 	default_source = 'GitHub'
 	def __init__(self,**kwargs):
-		RepoEdgesDepsFilter.__init__(self,input_list=[],reason='autoremove of 2-cycles in repo space base on earliest package creation date',**kwargs)
+		RepoEdgesDepsFilter.__init__(self,input_list=[],reason='autoremove of 2-cycles in repo space base on earliest repo or package creation date',**kwargs)
 
 	def prepare(self):
+		RepoEdgesDepsFilter.prepare(self)
 		self.get_input_list()
 
 	def get_input_list(self):
@@ -130,7 +244,35 @@ class AutoRepoEdges2Cycles(RepoEdgesDepsFilter):
 				INNER JOIN repositories rr2
 				ON rd1.r2 = rr2.id
 				INNER JOIN (SELECT p2.repo_id,MIN(p2.created_at) AS min_d FROM packages p2 GROUP BY repo_id) dt2
-				ON dt2.repo_id=rr2.id AND dt2.min_d >= dt1.min_d
+				ON dt2.repo_id=rr2.id AND COALESCE(rr2.created_at,dt2.min_d) >= COALESCE(rr1.created_at,dt1.min_d)
 			''')
 
-		self.input_list = [ '{}/{}/{},{}/{}/{}'.format(s1,r1o,r1n,s2,r2o,r2n) for (s1,r1o,r1n,s2,r2o,r2n) in self.db.cursor.fetchall()]
+		self.input_list = [ (s1,'/'.join([r1o,r1n]),s2,'/'.join([r2o,r2n])) for (s1,r1o,r1n,s2,r2o,r2n) in self.db.cursor.fetchall()]
+		self.input_list = [self.parse_element(e) for e in self.input_list]
+
+
+class FiltersFolderFiller(fillers.Filler):
+	'''
+	meta filler
+	'''
+	def __init__(self,input_folder='filters',
+			repoedges_file='filtered_repoedges.csv',
+			repos_file='filtered_repos.csv',
+			packages_file='filtered_packages.csv',
+			**kwargs):
+		self.input_folder = input_folder
+		self.packages_file = packages_file
+		self.repos_file = repos_file
+		self.repoedges_file = repoedges_file
+		fillers.Filler.__init__(self,**kwargs)
+
+	def prepare(self):
+		if self.data_folder is None:
+			self.data_folder = self.db.data_folder
+
+		folder = os.path.join(self.data_folder,self.input_folder)
+
+		self.db.add_filler(PackagesDepsFilter(input_file=os.path.join(folder,self.packages_file)))
+		self.db.add_filler(RepoDepsFilter(input_file=os.path.join(folder,self.repos_file)))
+		self.db.add_filler(RepoEdgesDepsFilter(input_file=os.path.join(folder,self.repoedges_file)))
+

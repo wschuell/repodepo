@@ -16,6 +16,8 @@ from . import check_sqlname_safe
 from . import errors
 
 def modify(old_id,salt):
+	if old_id is None:
+		return None
 	parts = old_id.split('@')
 	prefix = parts[0]
 	suffix = '@'.join(parts[1:])

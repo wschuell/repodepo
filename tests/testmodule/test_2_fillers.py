@@ -1,6 +1,6 @@
 
 import repo_tools
-from repo_tools.fillers import generic,commit_info,github_rest,meta_fillers,bot_fillers
+from repo_tools.fillers import generic,commit_info,github_rest,meta_fillers,bot_fillers,deps_filters_fillers
 import pytest
 import datetime
 import time
@@ -186,7 +186,9 @@ def test_reset_merged_identities(testdb):
 	testdb.fill_db()
 	assert testdb.count_users() == count
 
-# @pytest.mark.timeout(100)
-# def test_metafiller(testdb):
-# 	testdb.add_filler(meta_fillers.DummyMetaFiller(fail_on_wait=True))
-# 	testdb.fill_db()
+@pytest.mark.timeout(100)
+def test_filters(testdb):
+	testdb.add_filler(deps_filters_fillers.AutoRepoEdges2Cycles())
+	testdb.add_filler(deps_filters_fillers.PackagesDepsFilter(input_list=['crates/blah',('crites','bloh'),'blyh']))
+	testdb.add_filler(deps_filters_fillers.RepoDepsFilter(input_list=['GitHub/blah/blih',('GitHub','bloh','bluh'),'blyh/bluh']))
+	testdb.add_filler(deps_filters_fillers.RepoEdgesDepsFilter(input_list=[('GitHub/blah/blih','Gitlab/blih/blah'),('GitHub','bloh','bluh','GitHub','blyh','bloh')]))
