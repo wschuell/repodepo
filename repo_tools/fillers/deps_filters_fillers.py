@@ -212,6 +212,61 @@ class RepoEdgesDepsFilter(PackagesDepsFilter):
 
 
 
+class AutoPackageEdges2Cycles(PackageEdgesDepsFilter):
+
+	default_source = 'GitHub'
+	def __init__(self,**kwargs):
+		PackageEdgesDepsFilter.__init__(self,input_list=[],reason='autoremove of 2-cycles in package space base on earliest package creation date',**kwargs)
+
+	def prepare(self):
+		PackageEdgesDepsFilter.prepare(self)
+		self.get_input_list()
+
+	def get_input_list(self):
+		self.db.cursor.execute('''
+			WITH repodeps AS (SELECT DISTINCT p1.repo_id AS r1,p2.repo_id AS r2
+						FROM package_dependencies pd
+						INNER JOIN package_versions pv
+						ON pd.depending_version =pv.id
+						INNER JOIN packages p1
+						ON p1.id=pd.depending_on_package
+						INNER JOIN packages p2
+						ON p2.id=pv.package_id
+						AND p1.repo_id!=p2.repo_id)
+			SELECT (SELECT name FROM sources WHERE id=rr1.source),rr1.OWNER,rr1.name,(SELECT name FROM sources WHERE id=rr2.source),rr2.OWNER,rr2.name --, rd1.r1,rd1.r2,dt1.min_d,dt2.min_d
+				FROM repodeps rd1
+				INNER JOIN repodeps rd2
+				ON rd1.r1=rd2.r2 AND rd1.r2=rd2.r1
+				INNER JOIN repositories rr1
+				ON rd1.r1 = rr1.id
+				INNER JOIN (SELECT p1.repo_id,MIN(p1.created_at) AS min_d FROM packages p1 GROUP BY repo_id) dt1
+				ON dt1.repo_id=rr1.id
+				INNER JOIN repositories rr2
+				ON rd1.r2 = rr2.id
+				INNER JOIN (SELECT p2.repo_id,MIN(p2.created_at) AS min_d FROM packages p2 GROUP BY repo_id) dt2
+				ON dt2.repo_id=rr2.id AND COALESCE(rr2.created_at,dt2.min_d) >= COALESCE(rr1.created_at,dt1.min_d)
+			''')
+		self.db.cursor.execute('''
+			WITH pdeps AS (SELECT DISTINCT pv.package_id AS p1,pd.depending_on_package AS p2
+						FROM package_dependencies pd
+						INNER JOIN package_versions pv
+						ON pd.depending_version =pv.id
+						AND pv.package_id!=pd.depending_on_package)
+			SELECT (SELECT name FROM sources WHERE id=pp1.source_id),pp1.name,(SELECT name FROM sources WHERE id=pp2.source_id),pp2.name 
+				FROM pdeps pd1
+				INNER JOIN pdeps pd2
+				ON pd1.p1=pd2.p2 AND pd1.p2=pd2.p1
+				INNER JOIN packages pp1
+				ON rd1.p1 = pp1.id
+				INNER JOIN packages pp2
+				ON rd1.p2 = pp2.id
+				AND pp1.created_at >= pp2.created_at
+			''')
+
+		self.input_list = list(self.db.cursor.fetchall())
+		self.input_list = [self.parse_element(e) for e in self.input_list]
+
+
 class AutoRepoEdges2Cycles(RepoEdgesDepsFilter):
 
 	default_source = 'GitHub'
@@ -257,6 +312,7 @@ class FiltersFolderFiller(fillers.Filler):
 	'''
 	def __init__(self,input_folder='filters',
 			repoedges_file='filtered_repoedges.csv',
+			packageedges_file='filtered_packageedges.csv',
 			repos_file='filtered_repos.csv',
 			packages_file='filtered_packages.csv',
 			**kwargs):
@@ -264,6 +320,7 @@ class FiltersFolderFiller(fillers.Filler):
 		self.packages_file = packages_file
 		self.repos_file = repos_file
 		self.repoedges_file = repoedges_file
+		self.packageedges_file = packageedges_file
 		fillers.Filler.__init__(self,**kwargs)
 
 	def prepare(self):
@@ -275,4 +332,5 @@ class FiltersFolderFiller(fillers.Filler):
 		self.db.add_filler(PackagesDepsFilter(input_file=os.path.join(folder,self.packages_file)))
 		self.db.add_filler(RepoDepsFilter(input_file=os.path.join(folder,self.repos_file)))
 		self.db.add_filler(RepoEdgesDepsFilter(input_file=os.path.join(folder,self.repoedges_file)))
+		self.db.add_filler(PackageEdgesDepsFilter(input_file=os.path.join(folder,self.packageedges_file)))
 

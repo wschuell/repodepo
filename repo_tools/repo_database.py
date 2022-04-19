@@ -273,6 +273,7 @@ class Database(object):
 			self.cursor.execute('DROP TABLE IF EXISTS filtered_deps_package;')
 			self.cursor.execute('DROP TABLE IF EXISTS filtered_deps_repo;')
 			self.cursor.execute('DROP TABLE IF EXISTS filtered_deps_repoedges;')
+			self.cursor.execute('DROP TABLE IF EXISTS filtered_deps_packageedges;')
 			self.cursor.execute('DROP TABLE IF EXISTS packages;')
 			self.cursor.execute('DROP TABLE IF EXISTS followers;')
 			self.cursor.execute('DROP TABLE IF EXISTS stars;')
