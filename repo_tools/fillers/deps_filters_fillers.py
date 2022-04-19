@@ -14,7 +14,7 @@ from repo_tools import fillers
 import repo_tools as rp
 
 
-class PackagesDepsFilter(fillers.Filler):
+class PackageDepsFilter(fillers.Filler):
 	'''
 	fills from a string list
 	'''
@@ -95,7 +95,7 @@ class PackagesDepsFilter(fillers.Filler):
 				AND s.name=:psource
 				''',({'pname':pname,'reason':self.reason,'psource':s} for s,pname in self.input_list))
 
-class RepoDepsFilter(PackagesDepsFilter):
+class RepoDepsFilter(PackageDepsFilter):
 
 	default_source = 'GitHub'
 	def fill_filters(self):
@@ -146,7 +146,7 @@ class RepoDepsFilter(PackagesDepsFilter):
 		raise ValueError('{} not parsable'.format(elt))
 
 
-class PackageEdgesDepsFilter(PackagesDepsFilter):
+class PackageEdgesDepsFilter(PackageDepsFilter):
 
 	default_source = 'crates'
 	def fill_filters(self):
@@ -196,7 +196,7 @@ class PackageEdgesDepsFilter(PackagesDepsFilter):
 		raise ValueError('{} not parsable'.format(elt))
 
 
-class RepoEdgesDepsFilter(PackagesDepsFilter):
+class RepoEdgesDepsFilter(PackageDepsFilter):
 
 	default_source = 'GitHub'
 	def fill_filters(self):
@@ -356,7 +356,7 @@ class FiltersFolderFiller(fillers.Filler):
 
 		folder = os.path.join(self.data_folder,self.input_folder)
 
-		self.db.add_filler(PackagesDepsFilter(input_file=os.path.join(folder,self.packages_file)))
+		self.db.add_filler(PackageDepsFilter(input_file=os.path.join(folder,self.packages_file)))
 		self.db.add_filler(RepoDepsFilter(input_file=os.path.join(folder,self.repos_file)))
 		self.db.add_filler(RepoEdgesDepsFilter(input_file=os.path.join(folder,self.repoedges_file)))
 		self.db.add_filler(PackageEdgesDepsFilter(input_file=os.path.join(folder,self.packageedges_file)))
