@@ -146,6 +146,56 @@ class RepoDepsFilter(PackagesDepsFilter):
 		raise ValueError('{} not parsable'.format(elt))
 
 
+class PackageEdgesDepsFilter(PackagesDepsFilter):
+
+	default_source = 'crates'
+	def fill_filters(self):
+		if self.db.db_type == 'postgres':
+			extras.execute_batch(self.db.cursor,'''
+				INSERT INTO filtered_deps_packageedges(package_source_id,package_dest_id,reason)
+				SELECT ps.id,pd.id,%(reason)s
+				FROM packages ps
+				INNER JOIN sources ss
+				ON ps.name=%(pname1)s
+				AND ss.id=ps.source_id
+				AND ss.name=%(psource1)s
+				INNER JOIN packages pd
+				ON pd.name=%(pname2)s
+				INNER JOIN sources sd
+				ON sd.id=pd.source_id
+				AND sd.name=%(psource2)s
+				ON CONFLICT DO NOTHING;
+				''',({'pname1':pname1,'pname2':pname2,'reason':self.reason,'psource1':psource1,'psource2':psource2} for psource1,pname1,psource2,pname2 in self.input_list))
+		else:
+			self.db.cursor.executemany('''
+				INSERT INTO filtered_deps_packageedges(package_source_id,package_dest_id,reason)
+				SELECT ps.id,pd.id,%(reason)s
+				FROM packages ps
+				INNER JOIN sources ss
+				ON ps.name=%(pname1)s
+				AND ss.id=ps.source_id
+				AND ss.name=%(psource1)s
+				INNER JOIN packages pd
+				ON pd.name=%(pname2)s
+				INNER JOIN sources sd
+				ON sd.id=pd.source_id
+				AND sd.name=%(psource2)s
+				ON CONFLICT DO NOTHING;
+				''',({'pname1':pname1,'pname2':pname2,'reason':self.reason,'psource1':psource1,'psource2':psource2} for psource1,pname1,psource2,pname2 in self.input_list))
+
+	def parse_element(self,elt):
+		'''
+		output (sourcename,pname_source,s2,pname_dest)
+		'''
+		if isinstance(elt,str):
+			elt = (elt,)
+		if len(elt) == 2:
+			return tuple(list(PackageDepsFilter.parse_element(self,elt[0]))+list(PackageDepsFilter.parse_element(self,elt[1])))
+		elif len(elt) == 4:
+			return tuple(list(PackageDepsFilter.parse_element(self,elt[:2]))+list(PackageDepsFilter.parse_element(self,elt[2:])))
+		raise ValueError('{} not parsable'.format(elt))
+
+
 class RepoEdgesDepsFilter(PackagesDepsFilter):
 
 	default_source = 'GitHub'
@@ -223,29 +273,6 @@ class AutoPackageEdges2Cycles(PackageEdgesDepsFilter):
 		self.get_input_list()
 
 	def get_input_list(self):
-		self.db.cursor.execute('''
-			WITH repodeps AS (SELECT DISTINCT p1.repo_id AS r1,p2.repo_id AS r2
-						FROM package_dependencies pd
-						INNER JOIN package_versions pv
-						ON pd.depending_version =pv.id
-						INNER JOIN packages p1
-						ON p1.id=pd.depending_on_package
-						INNER JOIN packages p2
-						ON p2.id=pv.package_id
-						AND p1.repo_id!=p2.repo_id)
-			SELECT (SELECT name FROM sources WHERE id=rr1.source),rr1.OWNER,rr1.name,(SELECT name FROM sources WHERE id=rr2.source),rr2.OWNER,rr2.name --, rd1.r1,rd1.r2,dt1.min_d,dt2.min_d
-				FROM repodeps rd1
-				INNER JOIN repodeps rd2
-				ON rd1.r1=rd2.r2 AND rd1.r2=rd2.r1
-				INNER JOIN repositories rr1
-				ON rd1.r1 = rr1.id
-				INNER JOIN (SELECT p1.repo_id,MIN(p1.created_at) AS min_d FROM packages p1 GROUP BY repo_id) dt1
-				ON dt1.repo_id=rr1.id
-				INNER JOIN repositories rr2
-				ON rd1.r2 = rr2.id
-				INNER JOIN (SELECT p2.repo_id,MIN(p2.created_at) AS min_d FROM packages p2 GROUP BY repo_id) dt2
-				ON dt2.repo_id=rr2.id AND COALESCE(rr2.created_at,dt2.min_d) >= COALESCE(rr1.created_at,dt1.min_d)
-			''')
 		self.db.cursor.execute('''
 			WITH pdeps AS (SELECT DISTINCT pv.package_id AS p1,pd.depending_on_package AS p2
 						FROM package_dependencies pd
