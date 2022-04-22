@@ -284,10 +284,10 @@ class AutoPackageEdges2Cycles(PackageEdgesDepsFilter):
 				INNER JOIN pdeps pd2
 				ON pd1.p1=pd2.p2 AND pd1.p2=pd2.p1
 				INNER JOIN packages pp1
-				ON rd1.p1 = pp1.id
+				ON pd1.p1 = pp1.id
 				INNER JOIN packages pp2
-				ON rd1.p2 = pp2.id
-				AND pp1.created_at >= pp2.created_at
+				ON pd1.p2 = pp2.id
+				AND pp1.created_at <= pp2.created_at
 			''')
 
 		self.input_list = list(self.db.cursor.fetchall())

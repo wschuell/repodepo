@@ -745,13 +745,30 @@ class DepsStats(DBStats):
 		results['packagespace_filtered']['nb_links_filtered'] = self.get_nb_links(space='p',filtered=True)
 		results['packagespace_filtered']['cycles'] = self.get_cycles(space='p',filtered=True,detailed=self.detailed,network=self.network_p_filtered)
 
-		# results['repospace'] = OrderedDict()
-		# results['repospace']['nb_links'] = self.get_nb_links(space='r',filtered=False)
-		# results['repospace']['cycles'] = self.get_cycles(space='r',filtered=False,detailed=self.detailed,network=self.network_r_timestamp)
+		results['packagespace_timestamp'] = OrderedDict()
+		results['packagespace_timestamp']['nb_links'] = self.get_nb_links(space='p',filtered=False)
+		results['packagespace_timestamp']['cycles'] = self.get_cycles(space='p',filtered=False,detailed=self.detailed,network=self.network_p_timestamp)
+
+		results['packagespace_timestamp_filtered'] = OrderedDict()
+		results['packagespace_timestamp_filtered']['nb_links_filtered'] = self.get_nb_links(space='p',filtered=True)
+		results['packagespace_timestamp_filtered']['cycles'] = self.get_cycles(space='p',filtered=True,detailed=self.detailed,network=self.network_p_filtered_timestamp)
+
+		results['repospace'] = OrderedDict()
+		results['repospace']['nb_links'] = self.get_nb_links(space='r',filtered=False)
+		results['repospace']['cycles'] = self.get_cycles(space='r',filtered=False,detailed=self.detailed,network=self.network_r)
 
 		results['repospace_filtered'] = OrderedDict()
 		results['repospace_filtered']['nb_links_filtered'] = self.get_nb_links(space='r',filtered=True)
-		results['repospace_filtered']['cycles'] = self.get_cycles(space='r',filtered=True,detailed=self.detailed,network=self.network_r_filtered_timestamp)
+		results['repospace_filtered']['cycles'] = self.get_cycles(space='r',filtered=True,detailed=self.detailed,network=self.network_r_filtered)
+
+
+		results['repospace_timestamp'] = OrderedDict()
+		results['repospace_timestamp']['nb_links'] = self.get_nb_links(space='r',filtered=False)
+		results['repospace_timestamp']['cycles'] = self.get_cycles(space='r',filtered=False,detailed=self.detailed,network=self.network_r_timestamp)
+
+		results['repospace_timestamp_filtered'] = OrderedDict()
+		results['repospace_timestamp_filtered']['nb_links_filtered'] = self.get_nb_links(space='r',filtered=True)
+		results['repospace_timestamp_filtered']['cycles'] = self.get_cycles(space='r',filtered=True,detailed=self.detailed,network=self.network_r_filtered_timestamp)
 
 
 		return results
@@ -766,10 +783,7 @@ class DepsStats(DBStats):
 			# 			AND pd.depending_on_package != pv.package_id
 			# 	;''')
 			self.db.cursor.execute('''
-				SELECT DISTINCT
-					do_package_id,package_id
-				FROM
-					(SELECT p.id AS package_id,p_do.id AS do_package_id,pv.id AS version_id
+				SELECT DISTINCT p.id AS package_id,p_do.id AS do_package_id
 						FROM package_dependencies pd
 						INNER JOIN package_versions pv
 						ON pd.depending_version =pv.id
@@ -781,21 +795,40 @@ class DepsStats(DBStats):
 						AND p_do.repo_id != p.repo_id
 						--AND (pv.package_id NOT IN (SELECT package_id FROM filtered_deps_package))
 						--AND (p_do.repo_id NOT IN (SELECT repo_id FROM filtered_deps_repo))
-					) AS dep_q
-				INNER JOIN (
-					SELECT DISTINCT FIRST_VALUE(id) OVER (PARTITION BY package_id ORDER BY created_at DESC,version_str DESC) AS last_v_id
-					FROM package_versions pv
-					-- WHERE pv.created_at <= :ref_time
-					) AS lastv_q
-				ON dep_q.version_id=lastv_q.last_v_id
+			
 				;''')
+
+			# self.db.cursor.execute('''
+			# 	SELECT DISTINCT
+			# 		do_package_id,package_id
+			# 	FROM
+			# 		(SELECT p.id AS package_id,p_do.id AS do_package_id,pv.id AS version_id
+			# 			FROM package_dependencies pd
+			# 			INNER JOIN package_versions pv
+			# 			ON pd.depending_version =pv.id
+			# 			-- AND pv.created_at <= ref_time
+			# 			INNER JOIN packages p
+			# 			ON pv.package_id=p.id AND p.repo_id IS NOT NULL
+			# 			INNER JOIN packages p_do
+			# 			ON pd.depending_on_package=p_do.id AND p_do.repo_id IS NOT NULL
+			# 			AND p_do.repo_id != p.repo_id
+			# 			--AND (pv.package_id NOT IN (SELECT package_id FROM filtered_deps_package))
+			# 			--AND (p_do.repo_id NOT IN (SELECT repo_id FROM filtered_deps_repo))
+			# 		) AS dep_q
+			# 	INNER JOIN (
+			# 		SELECT DISTINCT FIRST_VALUE(id) OVER (PARTITION BY package_id ORDER BY created_at DESC,version_str DESC) AS last_v_id
+			# 		FROM package_versions pv
+			# 		-- WHERE pv.created_at <= :ref_time
+			# 		) AS lastv_q
+			# 	ON dep_q.version_id=lastv_q.last_v_id
+			# 	;''')
 
 			self.network_p = nx.DiGraph()
 			self.network_p.add_edges_from(self.db.cursor.fetchall())
 
 		if not hasattr(self,'network_r'):
 			self.db.cursor.execute('''
-					SELECT DISTINCT p1.repo_id,p2.repo_id
+					SELECT DISTINCT p2.repo_id,p1.repo_id
 						FROM package_dependencies pd
 						INNER JOIN package_versions pv
 						ON pv.id=pd.depending_version
@@ -821,10 +854,7 @@ class DepsStats(DBStats):
 			# 	;''')
 
 			self.db.cursor.execute('''
-				SELECT DISTINCT
-					do_package_id,package_id
-				FROM
-					(SELECT p.id AS package_id,p_do.id AS do_package_id,pv.id AS version_id
+				SELECT DISTINCT p.id AS package_id,p_do.id AS do_package_id
 						FROM package_dependencies pd
 						INNER JOIN package_versions pv
 						ON pd.depending_version =pv.id
@@ -836,31 +866,61 @@ class DepsStats(DBStats):
 						AND p_do.repo_id != p.repo_id
 						AND (pv.package_id NOT IN (SELECT package_id FROM filtered_deps_package))
 						AND (p_do.repo_id NOT IN (SELECT repo_id FROM filtered_deps_repo))
-					) AS dep_q
-				INNER JOIN (
-					SELECT DISTINCT FIRST_VALUE(id) OVER (PARTITION BY package_id ORDER BY created_at DESC,version_str DESC) AS last_v_id
-					FROM package_versions pv
-					-- WHERE pv.created_at <= :ref_time
-					) AS lastv_q
-				ON dep_q.version_id=lastv_q.last_v_id
+						LEFT OUTER JOIN filtered_deps_packageedges fdpe
+						ON (pv.package_id=fdpe.package_source_id AND p_do.id=fdpe.package_dest_id)
+						LEFT OUTER JOIN filtered_deps_repoedges fdre
+						ON (p.repo_id=fdre.repo_source_id AND p_do.repo_id=fdre.repo_dest_id)
+						WHERE fdpe.package_dest_id IS NULL AND fdre.repo_dest_id IS NULL
 				;''')
+		# self.db.cursor.execute('''
+		# 		SELECT DISTINCT
+		# 			do_package_id,package_id
+		# 		FROM
+		# 			(SELECT p.id AS package_id,p_do.id AS do_package_id,pv.id AS version_id
+		# 				FROM package_dependencies pd
+		# 				INNER JOIN package_versions pv
+		# 				ON pd.depending_version =pv.id
+		# 				-- AND pv.created_at <= ref_time
+		# 				INNER JOIN packages p
+		# 				ON pv.package_id=p.id AND p.repo_id IS NOT NULL
+		# 				INNER JOIN packages p_do
+		# 				ON pd.depending_on_package=p_do.id AND p_do.repo_id IS NOT NULL
+		# 				AND p_do.repo_id != p.repo_id
+		# 				AND (pv.package_id NOT IN (SELECT package_id FROM filtered_deps_package))
+		# 				AND (p_do.repo_id NOT IN (SELECT repo_id FROM filtered_deps_repo))
+		# 				LEFT OUTER JOIN filtered_deps_packageedges fdpe
+		# 				ON (pv.package_id=fdpe.package_source_id AND p_do.id=fdpe.package_dest_id)
+		# 				LEFT OUTER JOIN filtered_deps_repoedges fdre
+		# 				ON (p.repo_id=fdre.repo_source_id AND p_do.repo_id=fdre.repo_dest_id)
+		# 				WHERE fdpe.package_dest_id IS NULL AND fdre.repo_dest_id IS NULL
+		# 			) AS dep_q
+		# 		INNER JOIN (
+		# 			SELECT DISTINCT FIRST_VALUE(id) OVER (PARTITION BY package_id ORDER BY created_at DESC,version_str DESC) AS last_v_id
+		# 			FROM package_versions pv
+		# 			-- WHERE pv.created_at <= :ref_time
+		# 			) AS lastv_q
+		# 		ON dep_q.version_id=lastv_q.last_v_id
+		# 		;''')
 
 			self.network_p_filtered = nx.DiGraph()
 			self.network_p_filtered.add_edges_from(self.db.cursor.fetchall())
 
 		if not hasattr(self,'network_r_filtered'):
 			self.db.cursor.execute('''
-					SELECT DISTINCT p1.repo_id AS repo_source_id,p2.repo_id AS repo_dest_id
+					SELECT DISTINCT p2.repo_id AS repo_source_id,p_do.repo_id AS repo_dest_id
 						FROM package_dependencies pd
 						INNER JOIN package_versions pv
 						ON pv.id=pd.depending_version
-						INNER JOIN packages p1
-						ON pd.depending_on_package=p1.id
+						INNER JOIN packages p_do
+						ON pd.depending_on_package=p_do.id
 						INNER JOIN packages p2
 						ON pv.package_id=p2.id
 						AND pv.package_id NOT IN (SELECT package_id FROM filtered_deps_package)
-						AND p1.repo_id NOT IN (SELECT repo_id FROM filtered_deps_repo)
-					AND p1.repo_id!=p2.repo_id
+						AND p_do.repo_id NOT IN (SELECT repo_id FROM filtered_deps_repo)
+						LEFT OUTER JOIN filtered_deps_packageedges fdpe
+						ON (pv.package_id=fdpe.package_source_id AND p_do.id=fdpe.package_dest_id)
+						WHERE fdpe.package_dest_id IS NULL
+					AND p_do.repo_id!=p2.repo_id
 					EXCEPT
 						SELECT repo_source_id,repo_dest_id FROM filtered_deps_repoedges
 
@@ -871,14 +931,80 @@ class DepsStats(DBStats):
 
 	def set_network_timestamp(self,timestamp=datetime.datetime.now()):
 		if not hasattr(self,'network_r_timestamp'):
-			mat = edge_getters.RepoToRepoDeps(db=self.db,ref_time=timestamp,filter_deps=False).get_result()
-			self.network_r_timestamp = nx.convert_matrix.from_scipy_sparse_matrix(mat,create_using=nx.DiGraph)
+			mat = edge_getters.RepoToRepoDeps(db=self.db,ref_time=timestamp,filter_deps=False).get_result(raw_result=True)
+			# self.network_r_timestamp = nx.convert_matrix.from_scipy_sparse_matrix(mat,create_using=nx.DiGraph)
+			self.network_r_timestamp = nx.DiGraph()
+			self.network_r_timestamp.add_edges_from( ((r['repo_id'],r['dep_id']) for r in mat) )
+		if not hasattr(self,'network_p_timestamp'):
 
+			self.db.cursor.execute('''
+				SELECT DISTINCT
+					package_id,do_package_id
+				FROM
+					(SELECT p.id AS package_id,p_do.id AS do_package_id,pv.id AS version_id
+						FROM package_dependencies pd
+						INNER JOIN package_versions pv
+						ON pd.depending_version =pv.id
+						-- AND pv.created_at <= ref_time
+						INNER JOIN packages p
+						ON pv.package_id=p.id AND p.repo_id IS NOT NULL
+						INNER JOIN packages p_do
+						ON pd.depending_on_package=p_do.id AND p_do.repo_id IS NOT NULL
+						AND p_do.repo_id != p.repo_id
+						--AND (pv.package_id NOT IN (SELECT package_id FROM filtered_deps_package))
+						--AND (p_do.repo_id NOT IN (SELECT repo_id FROM filtered_deps_repo))
+					) AS dep_q
+				INNER JOIN (
+					SELECT DISTINCT FIRST_VALUE(id) OVER (PARTITION BY package_id ORDER BY created_at DESC,version_str DESC) AS last_v_id
+					FROM package_versions pv
+					-- WHERE pv.created_at <= :ref_time
+					) AS lastv_q
+				ON dep_q.version_id=lastv_q.last_v_id
+				;''')
+
+			self.network_p_timestamp = nx.DiGraph()
+			self.network_p_timestamp.add_edges_from(self.db.cursor.fetchall())
 
 	def set_network_filtered_timestamp(self,timestamp=datetime.datetime.now()):
 		if not hasattr(self,'network_r_filtered_timestamp'):
-			mat = edge_getters.RepoToRepoDeps(db=self.db,ref_time=timestamp,filter_deps=True).get_result()
-			self.network_r_filtered_timestamp = nx.convert_matrix.from_scipy_sparse_matrix(mat,create_using=nx.DiGraph)
+			mat = edge_getters.RepoToRepoDeps(db=self.db,ref_time=timestamp,filter_deps=True).get_result(raw_result=True)
+			# self.network_r_filtered_timestamp = nx.convert_matrix.from_scipy_sparse_matrix(mat,create_using=nx.DiGraph)
+			self.network_r_filtered_timestamp = nx.DiGraph()
+			self.network_r_filtered_timestamp.add_edges_from( ((r['repo_id'],r['dep_id']) for r in mat) )
+		
+		if not hasattr(self,'network_p_filtered_timestamp'):
+			self.db.cursor.execute('''
+					SELECT DISTINCT
+						package_id,do_package_id
+					FROM
+						(SELECT p.id AS package_id,p_do.id AS do_package_id,pv.id AS version_id
+							FROM package_dependencies pd
+							INNER JOIN package_versions pv
+							ON pd.depending_version =pv.id
+							-- AND pv.created_at <= ref_time
+							INNER JOIN packages p
+							ON pv.package_id=p.id AND p.repo_id IS NOT NULL
+							INNER JOIN packages p_do
+							ON pd.depending_on_package=p_do.id AND p_do.repo_id IS NOT NULL
+							AND p_do.repo_id != p.repo_id
+							AND (pv.package_id NOT IN (SELECT package_id FROM filtered_deps_package))
+							AND (p_do.repo_id NOT IN (SELECT repo_id FROM filtered_deps_repo))
+							LEFT OUTER JOIN filtered_deps_packageedges fdpe
+							ON (pv.package_id=fdpe.package_source_id AND p_do.id=fdpe.package_dest_id)
+							LEFT OUTER JOIN filtered_deps_repoedges fdre
+							ON (p.repo_id=fdre.repo_source_id AND p_do.repo_id=fdre.repo_dest_id)
+							WHERE fdpe.package_dest_id IS NULL AND fdre.repo_dest_id IS NULL
+						) AS dep_q
+					INNER JOIN (
+						SELECT DISTINCT FIRST_VALUE(id) OVER (PARTITION BY package_id ORDER BY created_at DESC,version_str DESC) AS last_v_id
+						FROM package_versions pv
+						-- WHERE pv.created_at <= :ref_time
+						) AS lastv_q
+					ON dep_q.version_id=lastv_q.last_v_id
+			 		;''')
+	
+			self.network_p_filtered_timestamp = nx.DiGraph()
+			self.network_p_filtered_timestamp.add_edges_from(self.db.cursor.fetchall())
 
 
 
@@ -902,7 +1028,8 @@ class DepsStats(DBStats):
 		def get_name(rk):
 			# return rk_names[rk_indirect[int(rk)]]
 			if space == 'r':
-				return str(rk_names[int(rk)])
+				# return str(rk_names[int(rk)])
+				return str(rk_names[rk_indirect[int(rk)]])
 			else:
 				return str(package_names[int(rk)]) # rk=p_id
 
@@ -1034,6 +1161,13 @@ class DepsStats(DBStats):
 							ON pv.id=pd.depending_version
 							INNER JOIN filtered_deps_package fdp
 							ON pd.depending_on_package=fdp.package_id
+						UNION 
+							SELECT DISTINCT pd.depending_on_package,pv.package_id
+							FROM package_dependencies pd
+							INNER JOIN package_versions pv
+							ON pv.id=pd.depending_version
+							INNER JOIN filtered_deps_packageedges fdpe
+							ON fdpe.package_dest_id=pd.depending_on_package AND fdpe.package_source_id=pv.package_id 
 						) a
 					;''')
 		elif space =='r':
@@ -1062,6 +1196,17 @@ class DepsStats(DBStats):
 						ON pv.package_id=p2.id
 							INNER JOIN filtered_deps_package fdp
 							ON pd.depending_on_package=fdp.package_id
+					UNION
+						SELECT DISTINCT p1.repo_id,p2.repo_id
+						FROM package_dependencies pd
+						INNER JOIN package_versions pv
+						ON pv.id=pd.depending_version
+						INNER JOIN packages p1
+						ON pd.depending_on_package=p1.id
+						INNER JOIN packages p2
+						ON pv.package_id=p2.id
+							INNER JOIN filtered_deps_packageedges fdpe
+							ON fdpe.package_dest_id=pd.depending_on_package AND fdpe.package_source_id=pv.package_id 
 					UNION
 						SELECT DISTINCT p1.repo_id,p2.repo_id
 						FROM package_dependencies pd

@@ -23,9 +23,9 @@ class CratesFiller(generic.PackageFiller):
 			package_limit=None,
 			package_limit_is_global=False,
 			force=False,
-			deps_to_delete=[('juju','charmhelpers'),
-							('arraygen','arraygen-docfix'),
-							('expr-parent','expr-child'),],
+			deps_to_delete= [], #[('juju','charmhelpers'),
+							#('arraygen','arraygen-docfix'),
+							#('expr-parent','expr-child'),],
 			page_size=10**4,
 					**kwargs):
 		self.source = source

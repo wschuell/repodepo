@@ -5,9 +5,8 @@ import logging
 import time
 import random
 
-from repo_tools import fillers
-from repo_tools.fillers import generic,github_rest,commit_info,bot_fillers,github_gql
-import repo_tools as rp
+from .. import fillers
+from . import generic,github_rest,commit_info,bot_fillers,github_gql
 
 
 
@@ -20,7 +19,7 @@ class DummyMetaFiller(fillers.Filler):
 		self.workers = workers
 		self.api_keys_file = api_keys_file
 		if packages_file is None:
-			self.packages_file = os.path.join(os.path.dirname(os.path.dirname(rp.__file__)),'tests','testmodule','dummy_data','packages.csv')
+			self.packages_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(fillers.__file__))),'tests','testmodule','dummy_data','packages.csv')
 		else:
 			self.packages_file = packages_file
 		self.fail_on_wait = fail_on_wait
@@ -78,7 +77,7 @@ class MetaBotFiller(fillers.Filler):
 			self.db.add_filler(bot_fillers.BotFiller(pattern=prefix+'travis@%'))
 
 		# Global
-		self.db.add_filler(bot_fillers.BotFileFiller(os.path.join(os.path.dirname(rp.__file__),'data','botlist.csv')))
+		self.db.add_filler(bot_fillers.BotFileFiller(os.path.join(os.path.dirname(os.path.dirname(fillers.__file__)),'data','botlist.csv')))
 		self.db.add_filler(bot_fillers.MGBotFiller(data_folder=self.data_folder)) # Golzadeh et al. paper
 
 		self.db.add_filler(bot_fillers.BotUserFiller()) # propagating from identities to users and connected identities

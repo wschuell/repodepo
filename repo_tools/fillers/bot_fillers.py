@@ -108,7 +108,7 @@ class BotListFiller(BotFiller):
 			elif len(b) == 1:
 				new_botlist.append((self.identity_type,b[0]))
 			elif len(b) == 2:
-				new_botlist.append(b)
+				new_botlist.append((b[0],b[1]))
 			else:
 				raise SyntaxError('In provided botlist, an element has more than 2 items (should be (<identity_type>,<bot>) or <bot> :{}'.format(b))
 		self.bot_list = new_botlist
@@ -119,19 +119,19 @@ class BotListFiller(BotFiller):
 				UPDATE identities SET is_bot=true
 				WHERE identity_type_id = (SELECT id FROM identity_types WHERE name=%(identity_type)s)
 				AND identity = %(identity)s
-				''',({'identity_type':self.identity_type,'identity':i} for i,it in self.bot_list))
+				''',({'identity_type':it,'identity':i} for it,i in self.bot_list))
 		else:
 			self.db.cursor.executemany('''
 				UPDATE identities SET is_bot=1
 				WHERE identity_type_id = (SELECT id FROM identity_types WHERE name=:identity_type)
 				AND identity = :identity
-				''',({'identity_type':self.identity_type,'identity':i} for i,it in self.bot_list))
+				''',({'identity_type':it,'identity':i} for it,i in self.bot_list))
 		
 
 
 class BotFileFiller(BotListFiller):
 	'''
-	fills bots from a file, containing only strings
+	fills bots from a file, containing only identity (with implied identity_type) or identity_type,identity
 	'''
 	def __init__(self,bot_file,identity_type='github_login',**kwargs):
 		self.bot_file = bot_file

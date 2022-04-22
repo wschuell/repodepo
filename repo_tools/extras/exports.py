@@ -416,7 +416,7 @@ COMMIT;
 
 
 
-def export_filters(db,folder=None):
+def export_filters(db,folder=None,overwrite=False):
 	if folder is None:
 		folder = db.data_folder
 
@@ -432,9 +432,19 @@ def export_filters(db,folder=None):
 		ON s.id=p.source_id
 		;''')
 
-	with open(os.path.join(folder,'filtered_packages.csv'),'w') as f:
+	res = list(db.cursor.fetchall())
+	filepath = os.path.join(folder,'filtered_packages.csv')
+	if not overwrite and os.path.exists(filepath):
+		with open(filepath,'r') as f:
+			reader = csv.reader(f)
+			next(reader)
+			previous_res = [tuple(r) for r in reader] 
+			res = sorted(list(set(previous_res+res)))
+
+		
+	with open(filepath,'w') as f:
 		f.write('source,package\n')
-		for s,p in db.cursor.fetchall():
+		for s,p in res:
 			f.write('"{}","{}"\n'.format(s,p))
 
 	# repos
@@ -446,9 +456,19 @@ def export_filters(db,folder=None):
 		ON s.id=r.source
 		;''')
 
-	with open(os.path.join(folder,'filtered_repos.csv'),'w') as f:
+	res = list(db.cursor.fetchall())
+	filepath = os.path.join(folder,'filtered_repos.csv')
+	if not overwrite and os.path.exists(filepath):
+		with open(filepath,'r') as f:
+			reader = csv.reader(f)
+			next(reader)
+			previous_res = [(s,r.split('/')[0],'/'.join(r.split('/')[1:])) for s,r in reader] 
+			res = sorted(list(set(previous_res+res)))
+
+
+	with open(filepath,'w') as f:
 		f.write('source,repo\n')
-		for s,o,n in db.cursor.fetchall():
+		for s,o,n in res:
 			f.write('"{}","{}/{}"\n'.format(s,o,n))
 
 	# repo_edges
@@ -464,10 +484,47 @@ def export_filters(db,folder=None):
 		ON sd.id=rd.source
 		;''')
 
-	with open(os.path.join(folder,'filtered_repoedges.csv'),'w') as f:
-		f.write('source,repo,source,repo\n')
-		for s,o,n,s2,o2,n2 in db.cursor.fetchall():
+	res = list(db.cursor.fetchall())
+	filepath = os.path.join(folder,'filtered_reppoedges.csv')
+	if not overwrite and os.path.exists(filepath):
+		with open(filepath,'r') as f:
+			reader = csv.reader(f)
+			next(reader)
+			previous_res = [(ss,rs.split('/')[0],'/'.join(rs.split('/')[1:]),sd,rd.split('/')[0],'/'.join(rd.split('/')[1:])) for ss,rs,sd,rd in reader] 
+			res = sorted(list(set(previous_res+res)))
+
+		
+	with open(filepath,'w') as f:
+		f.write('source_source,repo_source,source_dest,repo_dest\n')
+		for s,o,n,s2,o2,n2 in res:
 			f.write('"{}","{}/{}","{}","{}/{}"\n'.format(s,o,n,s2,o2,n2))
+
+	# package_edges
+	db.cursor.execute('''
+		SELECT ss.name,ps.name,sd.name,pd.name FROM filtered_deps_packageedges fdpe
+		INNER JOIN packages ps
+		ON ps.id=fdpe.package_source_id 
+		INNER JOIN sources ss
+		ON ss.id=ps.source_id
+		INNER JOIN packages pd
+		ON pd.id=fdpe.package_dest_id 
+		INNER JOIN sources sd
+		ON sd.id=pd.source_id
+		;''')
+
+	res = list(db.cursor.fetchall())
+	filepath = os.path.join(folder,'filtered_packageedges.csv')
+	if not overwrite and os.path.exists(filepath):
+		with open(filepath,'r') as f:
+			reader = csv.reader(f)
+			next(reader)
+			previous_res = [tuple(r) for r in reader]
+			res = sorted(list(set(previous_res+res)))
+		
+	with open(filepath,'w') as f:
+		f.write('source_source,package_source,source_dest,package_dest\n')
+		for s,n,s2,n2 in res:
+			f.write('"{}","{}","{}","{}"\n'.format(s,n,s2,n2))
 
 
 def export_bots(db,folder=None):

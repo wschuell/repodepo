@@ -189,6 +189,7 @@ def test_reset_merged_identities(testdb):
 @pytest.mark.timeout(100)
 def test_filters(testdb):
 	testdb.add_filler(deps_filters_fillers.AutoRepoEdges2Cycles())
+	testdb.add_filler(deps_filters_fillers.AutoPackageEdges2Cycles())
 	testdb.add_filler(deps_filters_fillers.PackageDepsFilter(input_list=['crates/blah',('crites','bloh'),'blyh']))
 	testdb.add_filler(deps_filters_fillers.RepoDepsFilter(input_list=['GitHub/blah/blih',('GitHub','bloh','bluh'),'blyh/bluh']))
 	testdb.add_filler(deps_filters_fillers.RepoEdgesDepsFilter(input_list=[('GitHub/blah/blih','Gitlab/blih/blah'),('GitHub','bloh','bluh','GitHub','blyh','bloh')]))

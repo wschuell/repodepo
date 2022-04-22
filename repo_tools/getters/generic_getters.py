@@ -160,7 +160,7 @@ class UserIDs(Getter):
 
 class UserLogins(Getter):
 	'''
-	IDs and names of repositories
+	user ids and main identities
 	'''
 	def query(self):
 		if self.db.db_type == 'postgres':
