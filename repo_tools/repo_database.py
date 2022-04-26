@@ -247,6 +247,27 @@ class Database(object):
 
 		self.connection.commit()
 
+	def move_to_RAM(self):
+		'''
+		makes a copy in RAM of the DB; only for SQLite
+		'''
+		if self.db_type == 'sqlite':
+			new_conn = sqlite3.connect(':memory:')
+			new_cur = new_conn.cursor()
+
+
+			def progress(status, remaining, total):
+				self.logger.info(f'Copied {total-remaining} of {total} pages...')
+
+
+			self.connection.backup(new_conn, pages=1000, progress=progress)
+
+			old_conn = self.connection
+			self.connection = new_conn
+			self.cursor = new_cur
+			old_conn.close()
+
+
 	def clean_db(self,sqlite_del=True):
 		'''
 		Dropping tables
