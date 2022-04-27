@@ -260,7 +260,7 @@ class Database(object):
 				self.logger.info(f'Copied {total-remaining} of {total} pages...')
 
 
-			self.connection.backup(new_conn, pages=1000, progress=progress)
+			self.connection.backup(new_conn, pages=10**5, progress=progress)
 
 			old_conn = self.connection
 			self.connection = new_conn
