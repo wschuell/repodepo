@@ -272,8 +272,20 @@ class RepoStats(DBStats):
 		results['nb_multipackages'] = self.get_multiplicity_packages()
 		results['nb_maxpackages'] = self.get_multiplicity_packages(option='max')
 		results['nb_avgpackages'] = self.get_multiplicity_packages(option='avg')
+		results['merged_repos'] = self.get_merged()
 
 		return results
+
+	def get_merged(self):
+		ans = OrderedDict()
+		self.db.cursor.execute('''SELECT '_all' AS sname,COUNT(*) FROM merged_repositories
+								UNION SELECT COALESCE(new_source,obsolete_source) AS sname,COUNT(*) FROM merged_repositories
+									GROUP BY COALESCE(new_source,obsolete_source)
+									ORDER BY sname ;''')
+
+		for s,cnt in self.db.cursor.fetchall():
+			ans[s] = cnt
+		return ans
 
 	def get_nb_repos(self,cloned=False):
 		if cloned:
@@ -738,36 +750,40 @@ class DepsStats(DBStats):
 
 		results = OrderedDict()
 		results['packagespace'] = OrderedDict()
-		results['packagespace']['nb_links'] = self.get_nb_links(space='p',filtered=False)
+		results['packagespace']['nb_links'] = len(self.network_p.edges)
 		results['packagespace']['cycles'] = self.get_cycles(space='p',filtered=False,detailed=self.detailed,network=self.network_p)
 
 		results['packagespace_filtered'] = OrderedDict()
-		results['packagespace_filtered']['nb_links_filtered'] = self.get_nb_links(space='p',filtered=True)
+		results['packagespace_filtered']['nb_links'] = len(self.network_p_filtered.edges)
+		results['packagespace_filtered']['nb_links_filtered'] = len(self.network_p.edges)-len(self.network_p_filtered.edges)
 		results['packagespace_filtered']['cycles'] = self.get_cycles(space='p',filtered=True,detailed=self.detailed,network=self.network_p_filtered)
 
 		results['packagespace_timestamp'] = OrderedDict()
-		results['packagespace_timestamp']['nb_links'] = self.get_nb_links(space='p',filtered=False)
+		results['packagespace_timestamp']['nb_links'] = len(self.network_p_timestamp.edges)
 		results['packagespace_timestamp']['cycles'] = self.get_cycles(space='p',filtered=False,detailed=self.detailed,network=self.network_p_timestamp)
 
 		results['packagespace_timestamp_filtered'] = OrderedDict()
-		results['packagespace_timestamp_filtered']['nb_links_filtered'] = self.get_nb_links(space='p',filtered=True)
+		results['packagespace_timestamp_filtered']['nb_links'] = len(self.network_p_filtered_timestamp.edges)
+		results['packagespace_timestamp_filtered']['nb_links_filtered'] = len(self.network_p_timestamp.edges) - len(self.network_p_filtered_timestamp.edges)
 		results['packagespace_timestamp_filtered']['cycles'] = self.get_cycles(space='p',filtered=True,detailed=self.detailed,network=self.network_p_filtered_timestamp)
 
 		results['repospace'] = OrderedDict()
-		results['repospace']['nb_links'] = self.get_nb_links(space='r',filtered=False)
+		results['repospace']['nb_links'] = len(self.network_r.edges)
 		results['repospace']['cycles'] = self.get_cycles(space='r',filtered=False,detailed=self.detailed,network=self.network_r)
 
 		results['repospace_filtered'] = OrderedDict()
-		results['repospace_filtered']['nb_links_filtered'] = self.get_nb_links(space='r',filtered=True)
+		results['repospace_filtered']['nb_links'] = len(self.network_r_filtered.edges)
+		results['repospace_filtered']['nb_links_filtered'] = len(self.network_r.edges) - len(self.network_r_filtered.edges)
 		results['repospace_filtered']['cycles'] = self.get_cycles(space='r',filtered=True,detailed=self.detailed,network=self.network_r_filtered)
 
 
 		results['repospace_timestamp'] = OrderedDict()
-		results['repospace_timestamp']['nb_links'] = self.get_nb_links(space='r',filtered=False)
+		results['repospace_timestamp']['nb_links'] = len(self.network_r_timestamp.edges)
 		results['repospace_timestamp']['cycles'] = self.get_cycles(space='r',filtered=False,detailed=self.detailed,network=self.network_r_timestamp)
 
 		results['repospace_timestamp_filtered'] = OrderedDict()
-		results['repospace_timestamp_filtered']['nb_links_filtered'] = self.get_nb_links(space='r',filtered=True)
+		results['repospace_timestamp_filtered']['nb_links'] = len(self.network_r_filtered_timestamp.edges)
+		results['repospace_timestamp_filtered']['nb_links_filtered'] = len(self.network_r_timestamp.edges) - len(self.network_r_filtered_timestamp.edges)
 		results['repospace_timestamp_filtered']['cycles'] = self.get_cycles(space='r',filtered=True,detailed=self.detailed,network=self.network_r_filtered_timestamp)
 
 
@@ -789,10 +805,11 @@ class DepsStats(DBStats):
 						ON pd.depending_version =pv.id
 						-- AND pv.created_at <= ref_time
 						INNER JOIN packages p
-						ON pv.package_id=p.id AND p.repo_id IS NOT NULL
+						ON pv.package_id=p.id --AND p.repo_id IS NOT NULL
 						INNER JOIN packages p_do
-						ON pd.depending_on_package=p_do.id AND p_do.repo_id IS NOT NULL
-						AND p_do.repo_id != p.repo_id
+						ON pd.depending_on_package=p_do.id --AND p_do.repo_id IS NOT NULL
+						AND p_do.id!=p.id
+						--AND p_do.repo_id != p.repo_id
 						--AND (pv.package_id NOT IN (SELECT package_id FROM filtered_deps_package))
 						--AND (p_do.repo_id NOT IN (SELECT repo_id FROM filtered_deps_repo))
 			
@@ -860,10 +877,10 @@ class DepsStats(DBStats):
 						ON pd.depending_version =pv.id
 						-- AND pv.created_at <= ref_time
 						INNER JOIN packages p
-						ON pv.package_id=p.id AND p.repo_id IS NOT NULL
+						ON pv.package_id=p.id --AND p.repo_id IS NOT NULL
 						INNER JOIN packages p_do
-						ON pd.depending_on_package=p_do.id AND p_do.repo_id IS NOT NULL
-						AND p_do.repo_id != p.repo_id
+						ON pd.depending_on_package=p_do.id --AND p_do.repo_id IS NOT NULL
+						AND p_do.id != p.id
 						AND (pv.package_id NOT IN (SELECT package_id FROM filtered_deps_package))
 						AND (p_do.repo_id NOT IN (SELECT repo_id FROM filtered_deps_repo))
 						LEFT OUTER JOIN filtered_deps_packageedges fdpe
@@ -947,10 +964,10 @@ class DepsStats(DBStats):
 						ON pd.depending_version =pv.id
 						-- AND pv.created_at <= ref_time
 						INNER JOIN packages p
-						ON pv.package_id=p.id AND p.repo_id IS NOT NULL
+						ON pv.package_id=p.id --AND p.repo_id IS NOT NULL
 						INNER JOIN packages p_do
-						ON pd.depending_on_package=p_do.id AND p_do.repo_id IS NOT NULL
-						AND p_do.repo_id != p.repo_id
+						ON pd.depending_on_package=p_do.id --AND p_do.repo_id IS NOT NULL
+						AND p_do.id != p.id
 						--AND (pv.package_id NOT IN (SELECT package_id FROM filtered_deps_package))
 						--AND (p_do.repo_id NOT IN (SELECT repo_id FROM filtered_deps_repo))
 					) AS dep_q
@@ -983,10 +1000,10 @@ class DepsStats(DBStats):
 							ON pd.depending_version =pv.id
 							-- AND pv.created_at <= ref_time
 							INNER JOIN packages p
-							ON pv.package_id=p.id AND p.repo_id IS NOT NULL
+							ON pv.package_id=p.id --AND p.repo_id IS NOT NULL
 							INNER JOIN packages p_do
-							ON pd.depending_on_package=p_do.id AND p_do.repo_id IS NOT NULL
-							AND p_do.repo_id != p.repo_id
+							ON pd.depending_on_package=p_do.id --AND p_do.repo_id IS NOT NULL
+							AND p_do.id != p.id
 							AND (pv.package_id NOT IN (SELECT package_id FROM filtered_deps_package))
 							AND (p_do.repo_id NOT IN (SELECT repo_id FROM filtered_deps_repo))
 							LEFT OUTER JOIN filtered_deps_packageedges fdpe
@@ -1150,7 +1167,8 @@ class DepsStats(DBStats):
 						SELECT DISTINCT pd.depending_on_package,pv.package_id
 						FROM package_dependencies pd
 						INNER JOIN package_versions pv
-						ON pv.id=pd.depending_version) a
+						ON pv.id=pd.depending_version
+						AND pd.depending_on_package!=pv.package_id) a
 					;''')
 			else:
 				self.db.cursor.execute('''
@@ -1161,6 +1179,7 @@ class DepsStats(DBStats):
 							ON pv.id=pd.depending_version
 							INNER JOIN filtered_deps_package fdp
 							ON pd.depending_on_package=fdp.package_id
+							AND pd.depending_on_package!=pv.package_id
 						UNION 
 							SELECT DISTINCT pd.depending_on_package,pv.package_id
 							FROM package_dependencies pd
@@ -1168,6 +1187,7 @@ class DepsStats(DBStats):
 							ON pv.id=pd.depending_version
 							INNER JOIN filtered_deps_packageedges fdpe
 							ON fdpe.package_dest_id=pd.depending_on_package AND fdpe.package_source_id=pv.package_id 
+							AND pd.depending_on_package!=pv.package_id
 						) a
 					;''')
 		elif space =='r':
@@ -1181,7 +1201,10 @@ class DepsStats(DBStats):
 						INNER JOIN packages p1
 						ON pd.depending_on_package=p1.id
 						INNER JOIN packages p2
-						ON pv.package_id=p2.id) a
+						ON pv.package_id=p2.id
+						AND p1.repo_id!=p2.repo_id
+						AND p1.repo_id IS NOT NULL
+						AND p2.repo_id IS NOT NULL) a
 					;''')
 			else:
 				self.db.cursor.execute('''
@@ -1249,11 +1272,11 @@ class GlobalStats(DBStats):
 		for (name,cl,kwargs_cl) in [
 				# ('packages',PackageStats,dict()),
 				# ('urls',URLStats,dict()),
-				# ('repositories',RepoStats,dict()),
+				('repositories',RepoStats,dict()),
 				# ('commits',CommitsStats,dict()),
 				# ('identities',IdentitiesStats,dict()),
 				# ('users',UsersStats,dict()),
-				('dependencies',DepsStats,dict(detailed=True)),
+				# ('dependencies',DepsStats,dict(detailed=True)),
 				]:
 			self.logger.info('Computing {}'.format(cl.__name__))
 			s = cl(db=db,**kwargs_cl)
