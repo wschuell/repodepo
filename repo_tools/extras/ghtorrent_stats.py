@@ -24,7 +24,7 @@ class GHTorrentStats(DBStats):
 
 	def fill_temp_commits(self):
 		'''
-		Temporayr table with commits
+		Temporary table with commits
 		sha
 		'''
 		self.ght_cur.execute('''CREATE TEMP TABLE IF NOT EXISTS temp_repo_tools_commits(
@@ -115,7 +115,7 @@ class GHTorrentStats(DBStats):
 
 	def fill_temp_userrepos(self):
 		'''
-		Temporary table with all repositories
+		Temporary table with all repositories-users links
 		owner,name,cloned
 		'''
 		self.ght_cur.execute('''CREATE TEMP TABLE IF NOT EXISTS temp_repo_tools_userrepos(
@@ -165,6 +165,41 @@ class GHTorrentStats(DBStats):
 
 			self.ght_cur.execute('CREATE INDEX IF NOT EXISTS userrepo_uidx ON temp_repo_tools_userrepos(login);')
 			self.logger.info('Filled user/repos edges in GHTorrent DB temp table')
+
+	def fill_temp_userrepos_ght(self):
+		'''
+		Temporary table with all repositories-users links found in ght for the relevant repos
+		owner,name,cloned
+		'''
+		self.ght_cur.execute('''CREATE TEMP TABLE IF NOT EXISTS temp_repo_tools_userrepos_ght(
+							owner TEXT,
+							name TEXT,
+							login TEXT,
+							PRIMARY KEY(owner,name,login)
+							);''')
+		self.ght_cur.execute('SELECT * FROM temp_repo_tools_userrepos_ght LIMIT 1;')
+		if len(list(self.ght_cur.fetchall())) == 0:
+			self.logger.info('Filling user/repos edges GHT in GHTorrent DB temp table')
+		
+			self.ght_cur.execute('''
+				INSERT INTO temp_repo_tools_userrepos_ght(owner,name,login)
+				SELECT  MIN(r.owner) AS rowner, MIN(r.name) AS rname, MIN(u2.login) AS u2login FROM temp_repo_tools_repos tr
+				INNER JOIN projects r
+				ON tr.name=r.name
+				INNER JOIN users u
+				ON r.owner_id=u.id
+				AND tr.owner=u.login
+					INNER JOIN project_commits cr
+					ON cr.project_id=r.id
+					INNER JOIN commits c
+					ON c.id=cr.commit_id
+				INNER JOIN users u2
+				ON c.author_id=u2.id
+				GROUP BY u2.id,r.id
+				;''')
+
+			self.ght_cur.execute('CREATE INDEX IF NOT EXISTS userrepo_ght_uidx ON temp_repo_tools_userrepos_ght(login);')
+			self.logger.info('Filled user/repos edges GHT in GHTorrent DB temp table')
 
 	def fill_temp_stars(self):
 		'''
@@ -455,6 +490,7 @@ class ForksGHTStats(GHTorrentStats):
 class UserReposGHTStats(GHTorrentStats):
 	def get(self,**kwargs):
 		self.fill_temp_userrepos()
+		self.fill_temp_userrepos_ght()
 		self.fill_temp_repos()
 
 		results = OrderedDict()
@@ -482,43 +518,59 @@ class UserReposGHTStats(GHTorrentStats):
 		# 	AND u2.login=tur.owner) AS sq
 		# 	;''')
 
-		self.ght_cur.execute('''SELECT COUNT(DISTINCT CONCAT(u2.id,'/',r.id)),COUNT(DISTINCT CASE WHEN tu.login IS NOT NULL THEN CONCAT(tur.login,'//',tur.owner,'/',tur.name) ELSE NULL END)
-			FROM temp_repo_tools_repos tr
-			INNER JOIN projects r
-			ON tr.name=r.name
-			INNER JOIN users u
-			ON r.owner_id=u.id
-			AND tr.owner=u.login
-				INNER JOIN project_commits cr
-				ON cr.project_id=r.id
-				INNER JOIN commits c
-				ON c.id=cr.commit_id
-			INNER JOIN users u2
-			ON c.author_id=u2.id
+		# self.ght_cur.execute('''SELECT COUNT(DISTINCT CONCAT(u2.id,'/',r.id)),
+		# 								COUNT(DISTINCT CASE WHEN tur.login IS NOT NULL THEN CONCAT(tur.login,'//',tur.owner,'/',tur.name) ELSE NULL END)
+		# 	FROM 
+		# 		(SELECT u2.id AS u2id, r.id AS rid,MIN(r.name) AS rname, MIN(r.owner) AS rowner, MIN(u2.login) AS u2login FROM temp_repo_tools_repos tr
+		# 		INNER JOIN projects r
+		# 		ON tr.name=r.name
+		# 		INNER JOIN users u
+		# 		ON r.owner_id=u.id
+		# 		AND tr.owner=u.login
+		# 			INNER JOIN project_commits cr
+		# 			ON cr.project_id=r.id
+		# 			INNER JOIN commits c
+		# 			ON c.id=cr.commit_id
+		# 		INNER JOIN users u2
+		# 		ON c.author_id=u2.id
+		# 		GROUP BY u2.id,r.id) AS sq
+		# 	LEFT OUTER JOIN temp_repo_tools_userrepos tur
+		# 	ON tur.login=sq.u2login AND tur.owner=sq.rowner AND tur.name=sq.rname
+		# 	;''')
+		self.ght_cur.execute('''SELECT COUNT(DISTINCT CONCAT(turg.login,'//',turg.owner,'/',turg.name)),
+				COUNT(DISTINCT CASE WHEN tur.login IS NOT NULL THEN CONCAT(tur.login,'//',tur.owner,'/',tur.name) ELSE NULL END)
+			FROM temp_repo_tools_userrepos_ght turg
 			LEFT OUTER JOIN temp_repo_tools_userrepos tur
-			ON tur.login=u2.login AND tur.owner=r.owner AND tur.name=r.name
+			ON tur.login=turg.login AND tur.owner=turg.owner AND tur.name=turg.name
+
 			;''')
 		ure_ght,ure_common1 = self.ght_cur.fetchone()
 		results['userrepos_edges_ght'] = ure_ght
 		results['userrepos_edges_missing_rust'] = ure_ght - ure_common1
 
-		self.ght_cur.execute('''SELECT COUNT(*) FROM
-		(SELECT tur.owner,tur.name,tur.login FROM temp_repo_tools_userrepos tur
-			WHERE EXISTS (
-				SELECT 1 FROM users u2
-				INNER JOIN projects r
-				ON u2.login=tur.owner
-				AND r.name=tur.name
-				AND u2.id=r.owner_id
-				INNER JOIN project_commits cr
-				ON cr.project_id=r.id
-				INNER JOIN commits c
-				ON c.id=cr.commit_id
-				INNER JOIN users u
-				ON c.author_id=u.id
-				AND tur.login=u.login
-			)
-			) AS sq
+		# self.ght_cur.execute('''SELECT COUNT(*) FROM
+		# (SELECT tur.owner,tur.name,tur.login FROM temp_repo_tools_userrepos tur
+		# 	WHERE EXISTS (
+		# 		SELECT 1 FROM users u2
+		# 		INNER JOIN projects r
+		# 		ON u2.login=tur.owner
+		# 		AND r.name=tur.name
+		# 		AND u2.id=r.owner_id
+		# 		INNER JOIN project_commits cr
+		# 		ON cr.project_id=r.id
+		# 		INNER JOIN commits c
+		# 		ON c.id=cr.commit_id
+		# 		INNER JOIN users u
+		# 		ON c.author_id=u.id
+		# 		AND tur.login=u.login
+		# 	)
+		# 	) AS sq
+		# 	;''')
+		self.ght_cur.execute('''SELECT COUNT(DISTINCT CONCAT(tur.login,'//',tur.owner,'/',tur.name))
+			FROM temp_repo_tools_userrepos tur
+			LEFT OUTER JOIN temp_repo_tools_userrepos_ght turg
+			ON tur.login=turg.login AND tur.owner=turg.owner AND tur.name=turg.name
+
 			;''')
 		results['userrepos_edges_common'] = self.ght_cur.fetchone()[0]
 		results['userrepos_edges_missing_ght'] = results['userrepos_edges_rust'] - results['userrepos_edges_common']
