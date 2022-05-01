@@ -530,7 +530,7 @@ class CommitsStats(DBStats):
 		return ans
 
 	def get_nb_commits_forks(self,onlybots=False,option=None):
-		self.db.cursor.execute('CREATE TEMPORARY TABLE IF NOT EXISTS commit_repos_multiplicity(commit_id BIGINT PRIMARY KEY,fork_count REAL);')
+		self.db.cursor.execute('CREATE TEMPORARY TABLE IF NOT EXISTS commit_repos_multiplicity(commit_id BIGINT PRIMARY KEY,fork_count BIGINT);')
 		self.db.cursor.execute('SELECT commit_id FROM commit_repos_multiplicity LIMIT 1;')
 		if len(list(self.db.cursor.fetchall())) == 0:
 			self.db.cursor.execute('''
@@ -1270,13 +1270,13 @@ class GlobalStats(DBStats):
 		results = OrderedDict()
 
 		for (name,cl,kwargs_cl) in [
-				# ('packages',PackageStats,dict()),
-				# ('urls',URLStats,dict()),
+				('packages',PackageStats,dict()),
+				('urls',URLStats,dict()),
 				('repositories',RepoStats,dict()),
-				# ('commits',CommitsStats,dict()),
-				# ('identities',IdentitiesStats,dict()),
-				# ('users',UsersStats,dict()),
-				# ('dependencies',DepsStats,dict(detailed=True)),
+				('commits',CommitsStats,dict()),
+				('identities',IdentitiesStats,dict()),
+				('users',UsersStats,dict()),
+				('dependencies',DepsStats,dict(detailed=True)),
 				]:
 			self.logger.info('Computing {}'.format(cl.__name__))
 			s = cl(db=db,**kwargs_cl)

@@ -313,7 +313,7 @@
 					repo_id BIGSERIAL REFERENCES repositories(id) ON DELETE CASCADE,
 					language TEXT NOT NULL,
 					size INT,
-					share REAL,
+					share DOUBLE PRECISION,
 					queried_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 					PRIMARY KEY(repo_id,language)
 					);
@@ -323,8 +323,8 @@
 				CREATE TABLE IF NOT EXISTS user_languages(
 					user_identity BIGSERIAL REFERENCES identities(id) ON DELETE CASCADE,
 					language TEXT NOT NULL,
-					size REAL,
-					share REAL,
+					size DOUBLE PRECISION,
+					share DOUBLE PRECISION,
 					queried_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 					PRIMARY KEY(user_identity,language)
 					);

@@ -2179,6 +2179,7 @@ class ComputationDB(object):
 	'''
 	ADDITIONAL COMPUTATION DB: to store computed results.
 	This is intentionally separated from the main DB, so that computation can be done and stored also when the main DB is not writeable.
+	Also, computation can rely on specific parameters and storing it into the main DB could quickly result in too much data being stored.
 	'''
 	def __init__(self,db):
 		self.orig_db = db

@@ -20,8 +20,8 @@ class DevToRepo(Getter):
 					user_q.user_rank,
 					main_q.repo_id,
 					repo_q.repo_rank,
-					(main_q.cnt/COALESCE(SUM(main_q.cnt) OVER (PARTITION BY main_q.repo_id),1))::REAL AS norm_value,
-					main_q.cnt::REAL AS abs_value
+					(main_q.cnt::DOUBLE PRECISION /COALESCE(SUM(main_q.cnt) OVER (PARTITION BY main_q.repo_id),1.))::DOUBLE PRECISION AS norm_value,
+					main_q.cnt::DOUBLE PRECISION AS abs_value
 				FROM
 					(SELECT i.user_id,c.repo_id,count(*) AS cnt FROM commits c
 					INNER JOIN identities i
@@ -146,17 +146,17 @@ class DevToRepoAddMax(DevToRepo):
 									END)*1./COALESCE(
 								SUM(main_q.cnt) OVER (PARTITION BY main_q.repo_id)
 
-							,1))::REAL AS norm_value,
+							,1))::DOUBLE PRECISION AS norm_value,
 					GREATEST(0,main_q.cnt-CASE WHEN main_q.repo_id IN %(repo_list)s
 									THEN MAX(main_q.cnt) OVER (PARTITION BY main_q.repo_id)
 									ELSE 0
-									END)::REAL AS abs_value,
+									END)::DOUBLE PRECISION AS abs_value,
 					(CASE WHEN main_q.repo_id IN %(repo_list)s
 									THEN MAX(main_q.cnt) OVER (PARTITION BY main_q.repo_id)
 										*1./(SUM(main_q.cnt) OVER (PARTITION BY main_q.repo_id)
 											)
 									ELSE 0
-									END)::REAL AS max_value
+									END)::DOUBLE PRECISION AS max_value
 				FROM
 					(SELECT i.user_id,c.repo_id,count(*) AS cnt FROM commits c
 					INNER JOIN identities i
@@ -286,26 +286,26 @@ class DevToRepoAddDailyCommits(DevToRepoAddMax):
 					(GREATEST(0,main_q.cnt-CASE WHEN main_q.repo_id IN %(repo_list)s
 									THEN GREATEST(DATE_PART('day',
 										%(end_time)s::timestamp- GREATEST(COALESCE(repo_q.repo_created_at,%(start_time)s::timestamp),%(start_time)s::timestamp)
-										),1.)*%(daily_commits)s
+										),1.)::DOUBLE PRECISION *%(daily_commits)s
 									ELSE 0
 									END)*1./COALESCE(
 								SUM(main_q.cnt) OVER (PARTITION BY main_q.repo_id)
 
-							,1.))::REAL AS norm_value,
+							,1.))::DOUBLE PRECISION AS norm_value,
 					GREATEST(0,main_q.cnt-CASE WHEN main_q.repo_id IN %(repo_list)s
 									THEN GREATEST(DATE_PART('day',
 										%(end_time)s::timestamp- GREATEST(COALESCE(repo_q.repo_created_at,%(start_time)s::timestamp),%(start_time)s::timestamp)
-										),1.)*%(daily_commits)s
+										),1.)::DOUBLE PRECISION *%(daily_commits)s
 									ELSE 0
-									END)::REAL AS abs_value,
+									END)::DOUBLE PRECISION AS abs_value,
 					(CASE WHEN main_q.repo_id IN %(repo_list)s
 									THEN GREATEST(DATE_PART('day',
 											%(end_time)s::timestamp- GREATEST(COALESCE(repo_q.repo_created_at,%(start_time)s::timestamp),%(start_time)s::timestamp)
-										),1.)*%(daily_commits)s
+										),1.)::DOUBLE PRECISION *%(daily_commits)s
 										*1./(SUM(main_q.cnt) OVER (PARTITION BY main_q.repo_id)
 											)
 									ELSE 0
-									END)::REAL AS inserted_value
+									END)::DOUBLE PRECISION AS inserted_value
 				FROM
 					(SELECT i.user_id,c.repo_id,count(*) AS cnt FROM commits c
 					INNER JOIN identities i
@@ -401,7 +401,7 @@ class RepoToRepoDeps(Getter):
 					repo_q1.repo_rank AS depending_repo_rank,
 					dep_q.do_repo_id AS depending_on_repo_id,
 					repo_q2.repo_rank AS depending_on_repo_rank,
-					(1./COALESCE(COUNT(*) OVER (PARTITION BY dep_q.repo_id),1))::REAL
+					(1./COALESCE(COUNT(*) OVER (PARTITION BY dep_q.repo_id),1))::DOUBLE PRECISION
 				FROM
 					(SELECT p.repo_id,p_do.repo_id AS do_repo_id,pv.id AS version_id
 						FROM package_dependencies pd

@@ -171,6 +171,7 @@ class GHTorrentStats(DBStats):
 		Temporary table with all repositories-users links found in ght for the relevant repos
 		owner,name,cloned
 		'''
+		self.fill_temp_repos()
 		self.ght_cur.execute('''CREATE TEMP TABLE IF NOT EXISTS temp_repo_tools_userrepos_ght(
 							owner TEXT,
 							name TEXT,
@@ -183,7 +184,7 @@ class GHTorrentStats(DBStats):
 		
 			self.ght_cur.execute('''
 				INSERT INTO temp_repo_tools_userrepos_ght(owner,name,login)
-				SELECT  MIN(r.owner) AS rowner, MIN(r.name) AS rname, MIN(u2.login) AS u2login FROM temp_repo_tools_repos tr
+				SELECT  MIN(u.login) AS rowner, MIN(r.name) AS rname, MIN(u2.login) AS u2login FROM temp_repo_tools_repos tr
 				INNER JOIN projects r
 				ON tr.name=r.name
 				INNER JOIN users u
@@ -590,10 +591,10 @@ class GHTorrentGlobalStats(GHTorrentStats):
 				('commits_stats',CommitsGHTStats),
 				('stars_stats',StarsGHTStats),
 				('forks_stats',ForksGHTStats),
-				# ('userrepos_edges',UserReposGHTStats),
+				('userrepos_edges',UserReposGHTStats),
 				]:
 
-			s = cl(db=self.db,ght_cur=self.ght_cur,ght_conn=self.ght_conn,limit=10**5)
+			s = cl(db=self.db,ght_cur=self.ght_cur,ght_conn=self.ght_conn,limit=None)
 			s.get_result()
 			results[name] = s.results
 

@@ -137,35 +137,36 @@ def sdb(request):
 	db.connection.close()
 	del db
 
+epsilon = 0 # 10**-15
 
 ##############
 
 #### Tests
 
-def test_setdb(testdb):
-	testdb.init_db()
+# def test_setdb(testdb):
+# 	testdb.init_db()
 
-def test_generic_getters(testdb,generic_g):
-	generic_g(db=testdb).get_result()
+# def test_generic_getters(testdb,generic_g):
+# 	generic_g(db=testdb).get_result()
 
-def test_combined_getters(testdb,combined_g):
-	combined_g(db=testdb).get_result()
+# def test_combined_getters(testdb,combined_g):
+# 	combined_g(db=testdb).get_result()
 
-def test_gettersPproj(testdb,time_window,Pgetter,proj_id,cumulative):
-	testdb.init_db()
-	df = Pgetter().get_result(db=testdb,aggregated=True,time_window=time_window,cumulative=cumulative,project_id=proj_id)
+# def test_gettersPproj(testdb,time_window,Pgetter,proj_id,cumulative):
+# 	testdb.init_db()
+# 	df = Pgetter().get_result(db=testdb,aggregated=True,time_window=time_window,cumulative=cumulative,project_id=proj_id)
 
-def test_gettersP(testdb,time_window,Pgetter,aggregated,cumulative):
-	testdb.init_db()
-	df = Pgetter().get_result(db=testdb,aggregated=aggregated,time_window=time_window,cumulative=cumulative)
+# def test_gettersP(testdb,time_window,Pgetter,aggregated,cumulative):
+# 	testdb.init_db()
+# 	df = Pgetter().get_result(db=testdb,aggregated=aggregated,time_window=time_window,cumulative=cumulative)
 
-def test_gettersUuser(testdb,time_window,Ugetter,identity_id,cumulative):
-	testdb.init_db()
-	df = Ugetter().get_result(db=testdb,aggregated=True,time_window=time_window,cumulative=cumulative,identity_id=identity_id)
+# def test_gettersUuser(testdb,time_window,Ugetter,identity_id,cumulative):
+# 	testdb.init_db()
+# 	df = Ugetter().get_result(db=testdb,aggregated=True,time_window=time_window,cumulative=cumulative,identity_id=identity_id)
 
-def test_gettersU(testdb,time_window,Ugetter,cumulative,aggregated):
-	testdb.init_db()
-	df = Ugetter().get_result(db=testdb,aggregated=aggregated,time_window=time_window,cumulative=cumulative)
+# def test_gettersU(testdb,time_window,Ugetter,cumulative,aggregated):
+# 	testdb.init_db()
+# 	df = Ugetter().get_result(db=testdb,aggregated=aggregated,time_window=time_window,cumulative=cumulative)
 
 
 #### test equal postgres vs sqlite
@@ -216,7 +217,7 @@ def test_value_edge_getters(pdb,sdb):
 	s.eliminate_zeros()
 
 	assert p.nonzero()[0].shape == s.nonzero()[0].shape and p.nonzero()[1].shape == s.nonzero()[1].shape and (p.nonzero()[0] == s.nonzero()[0]).all() and (p.nonzero()[1] == s.nonzero()[1]).all(), 'Different sparsity structure'
-	assert (np.abs(p.data-s.data)*2./(p.data+s.data)< 10**-4).all()
+	assert (np.abs(p.data-s.data)*2./(p.data+s.data)<= epsilon).all()
 
 def test_value_edge_addmax(pdb,sdb):
 	p = edge_getters.DevToRepoAddMax(db=pdb,repo_list=list(range(5))).get_result()
@@ -226,7 +227,7 @@ def test_value_edge_addmax(pdb,sdb):
 	s.eliminate_zeros()
 
 	assert p.nonzero()[0].shape == s.nonzero()[0].shape and p.nonzero()[1].shape == s.nonzero()[1].shape and (p.nonzero()[0] == s.nonzero()[0]).all() and (p.nonzero()[1] == s.nonzero()[1]).all(), 'Different sparsity structure'
-	assert (np.abs(p.data-s.data)*2./(p.data+s.data)< 10**-4).all()
+	assert (np.abs(p.data-s.data)*2./(p.data+s.data)<= epsilon).all()
 
 def test_value_edge_cr(pdb,sdb):
 	p = edge_getters.DevToRepoAddDailyCommits(db=pdb,repo_list=list(range(5)),daily_commits=0.005/7.).get_result()
@@ -236,7 +237,7 @@ def test_value_edge_cr(pdb,sdb):
 	s.eliminate_zeros()
 
 	assert p.nonzero()[0].shape == s.nonzero()[0].shape and p.nonzero()[1].shape == s.nonzero()[1].shape and (p.nonzero()[0] == s.nonzero()[0]).all() and (p.nonzero()[1] == s.nonzero()[1]).all(), 'Different sparsity structure'
-	assert (np.abs(p.data-s.data)*2./(p.data+s.data)< 10**-4).all()
+	assert (np.abs(p.data-s.data)*2./(p.data+s.data)<= epsilon).all()
 
 def test_value_edge_deps(pdb,sdb):
 	p = edge_getters.RepoToRepoDeps(db=pdb).get_result()
@@ -246,4 +247,4 @@ def test_value_edge_deps(pdb,sdb):
 	s.eliminate_zeros()
 
 	assert p.nonzero()[0].shape == s.nonzero()[0].shape and p.nonzero()[1].shape == s.nonzero()[1].shape and (p.nonzero()[0] == s.nonzero()[0]).all() and (p.nonzero()[1] == s.nonzero()[1]).all(), 'Different sparsity structure'
-	assert (np.abs(p.data-s.data)*2./(p.data+s.data)< 10**-4).all()
+	assert (np.abs(p.data-s.data)*2./(p.data+s.data)<= epsilon).all()

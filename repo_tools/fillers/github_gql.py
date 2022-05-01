@@ -3048,7 +3048,7 @@ class RepoLanguagesGQLFiller(GHGQLFiller):
 		if self.db.db_type == 'postgres':
 			self.db.cursor.execute('''
 				WITH repo_list AS (SELECT DISTINCT repo_id FROM repo_languages WHERE share IS NULL),
-					shares AS (SELECT r.repo_id,rl.language,rl.size::REAL/(SUM(rl.size::REAL) OVER (PARTITION BY r.repo_id)) AS share FROM repo_list r
+					shares AS (SELECT r.repo_id,rl.language,rl.size::DOUBLE PRECISION /(SUM(rl.size::DOUBLE PRECISION ) OVER (PARTITION BY r.repo_id)) AS share FROM repo_list r
 								INNER JOIN repo_languages rl
 								ON rl.repo_id=r.repo_id
 								)
@@ -3801,7 +3801,7 @@ class SingleQueryUserLanguagesGQLFiller(GHGQLFiller):
 		if self.db.db_type == 'postgres':
 			self.db.cursor.execute('''
 				WITH user_list AS (SELECT DISTINCT user_identity FROM user_languages WHERE share IS NULL),
-					shares AS (SELECT r.user_identity,rl.language,rl.size::REAL/(SUM(rl.size::REAL) OVER (PARTITION BY r.user_identity)) AS share FROM user_list r
+					shares AS (SELECT r.user_identity,rl.language,rl.size::DOUBLE PRECISION /(SUM(rl.size::DOUBLE PRECISION) OVER (PARTITION BY r.user_identity)) AS share FROM user_list r
 								INNER JOIN user_languages rl
 								ON rl.user_identity=r.user_identity
 								)
