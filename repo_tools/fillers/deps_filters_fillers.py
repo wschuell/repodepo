@@ -10,8 +10,7 @@ import subprocess
 
 from psycopg2 import extras
 
-from repo_tools import fillers
-import repo_tools as rp
+from .. import fillers
 
 
 class PackageDepsFilter(fillers.Filler):
@@ -361,3 +360,7 @@ class FiltersFolderFiller(fillers.Filler):
 		self.db.add_filler(RepoEdgesDepsFilter(input_file=os.path.join(folder,self.repoedges_file)))
 		self.db.add_filler(PackageEdgesDepsFilter(input_file=os.path.join(folder,self.packageedges_file)))
 
+
+class FiltersLibFolderFiller(FiltersFolderFiller):
+	def __init__(self,**kwargs):
+		FiltersFolderFiller.__init__(self,input_folder=os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(fillers.__file__))),'data','filters'))

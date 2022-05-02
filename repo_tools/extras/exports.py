@@ -131,7 +131,7 @@ def fix_sequences(db):
 			db.cursor.execute(c)
 		db.connection.commit()
 
-def export(orig_db,dest_db,page_size=10**5,ignore_error=False):
+def export(orig_db,dest_db,page_size=10**5,ignore_error=False,force=False):
 	'''
 	Exporting data from one database to another, being SQLite or PostgreSQL for both
 	'''
@@ -161,9 +161,14 @@ destination is not empty but has no _dbinfo table'''.format(orig_db=orig_db.db_n
 		if exportedfrom_uuid is not None:
 			exportedfrom_uuid = exportedfrom_uuid[0]
 
+		dest_db.cursor.execute('''SELECT info_content FROM _dbinfo WHERE info_type='finished_exported_from';''')
+		finished_exportedfrom_uuid = dest_db.cursor.fetchone()
+		if finished_exportedfrom_uuid is not None:
+			finished_exportedfrom_uuid = finished_exportedfrom_uuid[0]
+
 		if orig_uuid is None:
 			raise errors.RepoToolsError('No UUID for origin database')
-		elif exportedfrom_uuid == orig_uuid:
+		elif exportedfrom_uuid == orig_uuid and finished_exportedfrom_uuid == orig_uuid:
 			orig_db.logger.info('Export already done, skipping')
 		elif exportedfrom_uuid is not None:
 			raise errors.RepoToolsError('Trying to export in a non empty DB, already result of an export but from a different source DB')
@@ -182,15 +187,25 @@ destination is not empty but has no _dbinfo table'''.format(orig_db=orig_db.db_n
 					dest_db.logger.warning('You may experience failure of export due to parameter idle_in_transaction_session_timeout not existing in PostgreSQL<9.6')
 			try:
 				for t,columns in tables_info.items():
+					check_sqlname_safe(t)
 					if t in tables_info_dest.keys():
+						dest_db.cursor.execute('SELECT 1 FROM {} LIMIT 1;'.format(t))
+						if dest_db.cursor.fetchone() == (1,) and not force:
+							dest_db.logger.info('Skipping table {}, already exported'.format(t))
+							continue
 						dest_db.logger.info('Exporting table {}'.format(t))
 						table_data = get_table_data(table=t,columns=columns,db=orig_db)
 						insert_table_data(table=t,columns=columns,db=dest_db,table_data=table_data,page_size=page_size)
+						dest_db.connection.commit()
 					else:
 						dest_db.logger.info('Skipping table {}, not in schema of destination DB'.format(t))
 				if dest_db.db_type == 'postgres':
 					dest_db.cursor.execute(enable_triggers_cmd(db=dest_db,tables_info=tables_info_dest))
 					fix_sequences(db=dest_db)
+				if dest_db.db_type == 'postgres':
+					dest_db.cursor.execute('''INSERT INTO _dbinfo(info_type,info_content) VALUES ('finished_exported_from',%(orig_uuid)s);''',{'orig_uuid':orig_uuid})
+				else:
+					dest_db.cursor.execute('''INSERT INTO _dbinfo(info_type,info_content) VALUES ('finished_exported_from',:orig_uuid);''',{'orig_uuid':orig_uuid})
 			except:
 				# closing connection manually because idle_in_transaction_session_timeout is infinite
 				if dest_db.connection.closed == 0:
@@ -296,7 +311,7 @@ def clean_attr(db,table,attr,autocommit=True):
 	if autocommit:
 		db.connection.commit()
 
-def clean(db,*,inclusion_list=None,exclusion_list=None,autocommit=False):
+def clean(db,*,inclusion_list=None,exclusion_list=None,autocommit=False,vacuum_sqlite=True):
 	'''
 	Certain number of steps to prepare the dataset for release, not including pseudonymization
 	'''
@@ -325,6 +340,8 @@ def clean(db,*,inclusion_list=None,exclusion_list=None,autocommit=False):
 	if not autocommit:
 		# db.cursor.execute('COMMIT;')
 		db.connection.commit()
+	if db.db_type == 'sqlite' and vacuum_sqlite:
+		db.cursor.execute('VACUUM;')
 
 def dump_pg_csv(db,output_folder,import_dump=True,schema_dump=True,csv_dump=True,csv_psql=True,force=False,quiet_error=True):
 	'''
@@ -412,8 +429,54 @@ COMMIT;
 					for r in db.cursor.fetchall():
 						writer.writerow(r)
 	
-	db.logger.info('Dumped DB to folder')
 
+	####### script.sh
+	script_sh_content ='''#!/bin/bash
+set -e
+echo 'Database name? (default rust_repos)'
+read DBNAME
+if [ -z "$DBNAME" ]
+then
+	DBNAME="rust_repos"
+fi
+
+echo 'Database host? (default localhost)'
+read DBHOST
+if [ -z "$DBHOST" ]
+then
+	DBHOST="localhost"
+fi
+
+echo 'Database port? (default 5432)'
+read DBPORT
+if [ -z "$DBPORT" ]
+then
+	DBPORT="5432"
+fi
+
+echo 'Database user? (default postgres)'
+read DBUSER
+if [ -z "$DBUSER" ]
+then
+	DBUSER="postgres"
+fi
+
+echo "Create database $DBNAME? (empty=yes)"
+read DBCREATE
+if [ -z "$DBCREATE" ]
+then
+	psql -q -h $DBHOST --port=$DBPORT --user=$DBUSER -c "create database $DBNAME;"
+fi
+
+psql -q -h $DBHOST --port=$DBPORT --user=$DBUSER $DBNAME < schema.sql
+psql -q -h $DBHOST --port=$DBPORT --user=$DBUSER $DBNAME < import.sql
+
+echo "Finishing importing data into $DBNAME"
+'''
+	with open(os.path.join(output_folder,'script.sh'),'w') as f:
+		f.write(script_sh_content)
+
+	db.logger.info('Dumped DB to folder')
 
 
 def export_filters(db,folder=None,overwrite=False):
@@ -485,7 +548,7 @@ def export_filters(db,folder=None,overwrite=False):
 		;''')
 
 	res = list(db.cursor.fetchall())
-	filepath = os.path.join(folder,'filtered_reppoedges.csv')
+	filepath = os.path.join(folder,'filtered_repoedges.csv')
 	if not overwrite and os.path.exists(filepath):
 		with open(filepath,'r') as f:
 			reader = csv.reader(f)

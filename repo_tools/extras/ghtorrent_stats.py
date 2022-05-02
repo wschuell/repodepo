@@ -302,12 +302,17 @@ class UserGHTStats(GHTorrentStats):
 		results['users_ght'] = u_ght
 		results['users_missing_rust'] = u_ght - u_common1
 
+		results['users_common'] = u_common1
+		results['users_missing_ght'] = results['users_rust'] - results['users_common']
+
+
 		self.ght_cur.execute('''SELECT COUNT(*) FROM temp_repo_tools_users tu
 			INNER JOIN users u
 			ON tu.login=u.login
 			;''')
-		results['users_common'] = self.ght_cur.fetchone()[0]
-		results['users_missing_ght'] = results['users_rust'] - results['users_common']
+		results['globalusers_common'] = self.ght_cur.fetchone()[0]
+		results['globalusers_missing_ght'] = results['users_rust'] - results['users_common']
+
 
 		self.logger.info('Computed users result')
 
@@ -343,14 +348,18 @@ class CommitsGHTStats(GHTorrentStats):
 			;''')
 		c_ght,c_common1 = self.ght_cur.fetchone()
 		results['commits_ght'] = c_ght
-		results['commitss_missing_rust'] = c_ght - c_common1
+		results['commits_missing_rust'] = c_ght - c_common1
+	
+		results['commits_common'] = c_common1
+		results['commits_missing_ght'] = results['commits_rust'] - results['commits_common']
 
 		self.ght_cur.execute('''SELECT COUNT(*) FROM temp_repo_tools_commits tc
 			INNER JOIN commits c
 			ON tc.sha=c.sha
 			;''')
-		results['commits_common'] = self.ght_cur.fetchone()[0]
-		results['commits_missing_ght'] = results['commits_rust'] - results['commits_common']
+		results['globalcommits_common'] = self.ght_cur.fetchone()[0]
+		results['globalcommits_missing_ght'] = results['commits_rust'] - results['globalcommits_common']
+
 
 		self.logger.info('Computed commits result')
 
@@ -569,7 +578,7 @@ class UserReposGHTStats(GHTorrentStats):
 		# 	;''')
 		self.ght_cur.execute('''SELECT COUNT(DISTINCT CONCAT(tur.login,'//',tur.owner,'/',tur.name))
 			FROM temp_repo_tools_userrepos tur
-			LEFT OUTER JOIN temp_repo_tools_userrepos_ght turg
+			INNER JOIN temp_repo_tools_userrepos_ght turg
 			ON tur.login=turg.login AND tur.owner=turg.owner AND tur.name=turg.name
 
 			;''')

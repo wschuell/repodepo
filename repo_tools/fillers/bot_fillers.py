@@ -10,8 +10,7 @@ import subprocess
 
 from psycopg2 import extras
 
-from repo_tools import fillers
-import repo_tools as rp
+from .. import fillers
 
 
 class BotFiller(fillers.Filler):
@@ -133,9 +132,10 @@ class BotFileFiller(BotListFiller):
 	'''
 	fills bots from a file, containing only identity (with implied identity_type) or identity_type,identity
 	'''
-	def __init__(self,bot_file,identity_type='github_login',**kwargs):
+	def __init__(self,bot_file,identity_type='github_login',header=True,**kwargs):
 		self.bot_file = bot_file
 		self.identity_type = identity_type
+		self.header = header
 		BotFiller.__init__(self,**kwargs)
 
 
@@ -150,7 +150,10 @@ class BotFileFiller(BotListFiller):
 			self.db.register_source(source=self.source)
 		
 		with open(filepath,'r') as f:
-			self.bot_list = list(csv.reader(f))
+			reader = csv.reader(f)
+			if self.header:
+				next(reader)
+			self.bot_list = list(reader)
 
 		BotListFiller.prepare(self)
 
@@ -161,7 +164,7 @@ class MGBotFiller(BotFileFiller):
 	'''
 	def __init__(self,botfile_url='https://zenodo.org/record/4000388/files/groundtruthbots.csv.gz?download=1',**kwargs):
 		self.botfile_url = botfile_url
-		BotFileFiller.__init__(self,bot_file='groundtruthbots_formatted.csv',**kwargs)
+		BotFileFiller.__init__(self,bot_file='groundtruthbots_formatted.csv',header=True,**kwargs)
 
 	def prepare(self):
 		if self.data_folder is None:
@@ -179,7 +182,8 @@ class MGBotFiller(BotFileFiller):
 		bots = []
 		with open(orig_file,'r') as f:
 			reader = csv.reader(f)
-			next(reader) #header
+			if self.header:
+				next(reader) #header
 			for login,project,bot_or_human in reader:
 				if bot_or_human == 'Bot':
 					bots.append(login)

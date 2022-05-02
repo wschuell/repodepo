@@ -194,3 +194,8 @@ def test_filters(testdb):
 	testdb.add_filler(deps_filters_fillers.RepoDepsFilter(input_list=['GitHub/blah/blih',('GitHub','bloh','bluh'),'blyh/bluh']))
 	testdb.add_filler(deps_filters_fillers.RepoEdgesDepsFilter(input_list=[('GitHub/blah/blih','Gitlab/blih/blah'),('GitHub','bloh','bluh','GitHub','blyh','bloh')]))
 	testdb.add_filler(deps_filters_fillers.PackageEdgesDepsFilter(input_list=[('crates/bloh','juliahub/blah'),('crates','bloh','crates','blyh')]))
+
+@pytest.mark.timeout(30)
+def test_filters_folder(testdb):
+	testdb.add_filler(deps_filters_fillers.FiltersLibFolderFiller())
+	testdb.fill_db()
