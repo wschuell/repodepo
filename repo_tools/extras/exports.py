@@ -91,12 +91,12 @@ def insert_table_data(table,columns,db,table_data,page_size=10**5):
 		check_sqlname_safe(c)
 	if db.db_type == 'postgres':
 		psycopg2.extras.execute_batch(db.cursor,'''
-			INSERT INTO {table}({columns}) VALUES ({separators})
+			INSERT INTO {table}({columns}) VALUES ({separators}) ON CONFLICT DO NOTHING
 			;'''.format(columns=','.join(columns),table=table,separators=','.join(['%s' for _ in columns]))
 			,table_data,page_size=page_size)
 	else:
 		db.cursor.executemany('''
-			INSERT INTO {table}({columns}) VALUES ({separators})
+			INSERT OR IGNORE INTO {table}({columns}) VALUES ({separators})
 			;'''.format(columns=','.join(columns),table=table,separators=','.join(['?' for _ in columns]))
 			,table_data)
 

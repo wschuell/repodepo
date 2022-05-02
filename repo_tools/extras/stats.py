@@ -105,7 +105,7 @@ class PackageStats(DBStats):
 										INNER JOIN repositories r
 										ON r.id=p.repo_id AND r.cloned
 									UNION
-									(SELECT COUNT(p.repo_id),s.name AS sname FROM packages p
+									SELECT * FROM (SELECT COUNT(p.repo_id),s.name AS sname FROM packages p
 									INNER JOIN urls u
 									ON p.url_id=u.id
 									INNER JOIN sources s
@@ -113,7 +113,7 @@ class PackageStats(DBStats):
 									INNER JOIN repositories r
 									ON p.repo_id=r.id AND r.cloned
 									GROUP BY s.name
-									ORDER BY s.name)
+									ORDER BY s.name) AS sq
 									ORDER BY sname;''')
 			ans['total'] = OrderedDict()
 			for cnt,s in self.db.cursor.fetchall():
@@ -121,7 +121,7 @@ class PackageStats(DBStats):
 
 			self.db.cursor.execute('''SELECT COUNT(DISTINCT p.repo_id),'_all' AS sname FROM packages p
 									UNION
-									(SELECT COUNT(DISTINCT p.repo_id),s.name AS sname FROM packages p
+									SELECT * FROM (SELECT COUNT(DISTINCT p.repo_id),s.name AS sname FROM packages p
 									INNER JOIN urls u
 									ON p.url_id=u.id
 									INNER JOIN sources s
@@ -129,7 +129,7 @@ class PackageStats(DBStats):
 									INNER JOIN repositories r
 									ON p.repo_id=r.id AND r.cloned
 									GROUP BY s.name
-									ORDER BY s.name)
+									ORDER BY s.name) AS sq
 									ORDER BY sname;''')
 			ans['distinct'] = OrderedDict()
 			for cnt,s in self.db.cursor.fetchall():
@@ -138,13 +138,13 @@ class PackageStats(DBStats):
 		else:
 			self.db.cursor.execute('''SELECT COUNT(p.repo_id),'_all' AS sname FROM packages p
 									UNION
-									(SELECT COUNT(p.repo_id),s.name AS sname FROM packages p
+									SELECT * FROM (SELECT COUNT(p.repo_id),s.name AS sname FROM packages p
 									INNER JOIN urls u
 									ON p.url_id=u.id
 									INNER JOIN sources s
 									ON u.source_root=s.id
 									GROUP BY s.name
-									ORDER BY s.name)
+									ORDER BY s.name) AS sq
 									ORDER BY sname;''')
 			ans['total'] = OrderedDict()
 			for cnt,s in self.db.cursor.fetchall():
@@ -152,13 +152,13 @@ class PackageStats(DBStats):
 
 			self.db.cursor.execute('''SELECT COUNT(DISTINCT p.repo_id),'_all' AS sname FROM packages p
 									UNION
-									(SELECT COUNT(DISTINCT p.repo_id),s.name AS sname FROM packages p
+									SELECT * FROM (SELECT COUNT(DISTINCT p.repo_id),s.name AS sname FROM packages p
 									INNER JOIN urls u
 									ON p.url_id=u.id
 									INNER JOIN sources s
 									ON u.source_root=s.id
 									GROUP BY s.name
-									ORDER BY s.name)
+									ORDER BY s.name) AS sq
 									ORDER BY sname;''')
 			ans['distinct'] = OrderedDict()
 			for cnt,s in self.db.cursor.fetchall():
@@ -191,13 +191,13 @@ class URLStats(DBStats):
 									INNER JOIN repositories r
 									ON u.id=r.url_id AND r.cloned
 									UNION
-									(SELECT COUNT(u.cleaned_url),s.name AS sname FROM urls u
+									SELECT * FROM (SELECT COUNT(u.cleaned_url),s.name AS sname FROM urls u
 									INNER JOIN sources s
 									ON u.source_root=s.id
 									INNER JOIN repositories r
 									ON u.id=r.url_id AND r.cloned
 									GROUP BY s.name
-									ORDER BY s.name)
+									ORDER BY s.name) AS sq
 									ORDER BY sname;''')
 			ans['total'] = OrderedDict()
 			for cnt,s in self.db.cursor.fetchall():
@@ -207,13 +207,13 @@ class URLStats(DBStats):
 									INNER JOIN repositories r
 									ON u.id=r.url_id AND r.cloned
 									UNION
-									(SELECT COUNT(DISTINCT u.cleaned_url),s.name AS sname FROM urls u
+									SELECT * FROM (SELECT COUNT(DISTINCT u.cleaned_url),s.name AS sname FROM urls u
 									INNER JOIN sources s
 									ON u.source_root=s.id
 									INNER JOIN repositories r
 									ON u.id=r.url_id AND r.cloned
 									GROUP BY s.name
-									ORDER BY s.name)
+									ORDER BY s.name) AS sq
 									ORDER BY sname;''')
 
 			ans['distinct'] = OrderedDict()
@@ -225,13 +225,13 @@ class URLStats(DBStats):
 									INNER JOIN repositories r
 									ON u.id=r.url_id
 									UNION
-									(SELECT COUNT(u.cleaned_url),s.name AS sname FROM urls u
+									SELECT * FROM (SELECT COUNT(u.cleaned_url),s.name AS sname FROM urls u
 									INNER JOIN sources s
 									ON u.source_root=s.id
 									INNER JOIN repositories r
 									ON u.id=r.url_id
 									GROUP BY s.name
-									ORDER BY s.name)
+									ORDER BY s.name) AS sq
 									ORDER BY sname;''')
 			ans['total'] = OrderedDict()
 			for cnt,s in self.db.cursor.fetchall():
@@ -241,13 +241,13 @@ class URLStats(DBStats):
 									INNER JOIN repositories r
 									ON u.id=r.url_id
 									UNION
-									(SELECT COUNT(DISTINCT u.cleaned_url),s.name AS sname FROM urls u
+									SELECT * FROM (SELECT COUNT(DISTINCT u.cleaned_url),s.name AS sname FROM urls u
 									INNER JOIN sources s
 									ON u.source_root=s.id
 									INNER JOIN repositories r
 									ON u.id=r.url_id
 									GROUP BY s.name
-									ORDER BY s.name)
+									ORDER BY s.name) AS sq
 									ORDER BY sname;''')
 
 			ans['distinct'] = OrderedDict()
@@ -291,24 +291,24 @@ class RepoStats(DBStats):
 		if cloned:
 			self.db.cursor.execute('''SELECT COUNT(*),'_all' AS sname FROM repositories r WHERE r.cloned
 				UNION
-					(SELECT COUNT(*),s.name AS sname FROM repositories r
+					SELECT * FROM (SELECT COUNT(*),s.name AS sname FROM repositories r
 					INNER JOIN urls u
 					ON u.id=r.url_id AND r.cloned
 					INNER JOIN sources s
 					ON s.id=u.source_root
 					GROUP BY s.name
-					ORDER BY s.name)
+					ORDER BY s.name) AS sq
 				ORDER BY sname;''')
 		else:
 			self.db.cursor.execute('''SELECT COUNT(*),'_all' AS sname FROM repositories r
 				UNION
-					(SELECT COUNT(*),s.name AS sname FROM repositories r
+					SELECT * FROM (SELECT COUNT(*),s.name AS sname FROM repositories r
 					INNER JOIN urls u
 					ON u.id=r.url_id
 					INNER JOIN sources s
 					ON s.id=u.source_root
 					GROUP BY s.name
-					ORDER BY s.name)
+					ORDER BY s.name) AS sq
 				ORDER BY sname;''')
 		ans = OrderedDict()
 		for cnt,s in self.db.cursor.fetchall():
@@ -326,13 +326,13 @@ class RepoStats(DBStats):
 						HAVING COUNT(DISTINCT i.user_id) =1)
 			SELECT COUNT(DISTINCT r.id),'_all' AS sname FROM repos1dev r
 				UNION
-					(SELECT COUNT(DISTINCT r.id),s.name AS sname FROM repos1dev r
+					SELECT * FROM (SELECT COUNT(DISTINCT r.id),s.name AS sname FROM repos1dev r
 					INNER JOIN urls u
 					ON u.id=r.url_id
 					INNER JOIN sources s
 					ON s.id=u.source_root
 					GROUP BY s.name
-					ORDER BY s.name)
+					ORDER BY s.name) AS sq
 				ORDER BY sname;''')
 		ans = OrderedDict()
 		for cnt,s in self.db.cursor.fetchall():
@@ -350,13 +350,13 @@ class RepoStats(DBStats):
 						HAVING COUNT(DISTINCT i.user_id) >=100)
 			SELECT COUNT(DISTINCT r.id),'_all' AS sname FROM repos1dev r
 				UNION
-					(SELECT COUNT(DISTINCT r.id),s.name AS sname FROM repos1dev r
+					SELECT * FROM (SELECT COUNT(DISTINCT r.id),s.name AS sname FROM repos1dev r
 					INNER JOIN urls u
 					ON u.id=r.url_id
 					INNER JOIN sources s
 					ON s.id=u.source_root
 					GROUP BY s.name
-					ORDER BY s.name)
+					ORDER BY s.name) AS sq
 				ORDER BY sname;''')
 		ans = OrderedDict()
 		for cnt,s in self.db.cursor.fetchall():
@@ -372,7 +372,7 @@ class RepoStats(DBStats):
 									GROUP BY p.repo_id
 									HAVING COUNT(*)=1) a
 			UNION
-			(SELECT COUNT(*),b.sname FROM
+			SELECT * FROM (SELECT COUNT(*),b.sname FROM
 						(SELECT p.repo_id,s.name AS sname , COUNT(*)
 									FROM packages p
 									INNER JOIN repositories r ON r.id=p.repo_id
@@ -380,7 +380,7 @@ class RepoStats(DBStats):
 									ON s.id=r.source
 									GROUP BY p.repo_id,s.name
 									HAVING COUNT(*)=1) b
-						GROUP BY sname)
+						GROUP BY sname) AS sq
 			ORDER BY sname
 			;''')
 		ans = OrderedDict()
@@ -398,7 +398,7 @@ class RepoStats(DBStats):
 									GROUP BY p.repo_id
 									HAVING COUNT(*)>1) a
 				UNION
-				(SELECT COUNT(*),b.sname FROM
+				SELECT * FROM (SELECT COUNT(*),b.sname FROM
 							(SELECT p.repo_id,s.name AS sname , COUNT(*)
 									FROM packages p
 									INNER JOIN repositories r ON r.id=p.repo_id
@@ -406,7 +406,7 @@ class RepoStats(DBStats):
 									ON s.id=r.source
 									GROUP BY p.repo_id,s.name
 									HAVING COUNT(*)>1) b
-						GROUP BY sname)
+						GROUP BY sname) AS sq
 				ORDER BY sname
 				;''')
 		elif option == 'max':
@@ -419,7 +419,7 @@ class RepoStats(DBStats):
 									--HAVING COUNT(*)>1
 									) a
 				UNION
-				(SELECT MAX(cnt),b.sname FROM
+				SELECT * FROM (SELECT MAX(cnt),b.sname FROM
 							(SELECT p.repo_id,s.name AS sname , COUNT(*) as cnt
 									FROM packages p
 									INNER JOIN repositories r ON r.id=p.repo_id
@@ -428,7 +428,7 @@ class RepoStats(DBStats):
 									GROUP BY p.repo_id,s.name
 									--HAVING COUNT(*)>1
 									) b
-						GROUP BY b.sname)
+						GROUP BY b.sname) AS sq
 				ORDER BY sname
 				;''')
 		elif option == 'avg':
@@ -441,7 +441,7 @@ class RepoStats(DBStats):
 									--HAVING COUNT(*)>1
 									) a
 				UNION
-				(SELECT AVG(cnt),b.sname FROM
+				SELECT * FROM (SELECT AVG(cnt),b.sname FROM
 							(SELECT p.repo_id,s.name AS sname , COUNT(*) as cnt
 									FROM packages p
 									INNER JOIN repositories r ON r.id=p.repo_id
@@ -450,7 +450,7 @@ class RepoStats(DBStats):
 									GROUP BY p.repo_id,s.name
 									--HAVING COUNT(*)>1
 									) b
-						GROUP BY sname)
+						GROUP BY sname) AS sq
 				ORDER BY sname
 				;''')
 		else:
@@ -491,7 +491,7 @@ class CommitsStats(DBStats):
 						ON i.id=c.author_id
 						AND i.is_bot
 					UNION
-						(SELECT COUNT(*),s.name AS sname FROM repositories r
+						SELECT * FROM (SELECT COUNT(*),s.name AS sname FROM repositories r
 						INNER JOIN urls u
 						ON u.id=r.url_id
 						INNER JOIN sources s
@@ -502,7 +502,7 @@ class CommitsStats(DBStats):
 						ON i.id=c.author_id
 						AND i.is_bot
 						GROUP BY s.name
-						ORDER BY s.name)
+						ORDER BY s.name) AS sq
 					ORDER BY sname;''')
 		else:
 			self.db.cursor.execute('''
@@ -511,7 +511,7 @@ class CommitsStats(DBStats):
 						ON i.id=c.author_id
 						AND NOT i.is_bot
 					UNION
-						(SELECT COUNT(*),s.name AS sname FROM repositories r
+						SELECT * FROM (SELECT COUNT(*),s.name AS sname FROM repositories r
 						INNER JOIN urls u
 						ON u.id=r.url_id
 						INNER JOIN sources s
@@ -522,7 +522,7 @@ class CommitsStats(DBStats):
 						ON i.id=c.author_id
 						AND NOT i.is_bot
 						GROUP BY s.name
-						ORDER BY s.name)
+						ORDER BY s.name) AS sq
 					ORDER BY sname;''')
 		ans = OrderedDict()
 		for cnt,s in self.db.cursor.fetchall():
@@ -548,7 +548,7 @@ class CommitsStats(DBStats):
 						ON crm.commit_id=c.id
 						AND crm.fork_count>1
 					UNION
-						(SELECT COUNT(*),s.name AS sname,MAX(crm.fork_count) FROM repositories r
+						SELECT * FROM (SELECT COUNT(*),s.name AS sname,MAX(crm.fork_count) FROM repositories r
 						INNER JOIN urls u
 						ON u.id=r.url_id
 						INNER JOIN sources s
@@ -562,7 +562,7 @@ class CommitsStats(DBStats):
 						ON crm.commit_id=c.id
 						AND crm.fork_count>1
 						GROUP BY s.name
-						ORDER BY s.name)
+						ORDER BY s.name) AS sq
 					ORDER BY sname;''')
 		else:
 			self.db.cursor.execute('''
@@ -574,7 +574,7 @@ class CommitsStats(DBStats):
 						ON crm.commit_id=c.id
 						AND crm.fork_count>1
 					UNION
-						(SELECT COUNT(*),s.name AS sname,MAX(crm.fork_count) FROM repositories r
+						SELECT * FROM (SELECT COUNT(*),s.name AS sname,MAX(crm.fork_count) FROM repositories r
 						INNER JOIN urls u
 						ON u.id=r.url_id
 						INNER JOIN sources s
@@ -588,7 +588,7 @@ class CommitsStats(DBStats):
 						ON crm.commit_id=c.id
 						AND crm.fork_count>1
 						GROUP BY s.name
-						ORDER BY s.name)
+						ORDER BY s.name) AS sq
 					ORDER BY sname;''')
 		ans = OrderedDict()
 		for cnt,s,m in self.db.cursor.fetchall():
@@ -718,14 +718,13 @@ class UsersStats(DBStats):
 
 		self.db.cursor.execute('''
 			SELECT COUNT(*) FROM (
-				(SELECT DISTINCT i.user_id FROM identities i
+				SELECT DISTINCT i.user_id FROM identities i
 			EXCEPT
 				SELECT DISTINCT u.id FROM users u
 				INNER JOIN identities i
 				ON i.user_id = u.id
 				INNER JOIN identity_types it
 				ON it.id=i.identity_type_id AND it.name IN ('github_login','gitlab_login')
-				)
 			) sq
 			;''')
 		ans['no_gh_no_gl'] = self.db.cursor.fetchone()[0]

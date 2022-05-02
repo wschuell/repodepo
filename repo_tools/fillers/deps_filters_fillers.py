@@ -168,17 +168,17 @@ class PackageEdgesDepsFilter(PackageDepsFilter):
 		else:
 			self.db.cursor.executemany('''
 				INSERT INTO filtered_deps_packageedges(package_source_id,package_dest_id,reason)
-				SELECT ps.id,pd.id,%(reason)s
+				SELECT ps.id,pd.id,:reason
 				FROM packages ps
 				INNER JOIN sources ss
-				ON ps.name=%(pname1)s
+				ON ps.name=:pname1
 				AND ss.id=ps.source_id
-				AND ss.name=%(psource1)s
+				AND ss.name=:psource1
 				INNER JOIN packages pd
-				ON pd.name=%(pname2)s
+				ON pd.name=:pname2
 				INNER JOIN sources sd
 				ON sd.id=pd.source_id
-				AND sd.name=%(psource2)s
+				AND sd.name=:psource2
 				ON CONFLICT DO NOTHING;
 				''',({'pname1':pname1,'pname2':pname2,'reason':self.reason,'psource1':psource1,'psource2':psource2} for psource1,pname1,psource2,pname2 in self.input_list))
 
