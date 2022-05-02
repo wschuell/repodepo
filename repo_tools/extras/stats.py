@@ -458,9 +458,9 @@ class RepoStats(DBStats):
 		ans = OrderedDict()
 		for cnt,s in self.db.cursor.fetchall():
 			if option == 'avg':
-				ans[s] = float(cnt)
-			else:
-				ans[s] = cnt
+				if cnt is not None:
+					cnt = float(cnt)
+			ans[s] = cnt
 		return ans
 
 
