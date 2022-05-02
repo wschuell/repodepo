@@ -363,4 +363,4 @@ class FiltersFolderFiller(fillers.Filler):
 
 class FiltersLibFolderFiller(FiltersFolderFiller):
 	def __init__(self,**kwargs):
-		FiltersFolderFiller.__init__(self,input_folder=os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(fillers.__file__))),'data','filters'))
+		FiltersFolderFiller.__init__(self,input_folder=os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(fillers.__file__)),'data','filters')))
