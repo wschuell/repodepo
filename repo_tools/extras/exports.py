@@ -170,13 +170,13 @@ destination is not empty but has no _dbinfo table'''.format(orig_db=orig_db.db_n
 			raise errors.RepoToolsError('No UUID for origin database')
 		elif exportedfrom_uuid == orig_uuid and finished_exportedfrom_uuid == orig_uuid:
 			orig_db.logger.info('Export already done, skipping')
-		elif exportedfrom_uuid is not None:
+		elif exportedfrom_uuid is not None and exportedfrom_uuid != orig_uuid:
 			raise errors.RepoToolsError('Trying to export in a non empty DB, already result of an export but from a different source DB')
 		else:
 			if dest_db.db_type == 'postgres':
-				dest_db.cursor.execute('''INSERT INTO _dbinfo(info_type,info_content) VALUES ('exported_from',%(orig_uuid)s);''',{'orig_uuid':orig_uuid})
+				dest_db.cursor.execute('''INSERT INTO _dbinfo(info_type,info_content) VALUES ('exported_from',%(orig_uuid)s) ON CONFLICT DO NOTHING;''',{'orig_uuid':orig_uuid})
 			else:
-				dest_db.cursor.execute('''INSERT INTO _dbinfo(info_type,info_content) VALUES ('exported_from',:orig_uuid);''',{'orig_uuid':orig_uuid})
+				dest_db.cursor.execute('''INSERT OR IGNORE INTO _dbinfo(info_type,info_content) VALUES ('exported_from',:orig_uuid);''',{'orig_uuid':orig_uuid})
 			tables_info = get_tables_info(db=orig_db)
 			tables_info_dest = get_tables_info(db=dest_db)
 			if dest_db.db_type == 'postgres':

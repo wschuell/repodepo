@@ -511,18 +511,18 @@ class CommitsStats(DBStats):
 						ON i.id=c.author_id
 						AND NOT i.is_bot
 					UNION
-						SELECT * FROM (SELECT COUNT(*),s.name AS sname FROM repositories r
+						SELECT * FROM (SELECT COUNT(*),ssq.sname AS sname FROM commits c
+						LEFT OUTER JOIN (SELECT r.id AS rid,s.id AS sid,s.name AS sname FROM repositories r
 						INNER JOIN urls u
 						ON u.id=r.url_id
 						INNER JOIN sources s
-						ON s.id=u.source_root
-						RIGHT OUTER JOIN commits c
-						ON r.id=c.repo_id
+						ON s.id=u.source_root) AS ssq
+						ON ssq.rid=c.repo_id
 						INNER JOIN identities i
 						ON i.id=c.author_id
 						AND NOT i.is_bot
-						GROUP BY s.name
-						ORDER BY s.name) AS sq
+						GROUP BY ssq.sname
+						ORDER BY ssq.sname) AS sq
 					ORDER BY sname;''')
 		ans = OrderedDict()
 		for cnt,s in self.db.cursor.fetchall():
@@ -574,21 +574,21 @@ class CommitsStats(DBStats):
 						ON crm.commit_id=c.id
 						AND crm.fork_count>1
 					UNION
-						SELECT * FROM (SELECT COUNT(*),s.name AS sname,MAX(crm.fork_count) FROM repositories r
+						SELECT * FROM (SELECT COUNT(*),ssq.sname AS sname,MAX(crm.fork_count) FROM commits c
+						LEFT OUTER JOIN (SELECT r.id AS rid, s.id AS sid, s.name AS sname FROM repositories r
 						INNER JOIN urls u
 						ON u.id=r.url_id
 						INNER JOIN sources s
-						ON s.id=u.source_root
-						RIGHT OUTER JOIN commits c
-						ON r.id=c.repo_id
+						ON s.id=u.source_root) AS ssq
+						ON ssq.rid=c.repo_id
 						INNER JOIN identities i
 						ON i.id=c.author_id
 						AND NOT i.is_bot
 						INNER JOIN commit_repos_multiplicity crm
 						ON crm.commit_id=c.id
 						AND crm.fork_count>1
-						GROUP BY s.name
-						ORDER BY s.name) AS sq
+						GROUP BY ssq.sname
+						ORDER BY ssq.sname) AS sq
 					ORDER BY sname;''')
 		ans = OrderedDict()
 		for cnt,s,m in self.db.cursor.fetchall():
