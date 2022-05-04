@@ -10,7 +10,7 @@ import numpy as np
 import json
 from scipy import sparse
 
-import repo_tools as rp
+
 from repodepo.getters import edge_getters,rank_getters
 
 
