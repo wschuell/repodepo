@@ -5,3 +5,9 @@ pandas
 psycopg2-binary
 pytest-timeout
 gitpython
+oyaml
+scipy
+sh
+psutil
+python-dateutil
+networkx

@@ -1,0 +1,3 @@
+include repodepo/*.sql
+include repodepo/data/*.csv
+include repodepo/data/filters/*.csv

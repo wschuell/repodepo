@@ -1,4 +1,4 @@
-# REPO TOOLS
+# # REPODEPO (previously named repo_tools)
 
 Set of classes and methods to collect information from selected github repositories, update them and track failures.
 
