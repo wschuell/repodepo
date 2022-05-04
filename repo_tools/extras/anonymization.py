@@ -2,8 +2,7 @@
 
 import secrets
 
-import repo_tools as rp
-from repo_tools import fillers
+from .. import fillers
 
 import time
 import os

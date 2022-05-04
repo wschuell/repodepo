@@ -19,9 +19,8 @@ import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
 
 
-from repo_tools import fillers
-from repo_tools.fillers import generic
-import repo_tools as rp
+from .. import fillers
+from ..fillers import generic
 
 from github.GithubException import UnknownObjectException,RateLimitExceededException,IncompletableObject
 

@@ -3,9 +3,8 @@ import os
 import psycopg2
 import json
 
-from repo_tools import fillers
-from repo_tools.fillers import generic
-import repo_tools as rp
+from .. import fillers
+from ..fillers import generic
 
 class JuliaHubFiller(generic.PackageFiller):
 	"""

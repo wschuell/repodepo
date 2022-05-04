@@ -29,6 +29,8 @@ class Stats(generic_getters.Getter):
 		'''
 		saves output from format_resuts in a file
 		'''
+		if not os.path.exists(os.path.dirname(filepath)):
+			os.makedirs(os.path.dirname(filepath))
 		with open(filepath,'w') as f:
 			f.write(self.format_result(**kwargs))
 

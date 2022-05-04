@@ -98,7 +98,7 @@ class Database(object):
 
 	def __init__(self,
 					db_type='sqlite',
-					db_name='repo_tools',
+					db_name='repo_db',
 					db_folder='.',
 					db_schema=None,
 					db_user='postgres',
@@ -109,7 +109,7 @@ class Database(object):
 					clean_first=False,
 					do_init=False,
 					timeout=5,
-					computation_db_name='repo_tools_computation.db',
+					computation_db_name='repo_db_computation.db',
 					reconnect_on_pickling=False):
 		self.reconnect_on_pickling = reconnect_on_pickling
 		self.db_type = db_type

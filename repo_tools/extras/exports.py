@@ -73,17 +73,60 @@ def get_tables_info(db,as_yml=False,keep_dbinfo=False):
 		return ans
 
 
-def get_table_data(table,columns,db):
+def get_table_data(table,columns,db,batch_size=None,use_multiqueries=False,page_size=None):
 	'''
 	gets a generator outputing the rows of the table
 	'''
 	check_sqlname_safe(table)
+
+	if (not use_multiqueries) and db.db_type == 'postgres':
+		cursor = db.connection.cursor(name='cursor_{}'.format(table))
+		if page_size is not None:
+			cursor.itersize = page_size
+	else:
+		cursor = db.cursor
+		if db.db_type == 'postgres':
+			orig_itersize = cursor.itersize
+			if page_size is not None:
+				cursor.itersize = page_size
+
 	for c in columns:
 		check_sqlname_safe(c)
-	db.cursor.execute('''
+
+	if batch_size is None:
+		cursor.execute('''
 			SELECT {columns} FROM {table}
 			;'''.format(columns=','.join(columns),table=table))
-	return db.cursor.fetchall()
+		return cursor.fetchall()
+	else:
+		def ans_gen():
+			counter = 0
+			if not use_multiqueries:
+				cursor.execute('''
+						SELECT {columns} FROM {table}
+					;'''.format(columns=','.join(columns),table=table))
+			while True:
+				if use_multiqueries:
+					cursor.execute('''
+							SELECT {columns} FROM {table}
+							LIMIT {limit} OFFSET {offset}
+						;'''.format(columns=','.join(columns),table=table,limit=batch_size,offset=counter))
+					rows = list(cursor.fetchall())
+				else:
+					rows = cursor.fetchmany(batch_size)
+				if not rows:
+					break
+				else:
+					if counter != 0 or len(rows) == batch_size:
+						db.logger.info('Fetched {} rows of table {}'.format(counter+len(rows),table))
+						counter += len(rows)
+					for r in rows:
+						yield r
+					if len(rows) < batch_size:
+						break
+			if db.db_type == 'postgres' and use_multiqueries:
+				cursor.itersize = orig_itersize
+		return ans_gen()
 
 def insert_table_data(table,columns,db,table_data,page_size=10**5):
 	check_sqlname_safe(table)
@@ -93,12 +136,12 @@ def insert_table_data(table,columns,db,table_data,page_size=10**5):
 		psycopg2.extras.execute_batch(db.cursor,'''
 			INSERT INTO {table}({columns}) VALUES ({separators}) ON CONFLICT DO NOTHING
 			;'''.format(columns=','.join(columns),table=table,separators=','.join(['%s' for _ in columns]))
-			,table_data,page_size=page_size)
+			,(td for td in table_data),page_size=page_size)
 	else:
 		db.cursor.executemany('''
 			INSERT OR IGNORE INTO {table}({columns}) VALUES ({separators})
 			;'''.format(columns=','.join(columns),table=table,separators=','.join(['?' for _ in columns]))
-			,table_data)
+			,(td for td in table_data))
 
 def fix_sequences(db):
 	if db.db_type == 'postgres':
@@ -131,7 +174,7 @@ def fix_sequences(db):
 			db.cursor.execute(c)
 		db.connection.commit()
 
-def export(orig_db,dest_db,page_size=10**5,ignore_error=False,force=False):
+def export(orig_db,dest_db,page_size=10**5,ignore_error=False,force=False,batch_size=10**6):
 	'''
 	Exporting data from one database to another, being SQLite or PostgreSQL for both
 	'''
@@ -194,7 +237,7 @@ destination is not empty but has no _dbinfo table'''.format(orig_db=orig_db.db_n
 							dest_db.logger.info('Skipping table {}, already exported'.format(t))
 							continue
 						dest_db.logger.info('Exporting table {}'.format(t))
-						table_data = get_table_data(table=t,columns=columns,db=orig_db)
+						table_data = get_table_data(table=t,columns=columns,db=orig_db,batch_size=batch_size,page_size=page_size) # as a generator
 						insert_table_data(table=t,columns=columns,db=dest_db,table_data=table_data,page_size=page_size)
 						dest_db.connection.commit()
 					else:

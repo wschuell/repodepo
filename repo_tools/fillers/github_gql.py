@@ -16,10 +16,9 @@ import asyncio
 import time
 import random
 
-from repo_tools import fillers
-from repo_tools.fillers import generic
-from repo_tools.fillers import github_rest
-import repo_tools as rp
+from .. import fillers
+from ..fillers import generic
+from ..fillers import github_rest
 
 import gql
 from gql import gql, Client

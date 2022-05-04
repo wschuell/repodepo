@@ -10,8 +10,7 @@ import subprocess
 
 from psycopg2 import extras
 
-from repo_tools import fillers
-import repo_tools as rp
+from .. import fillers
 
 
 class RepoSyntaxError(ValueError):

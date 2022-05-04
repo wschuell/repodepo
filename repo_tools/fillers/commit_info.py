@@ -8,9 +8,9 @@ import git
 import itertools
 import psutil
 
-from repo_tools import fillers
-from repo_tools.fillers import generic
-import repo_tools as rp
+from .. import fillers
+from ..fillers import generic
+
 import multiprocessing as mp
 
 class CommitsFiller(fillers.Filler):
