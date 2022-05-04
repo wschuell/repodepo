@@ -3,6 +3,7 @@ from collections import OrderedDict
 import oyaml as yaml
 import networkx as nx
 import datetime
+import os
 
 from ..getters import generic_getters,edge_getters,rank_getters
 
