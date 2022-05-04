@@ -1,9 +1,9 @@
 
-import repo_tools
-from repo_tools import extras
-from repo_tools.extras import exports
-from repo_tools.fillers import generic,meta_fillers
-from repo_tools.getters import project_getters,user_getters,generic_getters,combined_getters,edge_getters
+import repodepo
+from repodepo import extras
+from repodepo.extras import exports
+from repodepo.fillers import generic,meta_fillers
+from repodepo.getters import project_getters,user_getters,generic_getters,combined_getters,edge_getters
 import pytest
 import datetime
 import time
@@ -104,7 +104,7 @@ def combined_g(request):
 
 @pytest.fixture(params=dbtype_list)
 def testdb(request):
-	db = repo_tools.repo_database.Database(db_name='travis_ci_test_repo_tools',db_type=request.param,data_folder=os.path.join(os.path.dirname(__file__),'dummy_data'))
+	db = repodepo.repo_database.Database(db_name='travis_ci_test_repo_tools',db_type=request.param,data_folder=os.path.join(os.path.dirname(__file__),'dummy_data'))
 	db.init_db()
 	db.cursor.execute('''SELECT info_content FROM _dbinfo WHERE info_type='DB_INIT';''')
 	ans = db.cursor.fetchone()
@@ -122,7 +122,7 @@ def testdb(request):
 
 @pytest.fixture(params=['postgres'])
 def pdb(request):
-	db = repo_tools.repo_database.Database(db_name='travis_ci_test_repo_tools',db_type=request.param,data_folder=os.path.join(os.path.dirname(__file__),'dummy_data'))
+	db = repodepo.repo_database.Database(db_name='travis_ci_test_repo_tools',db_type=request.param,data_folder=os.path.join(os.path.dirname(__file__),'dummy_data'))
 	yield db
 	db.connection.close()
 	del db
@@ -130,8 +130,8 @@ def pdb(request):
 
 @pytest.fixture(params=['sqlite'])
 def sdb(request):
-	orig_db = repo_tools.repo_database.Database(db_name='travis_ci_test_repo_tools',db_type='postgres',data_folder=os.path.join(os.path.dirname(__file__),'dummy_data'))
-	db = repo_tools.repo_database.Database(db_name='travis_ci_test_repo_tools_comparison',db_type=request.param,data_folder=os.path.join(os.path.dirname(__file__),'dummy_data'))
+	orig_db = repodepo.repo_database.Database(db_name='travis_ci_test_repo_tools',db_type='postgres',data_folder=os.path.join(os.path.dirname(__file__),'dummy_data'))
+	db = repodepo.repo_database.Database(db_name='travis_ci_test_repo_tools_comparison',db_type=request.param,data_folder=os.path.join(os.path.dirname(__file__),'dummy_data'))
 	extras.exports.export(orig_db=orig_db,dest_db=db)
 	yield db
 	db.connection.close()

@@ -1,5 +1,5 @@
 
-import repo_tools
+import repodepo
 import pytest
 import datetime
 import time
@@ -17,7 +17,7 @@ def dbtype(request):
 
 @pytest.fixture(params=dbtype_list)
 def testdb(request):
-	db = repo_tools.repo_database.Database(db_name='travis_ci_test_repo_tools',db_type=request.param)
+	db = repodepo.repo_database.Database(db_name='travis_ci_test_repo_tools',db_type=request.param)
 	db.clean_db()
 	db.init_db()
 	yield db
@@ -26,7 +26,7 @@ def testdb(request):
 
 @pytest.fixture(params=dbtype_list)
 def otherdb(request):
-	db = repo_tools.repo_database.Database(db_name='travis_ci_test_repo_tools_dumptest',db_type=request.param)
+	db = repodepo.repo_database.Database(db_name='travis_ci_test_repo_tools_dumptest',db_type=request.param)
 	db.clean_db()
 	db.init_db()
 	yield db
@@ -38,7 +38,7 @@ def otherdb(request):
 #### Tests
 
 def test_createdb(dbtype):
-	db = repo_tools.repo_database.Database(db_name='travis_ci_test_repo_tools',db_type=dbtype,clean_first=True)
+	db = repodepo.repo_database.Database(db_name='travis_ci_test_repo_tools',db_type=dbtype,clean_first=True)
 
 def test_cleandb(testdb):
 	testdb.clean_db()

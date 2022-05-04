@@ -1,6 +1,6 @@
 
-import repo_tools
-from repo_tools.fillers import generic,commit_info,github_gql,meta_fillers,github_rest,snowball
+import repodepo
+from repodepo.fillers import generic,commit_info,github_gql,meta_fillers,github_rest,snowball
 import pytest
 import datetime
 import time
@@ -19,7 +19,7 @@ def dbtype(request):
 
 @pytest.fixture(params=dbtype_list)
 def testdb(request):
-	db = repo_tools.repo_database.Database(db_name='travis_ci_test_repo_tools',db_type=request.param,data_folder='dummy_clones')
+	db = repodepo.repo_database.Database(db_name='travis_ci_test_repo_tools',db_type=request.param,data_folder='dummy_clones')
 	db.clean_db()
 	db.init_db()
 	yield db

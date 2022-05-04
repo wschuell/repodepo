@@ -1,7 +1,7 @@
 
-import repo_tools
-from repo_tools.fillers import generic,commit_info,github_gql,meta_fillers,bot_fillers
-from repo_tools.extras import anonymize,exports,errors,stats,anonymization
+import repodepo
+from repodepo.fillers import generic,commit_info,github_gql,meta_fillers,bot_fillers
+from repodepo.extras import anonymize,exports,errors,stats,anonymization
 import pytest
 import datetime
 import time
@@ -21,7 +21,7 @@ def dbtype(request):
 
 @pytest.fixture(params=dbtype_list)
 def testdb(request):
-	db = repo_tools.repo_database.Database(db_name='travis_ci_test_repo_tools',db_type=request.param,data_folder='dummy_clones')
+	db = repodepo.repo_database.Database(db_name='travis_ci_test_repo_tools',db_type=request.param,data_folder='dummy_clones')
 	# db.clean_db()
 	db.init_db()
 	db.add_filler(bot_fillers.BotFiller(identity_type='email',pattern='%@gmail.com'))
@@ -33,7 +33,7 @@ def testdb(request):
 
 @pytest.fixture(params=dbtype_list)
 def dest_db(request):
-	db = repo_tools.repo_database.Database(db_name='travis_ci_test_repo_tools_export',db_type=request.param,data_folder='dummy_clones')
+	db = repodepo.repo_database.Database(db_name='travis_ci_test_repo_tools_export',db_type=request.param,data_folder='dummy_clones')
 	db.clean_db()
 	db.init_db()
 	yield db
@@ -42,8 +42,8 @@ def dest_db(request):
 
 @pytest.fixture(params=dbtype_list)
 def dest_db_exported(request):
-	orig_db = repo_tools.repo_database.Database(db_name='travis_ci_test_repo_tools',db_type=request.param,data_folder='dummy_clones')
-	db = repo_tools.repo_database.Database(db_name='travis_ci_test_repo_tools_export',db_type=request.param,data_folder='dummy_clones')
+	orig_db = repodepo.repo_database.Database(db_name='travis_ci_test_repo_tools',db_type=request.param,data_folder='dummy_clones')
+	db = repodepo.repo_database.Database(db_name='travis_ci_test_repo_tools_export',db_type=request.param,data_folder='dummy_clones')
 	db.clean_db()
 	db.init_db()
 	exports.export(orig_db=orig_db,dest_db=db)
@@ -55,8 +55,8 @@ def dest_db_exported(request):
 
 @pytest.fixture(params=dbtype_list)
 def dest_db_anon(request):
-	orig_db = repo_tools.repo_database.Database(db_name='travis_ci_test_repo_tools',db_type=request.param,data_folder='dummy_clones')
-	db = repo_tools.repo_database.Database(db_name='travis_ci_test_repo_tools_export',db_type=request.param,data_folder='dummy_clones')
+	orig_db = repodepo.repo_database.Database(db_name='travis_ci_test_repo_tools',db_type=request.param,data_folder='dummy_clones')
+	db = repodepo.repo_database.Database(db_name='travis_ci_test_repo_tools_export',db_type=request.param,data_folder='dummy_clones')
 	db.clean_db()
 	db.init_db()
 	exports.export(orig_db=orig_db,dest_db=db)

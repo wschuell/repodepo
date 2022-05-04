@@ -1,6 +1,6 @@
 
-import repo_tools
-from repo_tools.fillers import generic,meta_fillers
+import repodepo
+from repodepo.fillers import generic,meta_fillers
 import pytest
 import datetime
 import time
@@ -11,7 +11,7 @@ import json
 from scipy import sparse
 
 import repo_tools as rp
-from repo_tools.getters import edge_getters,rank_getters
+from repodepo.getters import edge_getters,rank_getters
 
 
 #### Parameters
@@ -30,7 +30,7 @@ def rank_class(request):
 
 @pytest.fixture(params=dbtype_list)
 def testdb(request):
-	db = repo_tools.repo_database.Database(db_name='travis_ci_test_repo_tools',db_type=request.param,data_folder=os.path.join(os.path.dirname(__file__),'dummy_data'))
+	db = repodepo.repo_database.Database(db_name='travis_ci_test_repo_tools',db_type=request.param,data_folder=os.path.join(os.path.dirname(__file__),'dummy_data'))
 	db.init_db()
 	db.cursor.execute('''SELECT info_content FROM _dbinfo WHERE info_type='DB_INIT';''')
 	ans = db.cursor.fetchone()

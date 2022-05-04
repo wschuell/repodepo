@@ -1,2 +1,3 @@
-include repo_tools/*.sql
-include repo_tools/data/*.csv
+include repodepo/*.sql
+include repodepo/data/*.csv
+include repodepo/data/filters/*.csv
