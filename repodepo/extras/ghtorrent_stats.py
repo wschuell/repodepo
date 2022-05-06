@@ -10,9 +10,10 @@ class GHTorrentStats(DBStats):
 	Comparison of data present in the database with data present in a GHTorrent SQL DB
 	Creation of temporary tables should be granted on the GHTorrent DB
 	'''
-	def __init__(self,ght_cur,ght_conn,max_time=None,full_results=False,limit=None,**kwargs):
+	def __init__(self,ght_cur,ght_conn,max_time=None,full_results=False,limit=None,only_cloned=True,**kwargs):
 		self.ght_cur = ght_cur
 		self.ght_conn = ght_conn
+		self.only_cloned = only_cloned
 		self.limit = limit
 		self.full_results = full_results
 		DBStats.__init__(self,**kwargs)
@@ -34,7 +35,16 @@ class GHTorrentStats(DBStats):
 		if len(list(self.ght_cur.fetchall())) == 0:
 			self.logger.info('Filling commits in GHTorrent DB temp table')
 
-			self.db.cursor.execute('SELECT sha FROM commits WHERE created_at<=%(max_time)s',{'max_time':self.max_time})
+			self.db.cursor.execute('''SELECT DISTINCT c.sha
+						FROM commits c
+						INNER JOIN commit_repos cr
+						ON c.id=cr.commit_id
+						AND c.created_at<=%(max_time)s
+						INNER JOIN repositories r
+						ON r.id=cr.repo_id
+						INNER JOIN sources s
+						ON r.source=s.id AND s.name='GitHub'
+									;''',{'max_time':self.max_time})
 
 			if self.limit is None:
 				results = self.db.cursor.fetchall()
@@ -96,10 +106,16 @@ class GHTorrentStats(DBStats):
 		if len(list(self.ght_cur.fetchall())) == 0:
 			self.logger.info('Filling repositories in GHTorrent DB temp table')
 			self.db.cursor.execute('''SELECT DISTINCT r.owner,r.name,r.cloned FROM repositories r
+				INNER JOIN sources s
+				ON s.name='GitHub' AND s.id=r.source
+				AND ((NOT %(only_cloned)s) OR r.cloned)
+				--INNER JOIN commit_repos cr
+				--ON cr.repo_id=r.id
 				INNER JOIN commits c
+				--ON cr.repo_id=c.id
 				ON c.repo_id=r.id
 				 AND c.created_at<=%(max_time)s
-				;''',{'max_time':self.max_time})
+				;''',{'max_time':self.max_time,'only_cloned':self.only_cloned})
 
 			if self.limit is None:
 				results = self.db.cursor.fetchall()
@@ -139,6 +155,8 @@ class GHTorrentStats(DBStats):
 			# 	ON it.id=i2.identity_type_id AND it.name='github_login'
 			# 	;''',{'max_time':self.max_time})
 			self.db.cursor.execute('''SELECT DISTINCT r.owner,r.name,i2.identity FROM repositories r
+				INNER JOIN sources s
+				ON s.name='GitHub' AND s.id=r.source
 				INNER JOIN commit_repos cr
 				ON cr.repo_id=r.id
 				INNER JOIN commits c

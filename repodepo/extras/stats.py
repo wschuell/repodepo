@@ -190,15 +190,19 @@ class URLStats(DBStats):
 		ans = OrderedDict()
 
 		if cloned:
-			self.db.cursor.execute('''SELECT COUNT(u.cleaned_url),'_all' AS sname FROM urls u
+			self.db.cursor.execute('''SELECT COUNT(*),'_all' AS sname FROM urls u
+									INNER JOIN urls cu
+									ON cu.id=COALESCE(u.cleaned_url,u.id)
 									INNER JOIN repositories r
-									ON u.id=r.url_id AND r.cloned
+									ON cu.id=r.url_id AND r.cloned
 									UNION
-									SELECT * FROM (SELECT COUNT(u.cleaned_url),s.name AS sname FROM urls u
+									SELECT * FROM (SELECT COUNT(*),s.name AS sname FROM urls u
+									INNER JOIN urls cu
+									ON cu.id=COALESCE(u.cleaned_url,u.id)
 									INNER JOIN sources s
-									ON u.source_root=s.id
+									ON cu.source_root=s.id
 									INNER JOIN repositories r
-									ON u.id=r.url_id AND r.cloned
+									ON cu.id=r.url_id AND r.cloned
 									GROUP BY s.name
 									ORDER BY s.name) AS sq
 									ORDER BY sname;''')
@@ -206,15 +210,19 @@ class URLStats(DBStats):
 			for cnt,s in self.db.cursor.fetchall():
 				ans['total'][s] = cnt
 
-			self.db.cursor.execute('''SELECT COUNT(DISTINCT u.cleaned_url),'_all' AS sname FROM urls u
+			self.db.cursor.execute('''SELECT COUNT(DISTINCT COALESCE(u.cleaned_url,u.id)),'_all' AS sname FROM urls u
+									INNER JOIN urls cu
+									ON cu.id=COALESCE(u.cleaned_url,u.id)
 									INNER JOIN repositories r
-									ON u.id=r.url_id AND r.cloned
+									ON cu.id=r.url_id AND r.cloned
 									UNION
-									SELECT * FROM (SELECT COUNT(DISTINCT u.cleaned_url),s.name AS sname FROM urls u
+									SELECT * FROM (SELECT COUNT(DISTINCT COALESCE(u.cleaned_url,u.id)),s.name AS sname FROM urls u
+									INNER JOIN urls cu
+									ON cu.id=COALESCE(u.cleaned_url,u.id)
 									INNER JOIN sources s
-									ON u.source_root=s.id
+									ON cu.source_root=s.id
 									INNER JOIN repositories r
-									ON u.id=r.url_id AND r.cloned
+									ON cu.id=r.url_id AND r.cloned
 									GROUP BY s.name
 									ORDER BY s.name) AS sq
 									ORDER BY sname;''')
@@ -224,15 +232,19 @@ class URLStats(DBStats):
 				ans['distinct'][s] = cnt
 
 		else:
-			self.db.cursor.execute('''SELECT COUNT(u.cleaned_url),'_all' AS sname FROM urls u
+			self.db.cursor.execute('''SELECT COUNT(*),'_all' AS sname FROM urls u
+									INNER JOIN urls cu
+									ON cu.id=COALESCE(u.cleaned_url,u.id)
 									INNER JOIN repositories r
-									ON u.id=r.url_id
+									ON cu.id=r.url_id
 									UNION
-									SELECT * FROM (SELECT COUNT(u.cleaned_url),s.name AS sname FROM urls u
+									SELECT * FROM (SELECT COUNT(*),s.name AS sname FROM urls u
+									INNER JOIN urls cu
+									ON cu.id=COALESCE(u.cleaned_url,u.id)
 									INNER JOIN sources s
-									ON u.source_root=s.id
+									ON cu.source_root=s.id
 									INNER JOIN repositories r
-									ON u.id=r.url_id
+									ON cu.id=r.url_id
 									GROUP BY s.name
 									ORDER BY s.name) AS sq
 									ORDER BY sname;''')
@@ -240,15 +252,19 @@ class URLStats(DBStats):
 			for cnt,s in self.db.cursor.fetchall():
 				ans['total'][s] = cnt
 
-			self.db.cursor.execute('''SELECT COUNT(DISTINCT u.cleaned_url),'_all' AS sname FROM urls u
+			self.db.cursor.execute('''SELECT COUNT(DISTINCT COALESCE(u.cleaned_url,u.id)),'_all' AS sname FROM urls u
+									INNER JOIN urls cu
+									ON cu.id=COALESCE(u.cleaned_url,u.id)
 									INNER JOIN repositories r
-									ON u.id=r.url_id
+									ON cu.id=r.url_id
 									UNION
-									SELECT * FROM (SELECT COUNT(DISTINCT u.cleaned_url),s.name AS sname FROM urls u
+									SELECT * FROM (SELECT COUNT(DISTINCT COALESCE(u.cleaned_url,u.id)),s.name AS sname FROM urls u
+									INNER JOIN urls cu
+									ON cu.id=COALESCE(u.cleaned_url,u.id)
 									INNER JOIN sources s
-									ON u.source_root=s.id
+									ON cu.source_root=s.id
 									INNER JOIN repositories r
-									ON u.id=r.url_id
+									ON cu.id=r.url_id
 									GROUP BY s.name
 									ORDER BY s.name) AS sq
 									ORDER BY sname;''')

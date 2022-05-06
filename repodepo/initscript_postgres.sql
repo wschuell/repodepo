@@ -310,7 +310,7 @@
 				CREATE INDEX IF NOT EXISTS package_version_downloads_date_idx ON package_version_downloads(downloaded_at);
 
 				CREATE TABLE IF NOT EXISTS repo_languages(
-					repo_id BIGSERIAL REFERENCES repositories(id) ON DELETE CASCADE,
+					repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
 					language TEXT NOT NULL,
 					size INT,
 					share DOUBLE PRECISION,
@@ -321,7 +321,7 @@
 				CREATE INDEX IF NOT EXISTS lang_idx ON repo_languages(language,repo_id);
 
 				CREATE TABLE IF NOT EXISTS user_languages(
-					user_identity BIGSERIAL REFERENCES identities(id) ON DELETE CASCADE,
+					user_identity BIGINT REFERENCES identities(id) ON DELETE CASCADE,
 					language TEXT NOT NULL,
 					size DOUBLE PRECISION,
 					share DOUBLE PRECISION,

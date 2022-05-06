@@ -32,7 +32,7 @@ def anonymize(db,salt=None,keep_email_suffixes=True,ignore_error=False):
 		db.fill_db()
 	except errors.RepoToolsDBStructError:
 		if ignore_error:
-			db.logger.info('Skipping anonymization step, DB seems to have already be cleaned (_dbinfo table missing)')
+			db.logger.info('Skipping anonymization step, DB seems to have already been cleaned (_dbinfo table missing)')
 		else:
 			raise
 
