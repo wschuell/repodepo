@@ -381,6 +381,9 @@ def clean(db,*,inclusion_list=None,exclusion_list=None,autocommit=False,vacuum_s
 	'''
 	Certain number of steps to prepare the dataset for release, not including pseudonymization
 	'''
+
+	db.clean_users()
+
 	if autocommit is False:
 		db.cursor.execute('BEGIN TRANSACTION;')
 	if exclusion_list is not None and inclusion_list is not None:
