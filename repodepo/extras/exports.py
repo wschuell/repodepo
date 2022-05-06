@@ -12,6 +12,16 @@ import psycopg2.extras
 from . import errors
 from . import check_sqlname_safe
 
+def sizeof_fmt(num, suffix="B"):
+	'''
+	From https://stackoverflow.com/questions/1094841/get-human-readable-version-of-file-size
+	'''
+	for unit in ["", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei", "Zi"]:
+		if abs(num) < 1024.0:
+			return f"{num:3.1f}{unit}{suffix}"
+		num /= 1024.0
+	return f"{num:.1f}Yi{suffix}"
+
 def check_db_equal(db,other_db):
 	'''
 	Checks whether the databases are the same or not by inserting a random value in a new table
@@ -183,6 +193,7 @@ def export(orig_db,dest_db,page_size=10**5,ignore_error=False,force=False,batch_
 		raise errors.RepoToolsExportSameDBError
 	else:
 		dest_t_info = get_tables_info(dest_db,keep_dbinfo=True)
+		orig_t_info = get_tables_info(orig_db,keep_dbinfo=True)
 		if len(dest_t_info) == 0:
 			dest_db.init_db()
 		elif '_dbinfo' not in dest_t_info.keys():
@@ -194,7 +205,17 @@ destination is not empty but has no _dbinfo table'''.format(orig_db=orig_db.db_n
 															destdb_type=dest_db.db_type))
 				return
 			else:
-				raise errors.RepoToolsDBStructError('The destination database does not have the proper structure.')
+				raise errors.RepoToolsDBStructError('The destination database (for export) does not have the proper structure.')
+		elif '_dbinfo' not in orig_t_info.keys():
+			if ignore_error:
+				orig_db.logger.info('''Skipping export from {orig_db}({orig_db_type}) to {destdb}({destdb_type}):
+origin has no _dbinfo table'''.format(orig_db=orig_db.db_name,
+															orig_db_type=orig_db.db_type,
+															destdb=dest_db.db_name,
+															destdb_type=dest_db.db_type))
+				return
+			else:
+				raise errors.RepoToolsDBStructError('The origin database (for export) does not have the proper structure.')
 
 		orig_db.cursor.execute('''SELECT info_content FROM _dbinfo WHERE info_type='uuid';''')
 		orig_uuid = orig_db.cursor.fetchone()[0]
@@ -251,8 +272,10 @@ destination is not empty but has no _dbinfo table'''.format(orig_db=orig_db.db_n
 					dest_db.cursor.execute('''INSERT INTO _dbinfo(info_type,info_content) VALUES ('finished_exported_from',:orig_uuid);''',{'orig_uuid':orig_uuid})
 			except:
 				# closing connection manually because idle_in_transaction_session_timeout is infinite
-				if dest_db.connection.closed == 0:
+				try:
 					dest_db.connection.close()
+				except:
+					pass
 				raise
 			dest_db.connection.commit()
 
@@ -384,7 +407,9 @@ def clean(db,*,inclusion_list=None,exclusion_list=None,autocommit=False,vacuum_s
 		# db.cursor.execute('COMMIT;')
 		db.connection.commit()
 	if db.db_type == 'sqlite' and vacuum_sqlite:
+		db.logger.info('Vacuuming SQLite DB {}, initial file size: {}'.format(db.db_name,sizeof_fmt(os.path.getsize(db.db_path))))
 		db.cursor.execute('VACUUM;')
+		db.logger.info('Vacuumed SQLite DB {}, end file size: {}'.format(db.db_name,sizeof_fmt(os.path.getsize(db.db_path))))
 
 def dump_pg_csv(db,output_folder,import_dump=True,schema_dump=True,csv_dump=True,csv_psql=True,force=False,quiet_error=True):
 	'''
