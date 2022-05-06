@@ -69,6 +69,7 @@ class SRGetter(Getter):
 			# self.vaccinated_repo_ranks = copy.deepcopy(vaccinated_repo_ranks)
 			self.vaccinated_repo_ranks = vaccinated_repo_ranks
 		elif vaccinated_repos is not None:
+			repo_ranks = self.get_repo_ranks()
 			self.vaccinated_repo_ranks = [repo_ranks[v_id] for v_id in vaccinated_repos]
 		else:
 			raise SyntaxError('Either vaccinated_repos or vaccinated_repo_ranks should be provided')
