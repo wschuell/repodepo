@@ -85,6 +85,25 @@ class Getter(object):
 	# 		self.db = None
 
 
+	def start_of_tw(self,time_window):
+		'''
+		formatting for sqlite
+		'''
+		if time_window == 'week':
+			return 'weekday 0'
+		else:
+			return f'start of {time_window}'
+
+
+	def offset_tw(self,time_window):
+		'''
+		formatting for sqlite
+		'''
+		if time_window == 'week':
+			return '+0 days'
+		else:
+			return f'+1 {time_window}s'
+
 class RepoNames(Getter):
 	'''
 	IDs and names of repositories
