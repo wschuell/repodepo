@@ -90,7 +90,7 @@ class Getter(object):
 		formatting for sqlite
 		'''
 		if time_window == 'week':
-			return 'weekday 0'
+			return 'weekday 1'
 		else:
 			return f'start of {time_window}'
 

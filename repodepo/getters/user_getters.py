@@ -44,7 +44,7 @@ class UserGetter(Getter):
 			# 		''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 			# else:
 			# 	db.cursor.execute('''
-			# 		SELECT COUNT(*),date(datetime(created_at,:startoftw),'+1 '||:time_window||'s') AS time_stamp FROM commits c
+			# 		SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM commits c
 			# 		WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
 			# 		AND author_id=?
 			# 		GROUP BY time_stamp
@@ -96,7 +96,7 @@ class UserGetter(Getter):
 				# 		''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 				# else:
 				# 	db.cursor.execute('''
-				# 		SELECT COUNT(*),date(datetime(created_at,:startoftw),'+1 '||:time_window||'s') AS time_stamp FROM commits c
+				# 		SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM commits c
 				# 		WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
 				# 		GROUP BY time_stamp
 				# 		''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
@@ -180,7 +180,7 @@ class UserGetter(Getter):
 					# 		''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 					# else:
 					# 	db.cursor.execute('''
-					# 		SELECT COUNT(*),date(datetime(created_at,:startoftw),'+1 '||:time_window||'s') AS time_stamp,author_id FROM commits c
+					# 		SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp,author_id FROM commits c
 					# 		WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
 					# 		GROUP BY time_stamp,author_id
 					# 		''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
@@ -244,7 +244,7 @@ class Commits(UserGetter):
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(c.created_at,:startoftw),'+1 '||:time_window||'s') AS time_stamp FROM commits c
+				SELECT COUNT(*),date(datetime(c.created_at,:startoftw),:offsettw) AS time_stamp FROM commits c
 				INNER JOIN identities i
 				ON c.author_id=i.id AND datetime(:start_date) <= c.created_at AND c.created_at < datetime(:end_date)
 				AND i.user_id=:user_id
@@ -269,7 +269,7 @@ class Commits(UserGetter):
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(c.created_at,:startoftw),'+1 '||:time_window||'s') AS time_stamp FROM commits c
+				SELECT COUNT(*),date(datetime(c.created_at,:startoftw),:offsettw) AS time_stamp FROM commits c
 				INNER JOIN identities i
 				ON datetime(:start_date) <= c.created_at AND c.created_at < datetime(:end_date)
 				AND i.id=c.author_id
@@ -315,7 +315,7 @@ class Commits(UserGetter):
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(c.created_at,:startoftw),'+1 '||:time_window||'s') AS time_stamp,i.user_id FROM commits c
+				SELECT COUNT(*),date(datetime(c.created_at,:startoftw),:offsettw) AS time_stamp,i.user_id FROM commits c
 				INNER JOIN identities i
 				ON c.author_id=i.id
 				AND (:include_bots OR NOT i.is_bot)
@@ -353,7 +353,7 @@ class TotalLines(UserGetter):
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT SUM(c.insertions+c.deletions),date(datetime(c.created_at,:startoftw),'+1 '||:time_window||'s') AS time_stamp FROM commits c
+				SELECT SUM(c.insertions+c.deletions),date(datetime(c.created_at,:startoftw),:offsettw) AS time_stamp FROM commits c
 				INNER JOIN identities i
 				ON datetime(:start_date) <= c.created_at AND c.created_at < datetime(:end_date)
 				AND c.author_id=i.id AND i.user_id=:user_id
@@ -374,7 +374,7 @@ class TotalLines(UserGetter):
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT SUM(insertions+deletions),date(datetime(created_at,:startoftw),'+1 '||:time_window||'s') AS time_stamp FROM commits c
+				SELECT SUM(insertions+deletions),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM commits c
 				WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
 				GROUP BY time_stamp
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
@@ -414,7 +414,7 @@ class TotalLines(UserGetter):
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT SUM(c.insertions+c.deletions),date(datetime(c.created_at,:startoftw),'+1 '||:time_window||'s') AS time_stamp,i.user_id FROM commits c
+				SELECT SUM(c.insertions+c.deletions),date(datetime(c.created_at,:startoftw),:offsettw) AS time_stamp,i.user_id FROM commits c
 				INNER JOIN identities i
 				ON c.author_id=i.id
 				AND datetime(:start_date) <= c.created_at AND c.created_at < datetime(:end_date)
@@ -451,7 +451,7 @@ class Lines(UserGetter):
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT SUM(c.insertions-c.deletions),date(datetime(c.created_at,:startoftw),'+1 '||:time_window||'s') AS time_stamp FROM commits c
+				SELECT SUM(c.insertions-c.deletions),date(datetime(c.created_at,:startoftw),:offsettw) AS time_stamp FROM commits c
 				INNER JOIN identities i
 				ON datetime(:start_date) <= c.created_at AND c.created_at < datetime(:end_date)
 				AND c.author_id=i.id AND i.user_id=:user_id
@@ -472,7 +472,7 @@ class Lines(UserGetter):
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT SUM(insertions-deletions),date(datetime(created_at,:startoftw),'+1 '||:time_window||'s') AS time_stamp FROM commits c
+				SELECT SUM(insertions-deletions),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM commits c
 				WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
 				GROUP BY time_stamp
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
@@ -512,7 +512,7 @@ class Lines(UserGetter):
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT SUM(c.insertions-c.deletions),date(datetime(c.created_at,:startoftw),'+1 '||:time_window||'s') AS time_stamp,i.user_id FROM commits c
+				SELECT SUM(c.insertions-c.deletions),date(datetime(c.created_at,:startoftw),:offsettw) AS time_stamp,i.user_id FROM commits c
 				INNER JOIN identities i
 				ON c.author_id=i.id
 				AND datetime(:start_date) <= c.created_at AND c.created_at < datetime(:end_date)
@@ -553,7 +553,7 @@ class Projects(UserGetter):
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(created_at,:startoftw),'+1 '||:time_window||'s') AS time_stamp FROM
+				SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM
 				(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
@@ -586,7 +586,7 @@ class Projects(UserGetter):
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(created_at,:startoftw),'+1 '||:time_window||'s') AS time_stamp FROM
+				SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM
 				(SELECT MIN(cc.created_at) AS created_at,cc.repo_id--,i.user_id
 				FROM commits cc
 				INNER JOIN identities i
@@ -645,7 +645,7 @@ class Projects(UserGetter):
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(created_at,:startoftw),'+1 '||:time_window||'s') AS time_stamp,user_id FROM
+				SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp,user_id FROM
 				(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
@@ -689,7 +689,7 @@ class ActiveProjects(UserGetter):
 		else:
 			db.cursor.execute('''
 				SELECT COUNT(*), time_stamp FROM
-				(SELECT date(datetime(cc.created_at,:startoftw),'+1 '||:time_window||'s') AS time_stamp,i.user_id,cc.repo_id FROM commits cc
+				(SELECT date(datetime(cc.created_at,:startoftw),:offsettw) AS time_stamp,i.user_id,cc.repo_id FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
 				AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
@@ -717,7 +717,7 @@ class ActiveProjects(UserGetter):
 		else:
 			db.cursor.execute('''
 				SELECT COUNT(*), time_stamp FROM
-				(SELECT date(datetime(created_at,:startoftw),'+1 '||:time_window||'s') AS time_stamp,repo_id FROM commits cc
+				(SELECT date(datetime(created_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM commits cc
 				WHERE datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
 				GROUP BY time_stamp,repo_id
 				) AS c
@@ -769,7 +769,7 @@ class ActiveProjects(UserGetter):
 		else:
 			db.cursor.execute('''
 				SELECT COUNT(*), time_stamp, user_id FROM
-				(SELECT date(datetime(cc.created_at,:startoftw),'+1 '||:time_window||'s') AS time_stamp,i.user_id,cc.repo_id FROM commits cc
+				(SELECT date(datetime(cc.created_at,:startoftw),:offsettw) AS time_stamp,i.user_id,cc.repo_id FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
 				AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
@@ -806,7 +806,7 @@ class Followers(UserGetter):
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(:start_date,:startoftw),'+1 '||:time_window||'s') AS time_stamp FROM followers f
+				SELECT COUNT(*),date(datetime(:start_date,:startoftw),:offsettw) AS time_stamp FROM followers f
 				INNER JOIN identities i
 				ON f.followee_id=i.id AND i.user_id=:user_id
 				GROUP BY time_stamp
@@ -826,7 +826,7 @@ class Followers(UserGetter):
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(:start_date,:startoftw),'+1 '||:time_window||'s') AS time_stamp FROM followers f
+				SELECT COUNT(*),date(datetime(:start_date,:startoftw),:offsettw) AS time_stamp FROM followers f
 				GROUP BY time_stamp
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		query_result = list(db.cursor.fetchall())
@@ -854,7 +854,7 @@ class Followers(UserGetter):
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(:start_date,:startoftw),'+1 '||:time_window||'s') AS time_stamp,i.user_id FROM followers f
+				SELECT COUNT(*),date(datetime(:start_date,:startoftw),:offsettw) AS time_stamp,i.user_id FROM followers f
 				INNER JOIN identities i
 				ON f.followee_id=i.id
 				GROUP BY time_stamp,i.user_id
@@ -889,7 +889,7 @@ class FollowersCommunity(UserGetter):
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(:start_date,:startoftw),'+1 '||:time_window||'s') AS time_stamp FROM followers f
+				SELECT COUNT(*),date(datetime(:start_date,:startoftw),:offsettw) AS time_stamp FROM followers f
 				INNER JOIN identities i
 				ON f.followee_id=i.id AND i.user_id=:user_id
 				AND f.follower_id IS NOT NULL
@@ -911,7 +911,7 @@ class FollowersCommunity(UserGetter):
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(:start_date,:startoftw),'+1 '||:time_window||'s') AS time_stamp FROM followers f
+				SELECT COUNT(*),date(datetime(:start_date,:startoftw),:offsettw) AS time_stamp FROM followers f
 				WHERE f.follower_id IS NOT NULL
 				GROUP BY time_stamp
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
@@ -942,7 +942,7 @@ class FollowersCommunity(UserGetter):
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(:start_date,:startoftw),'+1 '||:time_window||'s') AS time_stamp,i.user_id FROM followers f
+				SELECT COUNT(*),date(datetime(:start_date,:startoftw),:offsettw) AS time_stamp,i.user_id FROM followers f
 				INNER JOIN identities i
 				ON f.followee_id=i.id
 				AND f.follower_id IS NOT NULL
@@ -978,7 +978,7 @@ class Sponsors(UserGetter):
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(s.created_at,:startoftw),'+1 '||:time_window||'s') AS time_stamp FROM sponsors_user s
+				SELECT COUNT(*),date(datetime(s.created_at,:startoftw),:offsettw) AS time_stamp FROM sponsors_user s
 				INNER JOIN identities i
 				ON s.sponsored_id=i.id AND datetime(:start_date) <= s.created_at AND s.created_at < datetime(:end_date)
 				AND i.user_id=:user_id
@@ -1000,7 +1000,7 @@ class Sponsors(UserGetter):
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(created_at,:startoftw),'+1 '||:time_window||'s') AS time_stamp FROM sponsors_user s
+				SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM sponsors_user s
 				WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
 				GROUP BY time_stamp
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
@@ -1040,7 +1040,7 @@ class Sponsors(UserGetter):
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(s.created_at,:startoftw),'+1 '||:time_window||'s') AS time_stamp,i.user_id FROM sponsors_user s
+				SELECT COUNT(*),date(datetime(s.created_at,:startoftw),:offsettw) AS time_stamp,i.user_id FROM sponsors_user s
 				INNER JOIN identities i
 				ON s.sponsored_id=i.id
 				AND datetime(:start_date) <= s.created_at AND s.created_at < datetime(:end_date)
@@ -1075,7 +1075,7 @@ class SponsorsCommunity(UserGetter):
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(s.created_at,:startoftw),'+1 '||:time_window||'s') AS time_stamp FROM sponsors_user s
+				SELECT COUNT(*),date(datetime(s.created_at,:startoftw),:offsettw) AS time_stamp FROM sponsors_user s
 				INNER JOIN identities i
 				ON s.sponsored_id=i.id AND datetime(:start_date) <= s.created_at AND s.created_at < datetime(:end_date)
 				AND i.user_id=:user_id
@@ -1099,7 +1099,7 @@ class SponsorsCommunity(UserGetter):
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(created_at,:startoftw),'+1 '||:time_window||'s') AS time_stamp FROM sponsors_user s
+				SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM sponsors_user s
 				WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
 				AND s.sponsor_id IS NOT NULL
 				GROUP BY time_stamp
@@ -1143,7 +1143,7 @@ class SponsorsCommunity(UserGetter):
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(s.created_at,:startoftw),'+1 '||:time_window||'s') AS time_stamp,i.user_id FROM sponsors_user s
+				SELECT COUNT(*),date(datetime(s.created_at,:startoftw),:offsettw) AS time_stamp,i.user_id FROM sponsors_user s
 				INNER JOIN identities i
 				ON s.sponsored_id=i.id
 				AND datetime(:start_date) <= s.created_at AND s.created_at < datetime(:end_date)
@@ -1192,7 +1192,7 @@ class CoWorkers(UserGetter):
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(created_at,:startoftw),'+1 '||:time_window||'s') AS time_stamp FROM
+				SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM
 				(SELECT MIN(cc.created_at) AS created_at,i.user_id,icw.user_id FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
@@ -1236,7 +1236,7 @@ class CoWorkers(UserGetter):
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(created_at,:startoftw),'+1 '||:time_window||'s') AS time_stamp FROM
+				SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM
 				(SELECT MIN(cc.created_at) AS created_at,i.user_id,icw.user_id FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
@@ -1318,7 +1318,7 @@ class CoWorkers(UserGetter):
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'user_id':user_id,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(created_at,:startoftw),'+1 '||:time_window||'s') AS time_stamp,main_user_id FROM
+				SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp,main_user_id FROM
 				(SELECT MIN(cc.created_at) AS created_at,i.user_id AS main_user_id,icw.user_id FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
@@ -1375,7 +1375,7 @@ class ActiveCoWorkers(CoWorkers):
 		else:
 			db.cursor.execute('''
 				SELECT COUNT(*),time_stamp FROM
-				(SELECT date(datetime(cc.created_at,:startoftw),'+1 '||:time_window||'s') AS time_stamp,i.user_id,icw.user_id FROM commits cc
+				(SELECT date(datetime(cc.created_at,:startoftw),:offsettw) AS time_stamp,i.user_id,icw.user_id FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
 				AND :start_date <= cc.created_at AND cc.created_at < :end_date
@@ -1419,7 +1419,7 @@ class ActiveCoWorkers(CoWorkers):
 		else:
 			db.cursor.execute('''
 				SELECT COUNT(*),time_stamp FROM
-				(SELECT date(datetime(cc.created_at,:startoftw),'+1 '||:time_window||'s') AS time_stamp,i.user_id,icw.user_id FROM commits cc
+				(SELECT date(datetime(cc.created_at,:startoftw),:offsettw) AS time_stamp,i.user_id,icw.user_id FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
 				AND :start_date <= cc.created_at AND cc.created_at < :end_date
@@ -1462,7 +1462,7 @@ class ActiveCoWorkers(CoWorkers):
 		else:
 			db.cursor.execute('''
 				SELECT COUNT(*),time_stamp,main_user_id FROM
-				(SELECT date(datetime(cc.created_at,:startoftw),'+1 '||:time_window||'s') AS time_stamp,i.user_id AS main_user_id,icw.user_id FROM commits cc
+				(SELECT date(datetime(cc.created_at,:startoftw),:offsettw) AS time_stamp,i.user_id AS main_user_id,icw.user_id FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
 				AND :start_date <= cc.created_at AND cc.created_at < :end_date
