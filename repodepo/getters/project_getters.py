@@ -88,14 +88,14 @@ class ProjectGetter(Getter):
 			# 		WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
 			# 		AND repo_id=%(project_id)s
 			# 		GROUP BY time_stamp
-			# 		''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+			# 		''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 			# else:
 			# 	db.cursor.execute('''
-			# 		SELECT COUNT(*),date(datetime(starred_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp FROM stars c
+			# 		SELECT COUNT(*),date(datetime(starred_at,:startoftw),:offsettw) AS time_stamp FROM stars c
 			# 		WHERE datetime(:start_date) <= starred_at AND starred_at < datetime(:end_date)
 			# 		AND repo_id=:project_id
 			# 		GROUP BY time_stamp
-			# 		''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+			# 		''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 
 			# query_result = list(db.cursor.fetchall())
 			query_result = self.query_proj(db=db,project_id=project_id,time_window=time_window,start_date=start_date,end_date=end_date)
@@ -141,13 +141,13 @@ class ProjectGetter(Getter):
 				# 		SELECT COUNT(*),date_trunc(%(time_window)s, starred_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM stars c
 				# 		WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
 				# 		GROUP BY time_stamp
-				# 		''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				# 		''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 				# else:
 				# 	db.cursor.execute('''
-				# 		SELECT COUNT(*),date(datetime(starred_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp FROM stars c
+				# 		SELECT COUNT(*),date(datetime(starred_at,:startoftw),:offsettw) AS time_stamp FROM stars c
 				# 		WHERE datetime(:start_date) <= starred_at AND starred_at < datetime(:end_date)
 				# 		GROUP BY time_stamp
-				# 		''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				# 		''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 
 				# query_result = list(db.cursor.fetchall())
 				# #correcting for datetime issue in sqlite:
@@ -188,13 +188,13 @@ class ProjectGetter(Getter):
 					# 		SELECT COUNT(*),repo_id FROM stars c
 					# 		WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
 					# 		GROUP BY repo_id
-					# 		''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+					# 		''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 					# else:
 					# 	db.cursor.execute('''
 					# 		SELECT COUNT(*),repo_id FROM stars c
 					# 		WHERE :start_date <= starred_at AND starred_at < :end_date
 					# 		GROUP BY repo_id
-					# 		''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+					# 		''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 
 					# query_result = list(db.cursor.fetchall())
 
@@ -227,13 +227,13 @@ class ProjectGetter(Getter):
 					# 		SELECT COUNT(*),date_trunc(%(time_window)s, starred_at) AS time_stamp,repo_id FROM stars c
 					# 		WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
 					# 		GROUP BY time_stamp,repo_id
-					# 		''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+					# 		''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 					# else:
 					# 	db.cursor.execute('''
-					# 		SELECT COUNT(*),date(datetime(starred_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp,repo_id FROM stars c
+					# 		SELECT COUNT(*),date(datetime(starred_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM stars c
 					# 		WHERE datetime(:start_date) <= starred_at AND starred_at < datetime(:end_date)
 					# 		GROUP BY time_stamp,repo_id
-					# 		''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+					# 		''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 
 					# query_result = list(db.cursor.fetchall())
 					# #correcting for datetime issue in sqlite:
@@ -291,14 +291,14 @@ class Forks(ProjectGetter):
 				WHERE %(start_date)s <= forked_at AND forked_at < %(end_date)s
 				AND forked_repo_id=%(project_id)s
 				GROUP BY time_stamp
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(forked_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp FROM forks c
+				SELECT COUNT(*),date(datetime(forked_at,:startoftw),:offsettw) AS time_stamp FROM forks c
 				WHERE datetime(:start_date) <= forked_at AND forked_at < datetime(:end_date)
 				AND forked_repo_id=:project_id
 				GROUP BY time_stamp
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 
 		query_result = list(db.cursor.fetchall())
 		#correcting for datetime issue in sqlite:
@@ -313,13 +313,13 @@ class Forks(ProjectGetter):
 				SELECT COUNT(*),date_trunc(%(time_window)s, forked_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM forks c
 				WHERE %(start_date)s <= forked_at AND forked_at < %(end_date)s
 				GROUP BY time_stamp
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(forked_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp FROM forks c
+				SELECT COUNT(*),date(datetime(forked_at,:startoftw),:offsettw) AS time_stamp FROM forks c
 				WHERE datetime(:start_date) <= forked_at AND forked_at < datetime(:end_date)
 				GROUP BY time_stamp
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		query_result = list(db.cursor.fetchall())
 		#correcting for datetime issue in sqlite:
 		if db.db_type == 'sqlite':
@@ -332,13 +332,13 @@ class Forks(ProjectGetter):
 				SELECT COUNT(*),forked_repo_id FROM forks c
 				WHERE %(start_date)s <= forked_at AND forked_at < %(end_date)s
 				GROUP BY forked_repo_id
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
 				SELECT COUNT(*),forked_repo_id FROM forks c
 				WHERE :start_date <= forked_at AND forked_at < :end_date
 				GROUP BY forked_repo_id
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		return list(db.cursor.fetchall())
 
 	def query_all(self,db,start_date,end_date,time_window,project_id=None):
@@ -347,13 +347,13 @@ class Forks(ProjectGetter):
 				SELECT COUNT(*),date_trunc(%(time_window)s, forked_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp,forked_repo_id FROM forks c
 				WHERE %(start_date)s <= forked_at AND forked_at < %(end_date)s
 				GROUP BY time_stamp,forked_repo_id
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(forked_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp,forked_repo_id FROM forks c
+				SELECT COUNT(*),date(datetime(forked_at,:startoftw),:offsettw) AS time_stamp,forked_repo_id FROM forks c
 				WHERE datetime(:start_date) <= forked_at AND forked_at < datetime(:end_date)
 				GROUP BY time_stamp,forked_repo_id
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		query_result = list(db.cursor.fetchall())
 		#correcting for datetime issue in sqlite:
 		if db.db_type == 'sqlite':
@@ -385,14 +385,14 @@ class Stars(ProjectGetter):
 				WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
 				AND repo_id=%(project_id)s
 				GROUP BY time_stamp
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(starred_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp FROM stars c
+				SELECT COUNT(*),date(datetime(starred_at,:startoftw),:offsettw) AS time_stamp FROM stars c
 				WHERE datetime(:start_date) <= starred_at AND starred_at < datetime(:end_date)
 				AND repo_id=:project_id
 				GROUP BY time_stamp
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 
 		query_result = list(db.cursor.fetchall())
 		#correcting for datetime issue in sqlite:
@@ -407,13 +407,13 @@ class Stars(ProjectGetter):
 				SELECT COUNT(*),date_trunc(%(time_window)s, starred_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM stars c
 				WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
 				GROUP BY time_stamp
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(starred_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp FROM stars c
+				SELECT COUNT(*),date(datetime(starred_at,:startoftw),:offsettw) AS time_stamp FROM stars c
 				WHERE datetime(:start_date) <= starred_at AND starred_at < datetime(:end_date)
 				GROUP BY time_stamp
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		query_result = list(db.cursor.fetchall())
 		#correcting for datetime issue in sqlite:
 		if db.db_type == 'sqlite':
@@ -426,13 +426,13 @@ class Stars(ProjectGetter):
 				SELECT COUNT(*),repo_id FROM stars c
 				WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
 				GROUP BY repo_id
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
 				SELECT COUNT(*),repo_id FROM stars c
 				WHERE :start_date <= starred_at AND starred_at < :end_date
 				GROUP BY repo_id
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		return list(db.cursor.fetchall())
 
 	def query_all(self,db,start_date,end_date,time_window,project_id=None):
@@ -441,13 +441,13 @@ class Stars(ProjectGetter):
 				SELECT COUNT(*),date_trunc(%(time_window)s, starred_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp,repo_id FROM stars c
 				WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
 				GROUP BY time_stamp,repo_id
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(starred_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp,repo_id FROM stars c
+				SELECT COUNT(*),date(datetime(starred_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM stars c
 				WHERE datetime(:start_date) <= starred_at AND starred_at < datetime(:end_date)
 				GROUP BY time_stamp,repo_id
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		query_result = list(db.cursor.fetchall())
 		#correcting for datetime issue in sqlite:
 		if db.db_type == 'sqlite':
@@ -480,15 +480,15 @@ class StarsCommunity(ProjectGetter):
 				AND repo_id=%(project_id)s
 				AND identity_id IS NOT NULL
 				GROUP BY time_stamp
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(starred_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp FROM stars c
+				SELECT COUNT(*),date(datetime(starred_at,:startoftw),:offsettw) AS time_stamp FROM stars c
 				WHERE datetime(:start_date) <= starred_at AND starred_at < datetime(:end_date)
 				AND repo_id=:project_id
 				AND identity_id IS NOT NULL
 				GROUP BY time_stamp
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 
 		query_result = list(db.cursor.fetchall())
 		#correcting for datetime issue in sqlite:
@@ -504,14 +504,14 @@ class StarsCommunity(ProjectGetter):
 				WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
 				AND identity_id IS NOT NULL
 				GROUP BY time_stamp
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(starred_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp FROM stars c
+				SELECT COUNT(*),date(datetime(starred_at,:startoftw),:offsettw) AS time_stamp FROM stars c
 				WHERE datetime(:start_date) <= starred_at AND starred_at < datetime(:end_date)
 				AND identity_id IS NOT NULL
 				GROUP BY time_stamp
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		query_result = list(db.cursor.fetchall())
 		#correcting for datetime issue in sqlite:
 		if db.db_type == 'sqlite':
@@ -525,14 +525,14 @@ class StarsCommunity(ProjectGetter):
 				WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
 				AND identity_id IS NOT NULL
 				GROUP BY repo_id
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
 				SELECT COUNT(*),repo_id FROM stars c
 				WHERE :start_date <= starred_at AND starred_at < :end_date
 				AND identity_id IS NOT NULL
 				GROUP BY repo_id
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		return list(db.cursor.fetchall())
 
 	def query_all(self,db,start_date,end_date,time_window,project_id=None):
@@ -542,14 +542,14 @@ class StarsCommunity(ProjectGetter):
 				WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
 				AND identity_id IS NOT NULL
 				GROUP BY time_stamp,repo_id
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(starred_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp,repo_id FROM stars c
+				SELECT COUNT(*),date(datetime(starred_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM stars c
 				WHERE datetime(:start_date) <= starred_at AND starred_at < datetime(:end_date)
 				AND identity_id IS NOT NULL
 				GROUP BY time_stamp,repo_id
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		query_result = list(db.cursor.fetchall())
 		#correcting for datetime issue in sqlite:
 		if db.db_type == 'sqlite':
@@ -584,17 +584,17 @@ class Commits(ProjectGetter):
 				AND i.id=c.author_id
 				AND (%(include_bots)s OR NOT i.is_bot)
 				GROUP BY time_stamp
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(c.created_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp FROM commits c
+				SELECT COUNT(*),date(datetime(c.created_at,:startoftw),:offsettw) AS time_stamp FROM commits c
 				INNER JOIN identities i
 				ON datetime(:start_date) <= c.created_at AND c.created_at < datetime(:end_date)
 				AND i.id=c.author_id
 				AND (:include_bots OR NOT i.is_bot)
 				AND c.repo_id=:project_id
 				GROUP BY time_stamp
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		query_result = list(db.cursor.fetchall())
 		#correcting for datetime issue in sqlite:
 		if db.db_type == 'sqlite':
@@ -610,16 +610,16 @@ class Commits(ProjectGetter):
 				AND i.id=c.author_id
 				AND (%(include_bots)s OR NOT i.is_bot)
 				GROUP BY time_stamp
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(c.created_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp FROM commits c
+				SELECT COUNT(*),date(datetime(c.created_at,:startoftw),:offsettw) AS time_stamp FROM commits c
 				INNER JOIN identities i
 				ON datetime(:start_date) <= c.created_at AND c.created_at < datetime(:end_date)
 				AND i.id=c.author_id
 				AND (:include_bots OR NOT i.is_bot)
 				GROUP BY time_stamp
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		query_result = list(db.cursor.fetchall())
 		#correcting for datetime issue in sqlite:
 		if db.db_type == 'sqlite':
@@ -636,7 +636,7 @@ class Commits(ProjectGetter):
 				AND (%(include_bots)s OR NOT i.is_bot)
 				AND repo_id IS NOT NULL
 				GROUP BY repo_id
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
 				SELECT COUNT(*),repo_id FROM commits c
@@ -646,7 +646,7 @@ class Commits(ProjectGetter):
 				AND (:include_bots OR NOT i.is_bot)
 				AND repo_id IS NOT NULL
 				GROUP BY repo_id
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		return list(db.cursor.fetchall())
 
 	def query_all(self,db,start_date,end_date,time_window,project_id=None):
@@ -659,17 +659,17 @@ class Commits(ProjectGetter):
 				AND (%(include_bots)s OR NOT i.is_bot)
 				AND repo_id IS NOT NULL
 				GROUP BY time_stamp,repo_id
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(c.created_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp,repo_id FROM commits c
+				SELECT COUNT(*),date(datetime(c.created_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM commits c
 				INNER JOIN identities i
 				ON datetime(:start_date) <= c.created_at AND c.created_at < datetime(:end_date)
 				AND i.id=c.author_id
 				AND (:include_bots OR NOT i.is_bot)
 				AND repo_id IS NOT NULL
 				GROUP BY time_stamp,repo_id
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		query_result = list(db.cursor.fetchall())
 		#correcting for datetime issue in sqlite:
 		if db.db_type == 'sqlite':
@@ -703,10 +703,10 @@ class Developers(ProjectGetter):
 				HAVING %(start_date)s <= MIN(cc.created_at) AND MIN(cc.created_at) < %(end_date)s
 				) AS c
 				GROUP BY time_stamp
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(created_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp FROM
+				SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM
 				(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
@@ -717,7 +717,7 @@ class Developers(ProjectGetter):
 				HAVING datetime(:start_date) <= MIN(cc.created_at) AND MIN(cc.created_at) < datetime(:end_date)
 				) AS c
 				GROUP BY time_stamp
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		query_result = list(db.cursor.fetchall())
 		#correcting for datetime issue in sqlite:
 		if db.db_type == 'sqlite':
@@ -738,10 +738,10 @@ class Developers(ProjectGetter):
 				HAVING %(start_date)s <= MIN(cc.created_at) AND MIN(cc.created_at) < %(end_date)s
 				) AS c
 				GROUP BY time_stamp
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(created_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp FROM
+				SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM
 				(SELECT MIN(cc.created_at) AS created_at,i.user_id--,cc.repo_id
 				FROM commits cc
 				INNER JOIN identities i
@@ -752,7 +752,7 @@ class Developers(ProjectGetter):
 				HAVING datetime(:start_date) <= MIN(cc.created_at) AND MIN(cc.created_at) < datetime(:end_date)
 				) AS c
 				GROUP BY time_stamp
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
 
 
 
@@ -769,10 +769,10 @@ class Developers(ProjectGetter):
 		# 		GROUP BY i.user_id,cc.repo_id
 		# 		) AS c
 		# 		GROUP BY time_stamp
-		# 		''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
+		# 		''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
 		# else:
 		# 	db.cursor.execute('''
-		# 		SELECT COUNT(*),date(datetime(created_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp FROM
+		# 		SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM
 		# 		(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
 		# 		INNER JOIN identities i
 		# 		ON i.id=cc.author_id
@@ -782,7 +782,7 @@ class Developers(ProjectGetter):
 		# 		GROUP BY i.user_id,cc.repo_id
 		# 		) AS c
 		# 		GROUP BY time_stamp
-		# 		''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
+		# 		''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
 		query_result = list(db.cursor.fetchall())
 		#correcting for datetime issue in sqlite:
 		if db.db_type == 'sqlite':
@@ -834,10 +834,10 @@ class Developers(ProjectGetter):
 				HAVING %(start_date)s <= MIN(cc.created_at) AND MIN(cc.created_at) < %(end_date)s
 				) AS c
 				GROUP BY time_stamp,repo_id
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
 		else:
 			db.cursor.execute('''
-				SELECT COUNT(*),date(datetime(created_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp,repo_id FROM
+				SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM
 				(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
@@ -848,7 +848,7 @@ class Developers(ProjectGetter):
 				HAVING datetime(:start_date) <= MIN(cc.created_at) AND MIN(cc.created_at) < datetime(:end_date)
 				) AS c
 				GROUP BY time_stamp,repo_id
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
 		query_result = list(db.cursor.fetchall())
 		#correcting for datetime issue in sqlite:
 		if db.db_type == 'sqlite':
@@ -881,11 +881,11 @@ class ActiveDevelopers(ProjectGetter):
 				GROUP BY time_stamp,i.user_id,cc.repo_id
 				) AS c
 				GROUP BY time_stamp
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
 				SELECT COUNT(*), time_stamp FROM
-				(SELECT date(datetime(cc.created_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp,i.user_id,cc.repo_id FROM commits cc
+				(SELECT date(datetime(cc.created_at,:startoftw),:offsettw) AS time_stamp,i.user_id,cc.repo_id FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
 				AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
@@ -894,7 +894,7 @@ class ActiveDevelopers(ProjectGetter):
 				GROUP BY time_stamp,i.user_id,cc.repo_id
 				) AS c
 				GROUP BY time_stamp
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		query_result = list(db.cursor.fetchall())
 		#correcting for datetime issue in sqlite:
 		if db.db_type == 'sqlite':
@@ -913,11 +913,11 @@ class ActiveDevelopers(ProjectGetter):
 				GROUP BY time_stamp,i.user_id
 				) AS c
 				GROUP BY time_stamp
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
 		else:
 			db.cursor.execute('''
 				SELECT COUNT(*), time_stamp FROM
-				(SELECT date(datetime(cc.created_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp,i.user_id FROM commits cc
+				(SELECT date(datetime(cc.created_at,:startoftw),:offsettw) AS time_stamp,i.user_id FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
 				AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
@@ -925,7 +925,7 @@ class ActiveDevelopers(ProjectGetter):
 				GROUP BY time_stamp,i.user_id
 				) AS c
 				GROUP BY time_stamp
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
 		query_result = list(db.cursor.fetchall())
 		#correcting for datetime issue in sqlite:
 		if db.db_type == 'sqlite':
@@ -974,11 +974,11 @@ class ActiveDevelopers(ProjectGetter):
 				GROUP BY time_stamp,i.user_id,cc.repo_id
 				) AS c
 				GROUP BY time_stamp,repo_id
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
 		else:
 			db.cursor.execute('''
 				SELECT COUNT(*), time_stamp, repo_id FROM
-				(SELECT date(datetime(cc.created_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp,i.user_id,cc.repo_id FROM commits cc
+				(SELECT date(datetime(cc.created_at,:startoftw),:offsettw) AS time_stamp,i.user_id,cc.repo_id FROM commits cc
 				INNER JOIN identities i
 				ON i.id=cc.author_id
 				AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
@@ -987,7 +987,7 @@ class ActiveDevelopers(ProjectGetter):
 				GROUP BY time_stamp,i.user_id,cc.repo_id
 				) AS c
 				GROUP BY time_stamp,repo_id
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
 		query_result = list(db.cursor.fetchall())
 		#correcting for datetime issue in sqlite:
 		if db.db_type == 'sqlite':
@@ -1014,14 +1014,14 @@ class TotalLines(ProjectGetter):
 				WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
 				AND repo_id=%(project_id)s
 				GROUP BY time_stamp
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT SUM(insertions+deletions),date(datetime(created_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp FROM commits c
+				SELECT SUM(insertions+deletions),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM commits c
 				WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
 				AND repo_id=:project_id
 				GROUP BY time_stamp
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		query_result = list(db.cursor.fetchall())
 		#correcting for datetime issue in sqlite:
 		if db.db_type == 'sqlite':
@@ -1034,13 +1034,13 @@ class TotalLines(ProjectGetter):
 				SELECT SUM(insertions+deletions),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM commits c
 				WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
 				GROUP BY time_stamp
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT SUM(insertions+deletions),date(datetime(created_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp FROM commits c
+				SELECT SUM(insertions+deletions),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM commits c
 				WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
 				GROUP BY time_stamp
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		query_result = list(db.cursor.fetchall())
 		#correcting for datetime issue in sqlite:
 		if db.db_type == 'sqlite':
@@ -1054,14 +1054,14 @@ class TotalLines(ProjectGetter):
 				WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
 				AND c.repo_id IS NOT NULL
 				GROUP BY repo_id
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
 				SELECT SUM(insertions+deletions),repo_id FROM commits c
 				WHERE :start_date <= created_at AND created_at < :end_date
 				AND c.repo_id IS NOT NULL
 				GROUP BY repo_id
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		return list(db.cursor.fetchall())
 
 	def query_all(self,db,start_date,end_date,time_window,project_id=None):
@@ -1071,14 +1071,14 @@ class TotalLines(ProjectGetter):
 				WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
 				AND c.repo_id IS NOT NULL
 				GROUP BY time_stamp,repo_id
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT SUM(insertions+deletions),date(datetime(created_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp,repo_id FROM commits c
+				SELECT SUM(insertions+deletions),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM commits c
 				WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
 				AND c.repo_id IS NOT NULL
 				GROUP BY time_stamp,repo_id
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		query_result = list(db.cursor.fetchall())
 		#correcting for datetime issue in sqlite:
 		if db.db_type == 'sqlite':
@@ -1106,14 +1106,14 @@ class Lines(ProjectGetter):
 				WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
 				AND repo_id=%(project_id)s
 				GROUP BY time_stamp
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT SUM(insertions-deletions),date(datetime(created_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp FROM commits c
+				SELECT SUM(insertions-deletions),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM commits c
 				WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
 				AND repo_id=:project_id
 				GROUP BY time_stamp
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		query_result = list(db.cursor.fetchall())
 		#correcting for datetime issue in sqlite:
 		if db.db_type == 'sqlite':
@@ -1126,13 +1126,13 @@ class Lines(ProjectGetter):
 				SELECT SUM(insertions-deletions),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM commits c
 				WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
 				GROUP BY time_stamp
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT SUM(insertions-deletions),date(datetime(created_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp FROM commits c
+				SELECT SUM(insertions-deletions),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM commits c
 				WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
 				GROUP BY time_stamp
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		query_result = list(db.cursor.fetchall())
 		#correcting for datetime issue in sqlite:
 		if db.db_type == 'sqlite':
@@ -1146,14 +1146,14 @@ class Lines(ProjectGetter):
 				WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
 				AND c.repo_id IS NOT NULL
 				GROUP BY repo_id
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
 				SELECT SUM(insertions-deletions),repo_id FROM commits c
 				WHERE :start_date <= created_at AND created_at < :end_date
 				AND c.repo_id IS NOT NULL
 				GROUP BY repo_id
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		return list(db.cursor.fetchall())
 
 	def query_all(self,db,start_date,end_date,time_window,project_id=None):
@@ -1163,14 +1163,14 @@ class Lines(ProjectGetter):
 				WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
 				AND c.repo_id IS NOT NULL
 				GROUP BY time_stamp,repo_id
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
-				SELECT SUM(insertions-deletions),date(datetime(created_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp,repo_id FROM commits c
+				SELECT SUM(insertions-deletions),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM commits c
 				WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
 				AND c.repo_id IS NOT NULL
 				GROUP BY time_stamp,repo_id
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		query_result = list(db.cursor.fetchall())
 		#correcting for datetime issue in sqlite:
 		if db.db_type == 'sqlite':
@@ -1202,10 +1202,10 @@ class Downloads(ProjectGetter):
 				ON vd.package_version=v.id
 				AND %(start_date)s <= vd.downloaded_at AND vd.downloaded_at < %(end_date)s
 				GROUP BY time_stamp;
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,})
 		else:
 			db.cursor.execute('''
-				SELECT SUM(vd.downloads),date(datetime(vd.downloaded_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp
+				SELECT SUM(vd.downloads),date(datetime(vd.downloaded_at,:startoftw),:offsettw) AS time_stamp
 				FROM packages p
 				INNER JOIN package_versions v
 				ON p.repo_id=:project_id
@@ -1215,7 +1215,7 @@ class Downloads(ProjectGetter):
 				AND datetime(:start_date) <= vd.downloaded_at AND vd.downloaded_at < datetime(:end_date)
 				GROUP BY time_stamp
 				;
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,})
 		query_result = list(db.cursor.fetchall())
 		#correcting for datetime issue in sqlite:
 		if db.db_type == 'sqlite':
@@ -1233,10 +1233,10 @@ class Downloads(ProjectGetter):
 				ON vd.package_version=v.id
 				AND %(start_date)s <= vd.downloaded_at AND vd.downloaded_at < %(end_date)s
 				GROUP BY time_stamp;
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,})
 		else:
 			db.cursor.execute('''
-				SELECT SUM(vd.downloads),date(datetime(vd.downloaded_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp
+				SELECT SUM(vd.downloads),date(datetime(vd.downloaded_at,:startoftw),:offsettw) AS time_stamp
 				FROM packages p
 				INNER JOIN package_versions v
 				ON v.package_id=p.id AND p.repo_id IS NOT NULL
@@ -1245,7 +1245,7 @@ class Downloads(ProjectGetter):
 				AND datetime(:start_date) <= vd.downloaded_at AND vd.downloaded_at < datetime(:end_date)
 				GROUP BY time_stamp
 				;
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,})
 		query_result = list(db.cursor.fetchall())
 		#correcting for datetime issue in sqlite:
 		if db.db_type == 'sqlite':
@@ -1288,10 +1288,10 @@ class Downloads(ProjectGetter):
 				ON vd.package_version=v.id
 				AND %(start_date)s <= vd.downloaded_at AND vd.downloaded_at < %(end_date)s
 				GROUP BY time_stamp,p.repo_id;
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,})
 		else:
 			db.cursor.execute('''
-				SELECT SUM(vd.downloads),date(datetime(vd.downloaded_at,'start of '||:time_window),'+1 '||:time_window||'s') AS time_stamp,p.repo_id
+				SELECT SUM(vd.downloads),date(datetime(vd.downloaded_at,:startoftw),:offsettw) AS time_stamp,p.repo_id
 				FROM packages p
 				INNER JOIN package_versions v
 				ON v.package_id=p.id AND p.repo_id IS NOT NULL
@@ -1300,7 +1300,7 @@ class Downloads(ProjectGetter):
 				AND datetime(:start_date) <= vd.downloaded_at AND vd.downloaded_at < datetime(:end_date)
 				GROUP BY time_stamp,p.repo_id
 				;
-				''',{'time_window':time_window,'start_date':start_date,'end_date':end_date,})
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,})
 		query_result = list(db.cursor.fetchall())
 		#correcting for datetime issue in sqlite:
 		if db.db_type == 'sqlite':
