@@ -14,6 +14,7 @@ import numpy as np
 import io
 
 from .extras import errors
+from .extras.home import homepath
 
 logger = logging.getLogger(__name__)
 ch = logging.StreamHandler()
@@ -140,7 +141,7 @@ class Database(object):
 				self.connection = psycopg2.connect(user=db_user,port=port,host=host,database=db_name,password=password,options=options)
 			except psycopg2.OperationalError:
 				pgpass_env = 'PGPASSFILE'
-				default_pgpass = os.path.join(os.environ['HOME'],'.pgpass')
+				default_pgpass = os.path.join(os.environ[homepath()],'.pgpass')
 				if pgpass_env not in os.environ.keys():
 					os.environ[pgpass_env] = default_pgpass
 					self.logger.info('Password authentication failed,trying to set .pgpass env variable')

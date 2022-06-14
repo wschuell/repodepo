@@ -20,6 +20,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 
 from .. import fillers
+from ..extras.home import homepath
 from ..fillers import generic
 
 from github.GithubException import UnknownObjectException,RateLimitExceededException,IncompletableObject
@@ -74,8 +75,8 @@ class GithubFiller(fillers.Filler):
 		elif os.path.exists(self.api_keys_file):
 			with open(self.api_keys_file,'r') as f:
 				self.api_keys += [l.split('#')[0] for l in f.read().split('\n')]
-		elif os.path.exists(os.path.join(os.environ['HOME'],'.repo_tools',self.api_keys_file)):
-			with open(os.path.join(os.environ['HOME'],'.repo_tools',self.api_keys_file),'r') as f:
+		elif os.path.exists(os.path.join(os.environ[homepath()],'.repo_tools',self.api_keys_file)):
+			with open(os.path.join(os.environ[homepath()],'.repo_tools',self.api_keys_file),'r') as f:
 				self.api_keys += [l.split('#')[0] for l in f.read().split('\n')]
 		# if os.path.exists(os.path.join(os.environ['HOME'],'.repo_tools','github_api_keys.txt')):
 		# 	with open(os.path.join(os.environ['HOME'],'.repo_tools','github_api_keys.txt'),'r') as f:
