@@ -11,6 +11,7 @@ import subprocess
 from psycopg2 import extras
 
 from .. import fillers
+from ..extras.home import homepath
 
 
 class RepoSyntaxError(ValueError):
@@ -610,7 +611,8 @@ class ClonesFiller(fillers.Filler):
 	'''
 	Tries to clone all repositories present in the DB
 	'''
-	def __init__(self,precheck_cloned=False,force=False,update=True,failed=False,ssh_sources=None,ssh_key=os.path.join(os.environ['HOME'],'.ssh','id_rsa'),sources=None,rm_first=False,**kwargs):
+	def __init__(self,precheck_cloned=False,force=False,update=True,failed=False,ssh_sources=None,
+				 ssh_key=os.path.join(os.environ[homepath()],'.ssh','id_rsa'),sources=None,rm_first=False,**kwargs):
 		'''
 		if sources is None, repositories of all sources are cloned. Otherwise, considered as a whitelist of sources to batch-clone.
 
