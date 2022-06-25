@@ -7,6 +7,7 @@ pandas_freq = {
 
 import datetime
 from dateutil.relativedelta import relativedelta
+import pandas as pd
 
 from .generic_getters import Getter
 
