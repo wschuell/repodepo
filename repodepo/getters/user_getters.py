@@ -101,8 +101,8 @@ class UserGetter(Getter):
 				# df.loc[(orig_df[self.measure_name].isna()),self.measure_name] = np.nan
 				# df[self.measure_name][orig_df[self.measure_name].isna()] = np.nan
 				if start_date > zero_date:
-					# correction_df = self.get_result(db=db,project_id=project_id,time_window=time_window,start_date=zero_date,end_date=start_date,cumulative=True,aggregated=False)
-					correction_df = self.get_result(db=db,project_id=project_id,time_window='year',start_date=zero_date,end_date=start_date,cumulative=True,aggregated=False)
+					# correction_df = self.get_result(db=db,user_id=user_id,time_window=time_window,start_date=zero_date,end_date=start_date,cumulative=True,aggregated=False)
+					correction_df = self.get_result(db=db,user_id=user_id,time_window='year',start_date=zero_date,end_date=start_date,cumulative=True,aggregated=False)
 					if correction_df.empty:
 						correction_value = 0
 					else:
@@ -161,7 +161,7 @@ class UserGetter(Getter):
 				if cumulative:
 					df[self.measure_name] = df.cumsum()
 					if start_date > zero_date:
-						correction_df = self.get_result(db=db,project_id=None,time_window=time_window,start_date=zero_date,end_date=start_date,cumulative=True,aggregated=True)
+						correction_df = self.get_result(db=db,user_id=None,time_window=time_window,start_date=zero_date,end_date=start_date,cumulative=True,aggregated=True)
 						if correction_df.empty:
 							correction_value = 0
 						else:
