@@ -62,23 +62,55 @@ class UserGetter(Getter):
 			df.set_index('timestamp',inplace=True)
 			df.sort_values(by='timestamp',inplace=True)
 
+
 			if not df.empty:
-				start_date_idx = df.index.min()
-				end_date_idx = end_date
-				idx = pd.date_range(start_date_idx,end_date_idx,freq=pandas_freq[time_window])
-				# print(df)
-				df = df.reindex(idx,fill_value=0)
-				# print(df)
-				if cumulative:
-					df[self.measure_name] = df.cumsum()
-					if start_date > zero_date:
-						correction_df = self.get_result(db=db,user_id=user_id,time_window='year',start_date=zero_date,end_date=start_date,cumulative=True,aggregated=False)
+				df_index_min = df.index.min()
+			else:
+				df_index_min = round_datetime_upper(end_date,time_window=time_window,strict=True) + datetime.timedelta(days=1)
+
+			if db.db_type == 'postgres':
+				db.cursor.execute('''
+					SELECT COALESCE(MIN(i.created_at),%s)
+					FROM identities i
+					WHERE i.user_id=%s
+					AND i.created_at IS NOT NULL
+					GROUP BY i.user_id
+					;
+					''',(df_index_min,user_id,))
+			else:
+				db.cursor.execute('''
+					SELECT COALESCE(MIN(i.created_at),%s)
+					FROM identities i
+					WHERE i.user_id=%s
+					AND i.created_at IS NOT NULL
+					GROUP BY i.user_id
+					;
+					''',(df_index_min,user_id,))
+			created_at = db.cursor.fetchone()[0]
+
+			start_date_idx = max(created_at,start_date)
+			end_date_idx = end_date
+			idx = pd.date_range(round_datetime_upper(start_date_idx,time_window=time_window,strict=False),round_datetime_upper(end_date_idx,time_window=time_window),freq=pandas_freq[time_window])
+
+			df = df.reindex(idx,fill_value=0)
+			if cumulative:
+				orig_df = df
+				df = df.fillna(0)
+				df[self.measure_name] = df.cumsum()
+				# df.loc[(orig_df[self.measure_name].isna()),self.measure_name] = np.nan
+				# df[self.measure_name][orig_df[self.measure_name].isna()] = np.nan
+				if start_date > zero_date:
+					# correction_df = self.get_result(db=db,project_id=project_id,time_window=time_window,start_date=zero_date,end_date=start_date,cumulative=True,aggregated=False)
+					correction_df = self.get_result(db=db,project_id=project_id,time_window='year',start_date=zero_date,end_date=start_date,cumulative=True,aggregated=False)
+					if correction_df.empty:
+						correction_value = 0
+					else:
 						correction_value = correction_df[self.measure_name].fillna(0).max()
-						df[self.measure_name] = df[self.measure_name]+correction_value
+					df[self.measure_name] = df[self.measure_name]+correction_value
 
-				complete_idx = pd.date_range(start_date,end_date,freq=pandas_freq[time_window],name='timestamp')
-				df = df.reindex(complete_idx)
-
+			# complete_idx = pd.date_range(start_date,end_date,freq=pandas_freq[time_window],name='timestamp')
+			complete_idx = pd.date_range(round_datetime_upper(start_date,time_window=time_window,strict=True),round_datetime_upper(end_date,time_window=time_window),freq=pandas_freq[time_window],name='timestamp')
+			df = df.reindex(complete_idx)
 
 			return df
 
@@ -112,21 +144,30 @@ class UserGetter(Getter):
 				df.set_index('timestamp',inplace=True)
 				df.sort_values(by='timestamp',inplace=True)
 
-				if not df.empty:
-					start_date_idx = df.index.min()
-					end_date_idx = end_date
-					idx = pd.date_range(start_date_idx,end_date_idx,freq=pandas_freq[time_window])
-					# print(df)
-					df = df.reindex(idx,fill_value=0)
-					# print(df)
-					if cumulative:
-						df[self.measure_name] = df.cumsum()
-						if start_date > zero_date:
-							correction_df = self.get_result(db=db,user_id=None,time_window='year',start_date=zero_date,end_date=start_date,cumulative=True,aggregated=True)
+
+				# if not df.empty:
+				# 	df_index_min = df.index.min()
+				# else:
+				# 	df_index_min = round_datetime_upper(end_date,time_window=time_window,strict=True) + datetime.timedelta(days=1)
+
+				start_date_idx = start_date
+				end_date_idx = end_date
+				# idx = pd.date_range(start_date_idx,end_date_idx,freq=pandas_freq[time_window])
+				idx = pd.date_range(round_datetime_upper(start_date_idx,time_window=time_window,strict=False),round_datetime_upper(end_date_idx,time_window=time_window),freq=pandas_freq[time_window])
+				# print(df)
+				df = df.reindex(idx,fill_value=0)
+				# print(df)
+				if cumulative:
+					df[self.measure_name] = df.cumsum()
+					if start_date > zero_date:
+						correction_df = self.get_result(db=db,project_id=None,time_window=time_window,start_date=zero_date,end_date=start_date,cumulative=True,aggregated=True)
+						if correction_df.empty:
+							correction_value = 0
+						else:
 							correction_value = correction_df[self.measure_name].fillna(0).max()
-							df[self.measure_name] = df[self.measure_name]+correction_value
-					complete_idx = pd.date_range(start_date,end_date,freq=pandas_freq[time_window],name='timestamp')
-					df = df.reindex(complete_idx)
+						df[self.measure_name] = df[self.measure_name]+correction_value
+				complete_idx = pd.date_range(round_datetime_upper(start_date,time_window=time_window,strict=True),round_datetime_upper(end_date,time_window=time_window),freq=pandas_freq[time_window],name='timestamp')
+				df = df.reindex(complete_idx)
 
 
 				return df
@@ -202,21 +243,19 @@ class UserGetter(Getter):
 
 					start_date_idx = start_date
 					end_date_idx = end_date
-					if not df.empty:
-						# print(df)
-						idx = pd.MultiIndex.from_product([user_ids,pd.date_range(start_date_idx,end_date_idx,freq=pandas_freq[time_window])],names=['user_id','timestamp'])
-						df = df.reindex(idx,fill_value=0)
 
-						if cumulative:
-							# df[self.measure_name] = df.groupby(level=0).cumsum().reset_index()
-							df = df.groupby(level=0).cumsum().reset_index()
-							df = df[df[self.measure_name]!=0]
-							df.set_index(['user_id','timestamp'],inplace=True)
+					#if not df.empty:
+					idx = pd.MultiIndex.from_product([user_ids,pd.date_range(round_datetime_upper(start_date_idx,time_window=time_window,strict=False),round_datetime_upper(end_date_idx,time_window=time_window),freq=pandas_freq[time_window])],names=['user_id','timestamp'])
+					df = df.reindex(idx,fill_value=0)
 
-						complete_idx = pd.MultiIndex.from_product([user_ids,pd.date_range(start_date,end_date,freq=pandas_freq[time_window])],names=['user_id','timestamp'])
+					if cumulative:
+						df = df.groupby(level=0).cumsum().reset_index()
+						df = df[df[self.measure_name]!=0]
+						df.set_index(['user_id','timestamp'],inplace=True)
 
-						df = df.reindex(complete_idx,fill_value=0)
+					complete_idx = pd.MultiIndex.from_product([user_ids,pd.date_range(round_datetime_upper(start_date,time_window=time_window,strict=True),round_datetime_upper(end_date,time_window=time_window),freq=pandas_freq[time_window])],names=['user_id','timestamp'])
 
+					df = df.reindex(complete_idx,fill_value=0)
 
 					return df
 
