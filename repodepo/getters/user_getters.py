@@ -6,6 +6,7 @@ import numpy as np
 from . import pandas_freq
 from .generic_getters import Getter
 from . import generic_getters
+from . import round_datetime_upper
 
 
 class UserGetter(Getter):
