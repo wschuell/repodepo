@@ -40,3 +40,16 @@ def round_datetime_upper(dt,time_window,strict=False):
 			return datetime.datetime(dt.year,dt.month,dt.day) + datetime.timedelta(days=1)
 	else:
 		raise NotImplementedError('Rounding of datetime not implemented for time window: {}'.format(time_window))
+
+
+def convert_date(dt):
+
+	if not isinstance(dt,datetime.datetime):
+		dt = pd.to_datetime(dt).to_pydatetime()
+
+	return dt
+
+def convert_date_str(dt):
+	dt = convert_date(dt)
+
+	return dt.strftime('%Y-%m-%dT%H:%M:%SZ')

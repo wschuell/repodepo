@@ -6,7 +6,7 @@ import numpy as np
 from . import pandas_freq
 from .generic_getters import Getter
 from . import generic_getters
-from . import round_datetime_upper
+from . import round_datetime_upper,convert_date,convert_date_str
 
 
 class ProjectGetter(Getter):
@@ -119,27 +119,28 @@ class ProjectGetter(Getter):
 
 			if db.db_type == 'postgres':
 				db.cursor.execute('''
-					SELECT COALESCE(r.created_at,MIN(p.created_at),%s)
+					SELECT COALESCE(r.created_at,MIN(p.created_at),%(dt)s)
 					FROM repositories r
 					LEFT OUTER JOIN packages p
 					ON p.repo_id = r.id
-					WHERE r.id=%s
+					WHERE r.id=%(rid)s
 					GROUP BY r.id,r.created_at
 					;
-					''',(df_index_min,project_id,))
+					''',{'dt':convert_date(df_index_min),'rid':project_id})
 			else:
+				print(df_index_min,'blah')
 				db.cursor.execute('''
-					SELECT COALESCE(r.created_at,MIN(p.created_at),?)
+					SELECT COALESCE(r.created_at,MIN(p.created_at),datetime(:dt))
 					FROM repositories r
 					LEFT OUTER JOIN packages p
 					ON p.repo_id = r.id
-					WHERE r.id=?
+					WHERE r.id=:rid
 					GROUP BY r.id,r.created_at
 					;
-					''',(df_index_min,project_id,))
+					''',{'dt':convert_date_str(df_index_min),'rid':project_id})
 			created_at = db.cursor.fetchone()[0]
 
-			start_date_idx = max(created_at,start_date)
+			start_date_idx = max(convert_date(created_at),convert_date(start_date))
 			end_date_idx = end_date
 			idx = pd.date_range(round_datetime_upper(start_date_idx,time_window=time_window,strict=False),round_datetime_upper(end_date_idx,time_window=time_window),freq=pandas_freq[time_window])
 
@@ -150,7 +151,7 @@ class ProjectGetter(Getter):
 				df[self.measure_name] = df.cumsum()
 				# df.loc[(orig_df[self.measure_name].isna()),self.measure_name] = np.nan
 				# df[self.measure_name][orig_df[self.measure_name].isna()] = np.nan
-				if start_date > zero_date:
+				if convert_date(start_date) > convert_date(zero_date):
 					# correction_df = self.get_result(db=db,project_id=project_id,time_window=time_window,start_date=zero_date,end_date=start_date,cumulative=True,aggregated=False)
 					correction_df = self.get_result(db=db,project_id=project_id,time_window='year',start_date=zero_date,end_date=start_date,cumulative=True,aggregated=False)
 					if correction_df.empty:
@@ -210,7 +211,7 @@ class ProjectGetter(Getter):
 				# print(df)
 				if cumulative:
 					df[self.measure_name] = df.cumsum()
-					if start_date > zero_date:
+				if convert_date(start_date) > convert_date(zero_date):
 						correction_df = self.get_result(db=db,project_id=None,time_window=time_window,start_date=zero_date,end_date=start_date,cumulative=True,aggregated=True)
 						if correction_df.empty:
 							correction_value = 0
@@ -255,7 +256,7 @@ class ProjectGetter(Getter):
 					df = df.reindex(complete_idx,fill_value=0)
 					df = df.convert_dtypes()
 					if cumulative:
-						if start_date > zero_date:
+						if convert_date(start_date) > convert_date(zero_date):
 							correction_df = self.get_result(db=db,project_id=None,time_window=None,start_date=zero_date,end_date=start_date,cumulative=True,aggregated=False)
 							correction_df.fillna(0,inplace=True)
 							correction_df = correction_df.convert_dtypes()
@@ -292,26 +293,25 @@ class ProjectGetter(Getter):
 					# project_ids = df['project_id'].sort_values().unique()#.tolist()
 					project_ids = generic_getters.RepoIDs(db=db).get_result()['project_id'].tolist()
 
-
 					df.set_index(['project_id','timestamp'],inplace=True)
 					df.sort_values(by='timestamp',inplace=True)
 
 					start_date_idx = start_date
 					end_date_idx = end_date
 
+
 					#if not df.empty:
 					idx = pd.MultiIndex.from_product([project_ids,pd.date_range(round_datetime_upper(start_date_idx,time_window=time_window,strict=False),round_datetime_upper(end_date_idx,time_window=time_window),freq=pandas_freq[time_window])],names=['project_id','timestamp'])
-					df = df.reindex(idx,fill_value=0)
+					df = df.reindex(idx,fill_value=0).fillna(0)
 
 					if cumulative:
 						df = df.groupby(level=0).cumsum().reset_index()
-						df = df[df[self.measure_name]!=0]
+						# df = df[df[self.measure_name]!=0]
 						df.set_index(['project_id','timestamp'],inplace=True)
 
-					complete_idx = pd.MultiIndex.from_product([project_ids,pd.date_range(round_datetime_upper(start_date,time_window=time_window,strict=True),round_datetime_upper(end_date,time_window=time_window),freq=pandas_freq[time_window])],names=['project_id','timestamp'])
+					# complete_idx = pd.MultiIndex.from_product([project_ids,pd.date_range(round_datetime_upper(start_date,time_window=time_window,strict=True),round_datetime_upper(end_date,time_window=time_window),freq=pandas_freq[time_window])],names=['project_id','timestamp'])
 
-					df = df.reindex(complete_idx,fill_value=0)
-
+					# df = df.reindex(complete_idx,fill_value=0)
 
 					return df
 

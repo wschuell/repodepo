@@ -39,14 +39,14 @@ def time_window(request):
 
 cumul_list = [
 	True,
-	False
+	# False
 	]
 @pytest.fixture(params=cumul_list)
 def cumulative(request):
 	return request.param
 
 agg_list = [
-	True,
+	# True,
 	False
 	]
 @pytest.fixture(params=agg_list)
@@ -131,6 +131,9 @@ def pdb(request):
 @pytest.fixture(params=['sqlite'])
 def sdb(request):
 	orig_db = repodepo.repo_database.Database(db_name='travis_ci_test_repo_tools',db_type='postgres',data_folder=os.path.join(os.path.dirname(__file__),'dummy_data'))
+	filename = os.path.join('.','travis_ci_test_repo_tools_comparison.db')
+	if os.path.exists(filename):
+		os.remove(filename)
 	db = repodepo.repo_database.Database(db_name='travis_ci_test_repo_tools_comparison',db_type=request.param,data_folder=os.path.join(os.path.dirname(__file__),'dummy_data'))
 	extras.exports.export(orig_db=orig_db,dest_db=db)
 	yield db
