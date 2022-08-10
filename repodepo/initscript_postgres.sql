@@ -273,14 +273,19 @@
 
 
 				CREATE TABLE IF NOT EXISTS issues(
-				id BIGSERIAL PRIMARY KEY,
 				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
 				issue_number TEXT,
 				issue_title TEXT,
+				issue_text TEXT,
 				created_at TIMESTAMP DEFAULT NULL,
 				closed_at TIMESTAMP DEFAULT NULL,
-				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+				author_login TEXT,
+				author_id BIGINT REFERENCES identities(id) ON DELETE CASCADE,
+				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				PRIMARY KEY(repo_id,issue_number)
 				);
+
+				CREATE INDEX IF NOT EXISTS issues_idx_dates ON issues(repo_id,created_at,closed_at);
 
 				CREATE TABLE IF NOT EXISTS package_versions(
 				id BIGSERIAL PRIMARY KEY,

@@ -2499,6 +2499,8 @@ class IssuesGQLFiller(GHGQLFiller):
       							nodes {{
         							number
 									title
+									author {{ login }}
+									bodyText
 									createdAt
 									closedAt
       								}}
@@ -2521,6 +2523,11 @@ class IssuesGQLFiller(GHGQLFiller):
 				d['closed_at'] = e['closedAt']
 				d['issue_number'] = e['number']
 				d['issue_title'] = e['title']
+				d['issue_text'] = e['bodyText']
+				try:
+					d['author_login'] = e['author']['login']
+				except (KeyError,TypeError) as err:
+					d['author_login'] = None
 			except (KeyError,TypeError) as err:
 				self.logger.info('Result triggering error: {} \nError when parsing issues for {}/{}: {}'.format(e,repo_owner,repo_name,err))
 				continue
@@ -2538,26 +2545,32 @@ class IssuesGQLFiller(GHGQLFiller):
 			db = self.db
 		if db.db_type == 'postgres':
 			extras.execute_batch(db.cursor,'''
-				INSERT INTO issues(created_at,closed_at,repo_id,issue_number,issue_title)
+				INSERT INTO issues(created_at,closed_at,repo_id,issue_number,issue_title,issue_text,author_login,author_id)
 				VALUES(%s,
 						%s,
 						%s,
 						%s,
-						%s
+						%s,
+						%s,
+						%s,
+						(SELECT id FROM identities WHERE identity=%s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%s))
 						)
 
 				ON CONFLICT DO NOTHING
-				;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title']) for s in items_list))
+				;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title'],s['issue_text'],s['author_login'],s['author_login'],self.target_identity_type) for s in items_list))
 		else:
 			db.cursor.executemany('''
-					INSERT OR IGNORE INTO issues(created_at,closed_at,repo_id,issue_number,issue_title)
+					INSERT OR IGNORE INTO issues(created_at,closed_at,repo_id,issue_number,issue_title,issue_text,author_login,author_id)
 					VALUES(?,
 							?,
 							?,
 							?,
-							?
+							?,
+							?,
+							?,
+							(SELECT id FROM identities WHERE identity=? AND identity_type_id=(SELECT id FROM identity_types WHERE name=?))
 							)
-				;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title']) for s in items_list))
+				;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title'],s['issue_text'],s['author_login'],s['author_login'],self.target_identity_type) for s in items_list))
 
 
 		if commit:
