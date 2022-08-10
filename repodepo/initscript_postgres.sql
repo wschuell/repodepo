@@ -90,11 +90,13 @@
 				id BIGSERIAL PRIMARY KEY,
 				sha TEXT,
 				author_id BIGINT REFERENCES identities(id) ON DELETE CASCADE,
+				committer_id BIGINT REFERENCES identities(id) ON DELETE CASCADE,
 				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
 				created_at TIMESTAMP,
 				original_created_at TIMESTAMP,
 				insertions INT,
 				deletions INT,
+				message TEXT,
 				UNIQUE(sha)
 				);
 

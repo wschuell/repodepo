@@ -227,6 +227,9 @@ class CommitsFiller(fillers.Filler):
 							'sha':commit['sha'],
 							'parents':commit['parents'],
 							'repo_id':repo_id,
+							'message':commit['message'],
+							'committer_email':commit['committer_email'],
+							'committer_name':commit['committer_name'],
 							}
 					else:
 						return {
@@ -238,6 +241,9 @@ class CommitsFiller(fillers.Filler):
 							'sha':commit.hex,
 							'parents':[pid.hex for pid in commit.parent_ids],
 							'repo_id':repo_id,
+							'message':commit.message,
+							'committer_email':commit.committer.email,
+							'committer_name':commit.committer.name,
 							}
 				else:
 					if isinstance(commit,dict):
@@ -263,6 +269,9 @@ class CommitsFiller(fillers.Filler):
 							'deletions':deletions,
 							'total':insertions+deletions,
 							'repo_id':repo_id,
+							'message':commit.message,
+							'committer_email':commit.committer.email,
+							'committer_name':commit.committer.name,
 							}
 
 			# Wrapping the walker generator into another one to be able to deal with multiprocessing
@@ -271,10 +280,11 @@ class CommitsFiller(fillers.Filler):
 					if after_time is not None and (not allbranches) and commit.commit_time<after_time:
 						break
 					if group_by == 'authors':
-						if commit.author.email in tracked_args.keys():
+						if commit.author.email in tracked_args.keys() and commit.committer.email in tracked_args.keys():
 							continue
 						else:
 							tracked_args[commit.author.email] = True
+							tracked_args[commit.committer.email] = True
 					elif group_by == 'sha':
 						if commit.hex in tracked_args.keys():
 							continue
@@ -400,7 +410,24 @@ class CommitsFiller(fillers.Filler):
 						INNER JOIN identity_types it
 						ON it.name='email' AND u.creation_identity=%(email)s AND u.creation_identity_type_id=it.id
 				ON CONFLICT DO NOTHING;
-				''',({'info':json.dumps({'name':c['author_name']}),'email':c['author_email']} for c in tr_gen))
+				INSERT INTO users(
+						creation_identity,
+						creation_identity_type_id)
+							SELECT %(committer_email)s,id FROM identity_types WHERE name='email'
+					AND NOT EXISTS (SELECT 1 FROM identities i
+						INNER JOIN identity_types it
+						ON i.identity=%(committer_email)s AND i.identity_type_id=it.id AND it.name='email')
+				ON CONFLICT DO NOTHING;
+				INSERT INTO identities(
+						attributes,
+						identity,
+						user_id,
+						identity_type_id) SELECT %(committer_info)s,%(committer_email)s,u.id,it.id
+						FROM users u
+						INNER JOIN identity_types it
+						ON it.name='email' AND u.creation_identity=%(committer_email)s AND u.creation_identity_type_id=it.id
+				ON CONFLICT DO NOTHING;
+				''',({'info':json.dumps({'name':c['author_name']}),'email':c['author_email'],'committer_email':c['committer_email'],'committer_info':json.dumps({'name':c['committer_name']}),} for c in tr_gen))
 			self.db.connection.commit()
 
 
@@ -411,7 +438,7 @@ class CommitsFiller(fillers.Filler):
 				;''')
 			self.db.connection.commit()
 			for c in tr_gen:
-				info_dict = {'info':json.dumps({'name':c['author_name']}),'email':c['author_email']}
+				info_dict = {'info':json.dumps({'name':c['author_name']}),'email':c['author_email'],'committer_email':c['committer_email'],'committer_info':json.dumps({'name':c['committer_name']}),}
 				self.db.cursor.execute('''
 					INSERT OR IGNORE INTO users(
 							creation_identity,
@@ -419,7 +446,7 @@ class CommitsFiller(fillers.Filler):
 								SELECT :email,id FROM identity_types WHERE name='email'
 						AND NOT EXISTS  (SELECT 1 FROM identities i
 							INNER JOIN identity_types it
-							ON i.identity='email' AND i.identity_type_id=it.id AND it.name='email')
+							ON i.identity=:email AND i.identity_type_id=it.id AND it.name='email')
 					;
 					''',info_dict)
 				self.db.cursor.execute('''
@@ -431,6 +458,27 @@ class CommitsFiller(fillers.Filler):
 							FROM users u
 							INNER JOIN identity_types it
 							ON it.name='email' AND u.creation_identity=:email AND u.creation_identity_type_id=it.id
+					;
+					''',info_dict )
+				self.db.cursor.execute('''
+					INSERT OR IGNORE INTO users(
+							creation_identity,
+							creation_identity_type_id)
+								SELECT :committer_email,id FROM identity_types WHERE name='email'
+						AND NOT EXISTS  (SELECT 1 FROM identities i
+							INNER JOIN identity_types it
+							ON i.identity=:committer_email AND i.identity_type_id=it.id AND it.name='email')
+					;
+					''',info_dict)
+				self.db.cursor.execute('''
+					INSERT OR IGNORE INTO identities(
+							attributes,
+							identity,
+							user_id,
+							identity_type_id) SELECT :committer_info,:committer_email,u.id,it.id
+							FROM users u
+							INNER JOIN identity_types it
+							ON it.name='email' AND u.creation_identity=:committer_email AND u.creation_identity_type_id=it.id
 					;
 					''',info_dict )
 			self.db.connection.commit()
@@ -480,30 +528,38 @@ class CommitsFiller(fillers.Filler):
 
 		if self.db.db_type == 'postgres':
 			extras.execute_batch(self.db.cursor,'''
-				INSERT INTO commits(sha,author_id,created_at,insertions,deletions)
+				INSERT INTO commits(sha,author_id,committer_id,created_at,insertions,deletions,message)
 					VALUES(%s,
+							(SELECT i.id FROM identities i
+								INNER JOIN identity_types it
+							 ON i.identity=%s AND it.name='email' AND it.id=i.identity_type_id),
 							(SELECT i.id FROM identities i
 								INNER JOIN identity_types it
 							 ON i.identity=%s AND it.name='email' AND it.id=i.identity_type_id),
 							%s,
 							%s,
+							%s,
 							%s
 							)
 				ON CONFLICT DO NOTHING;
-				''',((c['sha'],c['author_email'],datetime.datetime.fromtimestamp(c['time']),c['insertions'],c['deletions'],) for c in tracked_gen(commit_info_list)))
+				''',((c['sha'],c['author_email'],c['committer_email'],datetime.datetime.fromtimestamp(c['time']),c['insertions'],c['deletions'],c['message']) for c in tracked_gen(commit_info_list)))
 
 		else:
 			self.db.cursor.executemany('''
-				INSERT OR IGNORE INTO commits(sha,author_id,created_at,insertions,deletions)
+				INSERT OR IGNORE INTO commits(sha,author_id,committer_id,created_at,insertions,deletions,message)
 					VALUES(?,
+							(SELECT i.id FROM identities i
+								INNER JOIN identity_types it
+							 ON i.identity=? AND it.name='email' AND it.id=i.identity_type_id),
 							(SELECT i.id FROM identities i
 								INNER JOIN identity_types it
 							 ON i.identity=? AND it.name='email' AND it.id=i.identity_type_id),
 							?,
 							?,
+							?,
 							?
 							);
-				''',((c['sha'],c['author_email'],datetime.datetime.fromtimestamp(c['time']),c['insertions'],c['deletions'],) for c in tracked_gen(commit_info_list)))
+				''',((c['sha'],c['author_email'],c['committer_email'],datetime.datetime.fromtimestamp(c['time']),c['insertions'],c['deletions'],c['message']) for c in tracked_gen(commit_info_list)))
 
 		if not tracked_data['empty']:
 #			repo_id = tracked_data['last_commit']['repo_id']

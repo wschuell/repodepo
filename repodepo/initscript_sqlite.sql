@@ -90,11 +90,13 @@
 				id INTEGER PRIMARY KEY,
 				sha TEXT,
 				author_id INTEGER REFERENCES identities(id) ON DELETE CASCADE,
+				committer_id INTEGER REFERENCES identities(id) ON DELETE CASCADE,
 				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
 				created_at TIMESTAMP,
 				original_created_at TIMESTAMP,
 				insertions INTEGER,
 				deletions INTEGER,
+				message TEXT,
 				UNIQUE(sha)
 				);
 

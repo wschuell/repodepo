@@ -119,23 +119,26 @@ class ProjectGetter(Getter):
 
 			if db.db_type == 'postgres':
 				db.cursor.execute('''
-					SELECT COALESCE(r.created_at,MIN(p.created_at),%(dt)s)
-					FROM repositories r
-					LEFT OUTER JOIN packages p
-					ON p.repo_id = r.id
-					WHERE r.id=%(rid)s
-					GROUP BY r.id,r.created_at
+					SELECT COALESCE(
+						(SELECT COALESCE(r.created_at,MIN(p.created_at))
+						FROM repositories r
+						LEFT OUTER JOIN packages p
+						ON p.repo_id = r.id
+						WHERE r.id=%(rid)s
+						GROUP BY r.id,r.created_at)
+						,%(dt)s::timestamp)
 					;
 					''',{'dt':convert_date(df_index_min),'rid':project_id})
 			else:
-				print(df_index_min,'blah')
 				db.cursor.execute('''
-					SELECT COALESCE(r.created_at,MIN(p.created_at),datetime(:dt))
-					FROM repositories r
-					LEFT OUTER JOIN packages p
-					ON p.repo_id = r.id
-					WHERE r.id=:rid
-					GROUP BY r.id,r.created_at
+					SELECT COALESCE(
+						(SELECT COALESCE(r.created_at,MIN(p.created_at))
+						FROM repositories r
+						LEFT OUTER JOIN packages p
+						ON p.repo_id = r.id
+						WHERE r.id=:rid
+						GROUP BY r.id,r.created_at)
+					,datetime(:dt))
 					;
 					''',{'dt':convert_date_str(df_index_min),'rid':project_id})
 			created_at = db.cursor.fetchone()[0]
@@ -206,9 +209,7 @@ class ProjectGetter(Getter):
 				end_date_idx = end_date
 				# idx = pd.date_range(start_date_idx,end_date_idx,freq=pandas_freq[time_window])
 				idx = pd.date_range(round_datetime_upper(start_date_idx,time_window=time_window,strict=False),round_datetime_upper(end_date_idx,time_window=time_window),freq=pandas_freq[time_window])
-				# print(df)
 				df = df.reindex(idx,fill_value=0)
-				# print(df)
 				if cumulative:
 					df[self.measure_name] = df.cumsum()
 				if convert_date(start_date) > convert_date(zero_date):
