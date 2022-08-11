@@ -105,6 +105,29 @@
 				CREATE INDEX IF NOT EXISTS commits_rc_idx ON commits(original_created_at) WHERE original_created_at IS NOT NULL;
 				CREATE INDEX IF NOT EXISTS commits_cra_idx ON commits(created_at,repo_id,author_id);
 
+				CREATE TABLE IF NOT EXISTS commit_comments(
+				commit_id INTEGER REFERENCES commits(id) ON DELETE CASCADE,
+				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
+				comment_id INTEGER,
+				comment_text TEXT,
+				author_login TEXT,
+				identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
+				author_id INTEGER REFERENCES identities(id) ON DELETE SET NULL,
+				PRIMARY KEY(commit_id,repo_id,comment_id)
+				);
+
+				CREATE TABLE IF NOT EXISTS commit_comment_reactions(
+				commit_id INTEGER,
+				repo_id INTEGER,
+				comment_id INTEGER,
+				author_login TEXT,
+				identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
+				author_id INTEGER REFERENCES identities(id) ON DELETE SET NULL,
+				reaction TEXT,
+				PRIMARY KEY(commit_id,repo_id,comment_id,author_login,reaction),
+				FOREIGN KEY (commit_id,repo_id,comment_id) REFERENCES commit_comments(commit_id,repo_id,comment_id) ON DELETE CASCADE
+				);
+
 				CREATE TABLE IF NOT EXISTS commit_repos(
 				commit_id INTEGER REFERENCES commits(id) ON DELETE CASCADE,
 				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
@@ -160,7 +183,7 @@
 				CREATE TABLE IF NOT EXISTS followers(
 				follower_identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
 				follower_login TEXT,
-				follower_id INTEGER REFERENCES identities(id) ON DELETE CASCADE,
+				follower_id INTEGER REFERENCES identities(id) ON DELETE SET NULL,
 				followee_id INTEGER REFERENCES identities(id) ON DELETE CASCADE,
 				created_at TIMESTAMP DEFAULT NULL,
 				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -173,7 +196,7 @@
 				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
 				identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
 				login TEXT NOT NULL,
-				identity_id INTEGER REFERENCES identities(id) ON DELETE CASCADE,
+				identity_id INTEGER REFERENCES identities(id) ON DELETE SET NULL,
 				starred_at TIMESTAMP NOT NULL,
 				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 				PRIMARY KEY(repo_id,login,identity_type_id)
@@ -220,7 +243,7 @@
 				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
 				sponsor_identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
 				sponsor_login TEXT,
-				sponsor_id INTEGER REFERENCES identities(id) ON DELETE CASCADE,
+				sponsor_id INTEGER REFERENCES identities(id) ON DELETE SET NULL,
 				created_at TIMESTAMP NOT NULL,
 				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 				is_onetime_payment BOOLEAN DEFAULT false,
@@ -235,7 +258,7 @@
 				id INTEGER PRIMARY KEY,
 				sponsored_id INTEGER REFERENCES identities(id) ON DELETE CASCADE,
 				sponsor_identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
-				sponsor_id INTEGER REFERENCES identities(id) ON DELETE CASCADE,
+				sponsor_id INTEGER REFERENCES identities(id) ON DELETE SET NULL,
 				sponsor_login TEXT,
 				created_at TIMESTAMP NOT NULL,
 				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -269,18 +292,62 @@
 
 				CREATE TABLE IF NOT EXISTS issues(
 				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
-				issue_number TEXT,
+				issue_number INTEGER,
 				issue_title TEXT,
 				issue_text TEXT,
 				created_at TIMESTAMP DEFAULT NULL,
 				closed_at TIMESTAMP DEFAULT NULL,
 				author_login TEXT,
-				author_id INTEGER REFERENCES identities(id) ON DELETE CASCADE,
+				author_id INTEGER REFERENCES identities(id) ON DELETE SET NULL,
+				identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
 				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 				PRIMARY KEY(repo_id,issue_number)
 				);
 
 				CREATE INDEX IF NOT EXISTS issues_idx_dates ON issues(repo_id,created_at,closed_at);
+
+				CREATE TABLE IF NOT EXISTS issue_comments(
+					repo_id INTEGER,
+					issue_number INTEGER,
+					comment_id INTEGER,
+					comment_text TEXT,
+					author_login TEXT,
+					author_id INTEGER REFERENCES identities(id) ON DELETE SET NULL,
+					identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
+					PRIMARY KEY(repo_id,issue_number,comment_id),
+					FOREIGN KEY (repo_id,issue_number) REFERENCES issues(repo_id,issue_number) ON DELETE CASCADE
+				);
+
+				CREATE TABLE IF NOT EXISTS issue_labels(
+					repo_id INTEGER,
+					issue_number INTEGER,
+					label TEXT,
+					PRIMARY KEY(repo_id,issue_number,label),
+					FOREIGN KEY (repo_id,issue_number) REFERENCES issues(repo_id,issue_number) ON DELETE CASCADE
+				);
+
+				CREATE TABLE IF NOT EXISTS issue_reactions(
+					repo_id INTEGER,
+					issue_number INTEGER,
+					reaction TEXT,
+					author_login TEXT,
+					author_id INTEGER REFERENCES identities(id) ON DELETE SET NULL,
+					identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
+					PRIMARY KEY(repo_id,issue_number,author_login,reaction),
+					FOREIGN KEY (repo_id,issue_number) REFERENCES issues(repo_id,issue_number) ON DELETE CASCADE
+				);
+
+				CREATE TABLE IF NOT EXISTS issue_comment_reactions(
+					repo_id INTEGER,
+					issue_number INTEGER,
+					comment_id INTEGER,
+					reaction TEXT,
+					author_login TEXT,
+					author_id INTEGER REFERENCES identities(id) ON DELETE SET NULL,
+					identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
+					PRIMARY KEY(repo_id,issue_number,author_login,reaction),
+					FOREIGN KEY (repo_id,issue_number,comment_id) REFERENCES issue_comments(repo_id,issue_number,comment_id) ON DELETE CASCADE
+				);
 
 				CREATE TABLE IF NOT EXISTS package_versions(
 				id INTEGER PRIMARY KEY,

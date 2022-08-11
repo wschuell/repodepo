@@ -48,6 +48,7 @@ class DummyMetaFiller(fillers.Filler):
 		self.db.add_filler(github_rest.GHLoginsFiller(fail_on_wait=self.fail_on_wait,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
 		self.db.add_filler(github_gql.StarsGQLFiller(fail_on_wait=self.fail_on_wait,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
 		self.db.add_filler(github_gql.FollowersGQLFiller(fail_on_wait=self.fail_on_wait,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
+		self.db.add_filler(github_gql.CompleteIssuesGQLFiller(fail_on_wait=self.fail_on_wait,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
 		self.db.add_filler(github_gql.UserCreatedAtGQLFiller(fail_on_wait=self.fail_on_wait,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
 		self.db.add_filler(github_gql.RepoCreatedAtGQLFiller(fail_on_wait=self.fail_on_wait,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))
 		self.db.add_filler(github_gql.RepoLanguagesGQLFiller(fail_on_wait=self.fail_on_wait,workers=self.workers,data_folder=data_folder,api_keys_file=api_keys_file))

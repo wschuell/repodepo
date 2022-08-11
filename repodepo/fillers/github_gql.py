@@ -2517,7 +2517,7 @@ class IssuesGQLFiller(GHGQLFiller):
 		if repo_owner is None:
 			repo_owner,repo_name = query_result['repository']['nameWithOwner'].split('/')
 		for e in query_result['repository']['issues']['nodes']:
-			d = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name}
+			d = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type}
 			try:
 				d['created_at'] = e['createdAt']
 				d['closed_at'] = e['closedAt']
@@ -2545,32 +2545,36 @@ class IssuesGQLFiller(GHGQLFiller):
 			db = self.db
 		if db.db_type == 'postgres':
 			extras.execute_batch(db.cursor,'''
-				INSERT INTO issues(created_at,closed_at,repo_id,issue_number,issue_title,issue_text,author_login,author_id)
-				VALUES(%s,
-						%s,
-						%s,
-						%s,
-						%s,
-						%s,
-						%s,
-						(SELECT id FROM identities WHERE identity=%s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%s))
+				INSERT INTO issues(created_at,closed_at,repo_id,issue_number,issue_title,issue_text,author_login,author_id,identity_type_id)
+				VALUES(%(created_at)s,
+						%(closed_at)s,
+						%(repo_id)s,
+						%(issue_number)s,
+						%(issue_title)s,
+						%(issue_text)s,
+						%(author_login)s,
+						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
+						(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
 						)
 
 				ON CONFLICT DO NOTHING
-				;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title'],s['issue_text'],s['author_login'],s['author_login'],self.target_identity_type) for s in items_list))
+				;''',items_list)
+				# ;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title'],s['issue_text'],s['author_login'],s['author_login'],self.target_identity_type,self.target_identity_type) for s in items_list))
 		else:
 			db.cursor.executemany('''
-					INSERT OR IGNORE INTO issues(created_at,closed_at,repo_id,issue_number,issue_title,issue_text,author_login,author_id)
-					VALUES(?,
-							?,
-							?,
-							?,
-							?,
-							?,
-							?,
-							(SELECT id FROM identities WHERE identity=? AND identity_type_id=(SELECT id FROM identity_types WHERE name=?))
+					INSERT OR IGNORE INTO issues(created_at,closed_at,repo_id,issue_number,issue_title,issue_text,author_login,author_id,identity_type_id)
+					VALUES(:created_at,
+						:closed_at,
+						:repo_id,
+						:issue_number,
+						:issue_title,
+						:issue_text,
+						:author_login,
+							(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
+							(SELECT id FROM identity_types WHERE name=:target_identity_type)
 							)
-				;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title'],s['issue_text'],s['author_login'],s['author_login'],self.target_identity_type) for s in items_list))
+				;''',items_list)
+				# ;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title'],s['issue_text'],s['author_login'],s['author_login'],self.target_identity_type,self.target_identity_type) for s in items_list))
 
 
 		if commit:
@@ -2743,6 +2747,164 @@ class IssuesGQLFiller(GHGQLFiller):
 		if self.start_offset is not None:
 			self.elt_list = [r for r in self.elt_list if r[1]>=self.start_offset]
 
+
+
+class CompleteIssuesGQLFiller(IssuesGQLFiller):
+	'''
+	Querying issues through the GraphQL API
+	Adding comments, labels and reactions (first 100 per issue), and first 40 reactions to comments.
+	'''
+
+	def query_string(self,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: python-formatable string representing the graphql query
+		'''
+		return '''query {{
+  					repository(owner: "{repo_owner}", name: "{repo_name}") {{
+  							nameWithOwner
+    						id
+    						issues(first: 100 {after_end_cursor}) {{
+    							totalCount
+    							pageInfo {{
+									endCursor
+									hasNextPage
+						 			}}
+      							nodes {{
+        							number
+									title
+									author {{ login }}
+									bodyText
+									createdAt
+									closedAt
+									comments(first:100) {{
+										totalCount
+										pageInfo {{
+											endCursor
+											hasNextPage
+											}}
+										nodes {{
+											createdAt
+											author {{ login }}
+											bodyText
+
+											reactions(first:40) {{
+												totalCount
+												pageInfo {{
+													endCursor
+													hasNextPage
+													}}
+												nodes {{
+													user {{ login }}
+													createdAt
+													content
+													}}
+												}}
+											}}
+										}}
+
+									labels(first:100) {{
+										totalCount
+										pageInfo {{
+											endCursor
+											hasNextPage
+											}}
+										nodes {{
+											name
+											createdAt
+											}}
+										}}
+
+									reactions(first:100) {{
+										totalCount
+										pageInfo {{
+											endCursor
+											hasNextPage
+											}}
+										nodes {{
+											user {{ login }}
+											createdAt
+											content
+											}}
+										}}
+      								}}
+    							}}
+  							}}
+						}}'''
+
+
+	def parse_query_result(self,query_result,repo_id,identity_id,repo_owner=None,repo_name=None,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: [ {'repo_id':r_id,'repo_owner':r_ow,'repo_name':r_na,'issue_number':issue_na,'issue_title':title_na,'created_at':created_date,'closed_at':closed_date} , ...]
+		'''
+		ans = []
+		if repo_owner is None:
+			repo_owner,repo_name = query_result['repository']['nameWithOwner'].split('/')
+		for e in query_result['repository']['issues']['nodes']:
+			d = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type}
+			try:
+				d['created_at'] = e['createdAt']
+				d['closed_at'] = e['closedAt']
+				d['issue_number'] = e['number']
+				d['issue_title'] = e['title']
+				d['issue_text'] = e['bodyText']
+				try:
+					d['author_login'] = e['author']['login']
+				except (KeyError,TypeError) as err:
+					d['author_login'] = None
+			except (KeyError,TypeError) as err:
+				self.logger.info('Result triggering error: {} \nError when parsing issues for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+				continue
+			else:
+				ans.append(d)
+		return ans
+
+
+
+	def insert_items(self,items_list,commit=True,db=None):
+		'''
+		In subclasses this has to be implemented
+		inserts results in the DB
+		'''
+		if db is None:
+			db = self.db
+		if db.db_type == 'postgres':
+			extras.execute_batch(db.cursor,'''
+				INSERT INTO issues(created_at,closed_at,repo_id,issue_number,issue_title,issue_text,author_login,author_id,identity_type_id)
+				VALUES(%(created_at)s,
+						%(closed_at)s,
+						%(repo_id)s,
+						%(issue_number)s,
+						%(issue_title)s,
+						%(issue_text)s,
+						%(author_login)s,
+						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
+						(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
+						)
+
+				ON CONFLICT DO NOTHING
+				;''',items_list)
+				# ;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title'],s['issue_text'],s['author_login'],s['author_login'],self.target_identity_type,self.target_identity_type) for s in items_list))
+		else:
+			db.cursor.executemany('''
+					INSERT OR IGNORE INTO issues(created_at,closed_at,repo_id,issue_number,issue_title,issue_text,author_login,author_id,identity_type_id)
+					VALUES(:created_at,
+						:closed_at,
+						:repo_id,
+						:issue_number,
+						:issue_title,
+						:issue_text,
+						:author_login,
+							(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
+							(SELECT id FROM identity_types WHERE name=:target_identity_type)
+							)
+				;''',items_list)
+				# ;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title'],s['issue_text'],s['author_login'],s['author_login'],self.target_identity_type,self.target_identity_type) for s in items_list))
+
+
+		if commit:
+			db.connection.commit()
 
 class SponsorablesGQLFiller(GHGQLFiller):
 	'''

@@ -165,7 +165,7 @@
 				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
 				identity_type_id BIGINT REFERENCES identity_types(id) ON DELETE CASCADE,
 				login TEXT NOT NULL,
-				identity_id BIGINT REFERENCES identities(id) ON DELETE CASCADE,
+				identity_id BIGINT REFERENCES identities(id) ON DELETE SET NULL,
 				starred_at TIMESTAMP NOT NULL,
 				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 				PRIMARY KEY(repo_id,login,identity_type_id)
@@ -178,7 +178,7 @@
 				CREATE TABLE IF NOT EXISTS followers(
 				follower_identity_type_id BIGINT REFERENCES identity_types(id) ON DELETE CASCADE,
 				follower_login TEXT,
-				follower_id BIGINT REFERENCES identities(id) ON DELETE CASCADE,
+				follower_id BIGINT REFERENCES identities(id) ON DELETE SET NULL,
 				followee_id BIGINT REFERENCES identities(id) ON DELETE CASCADE,
 				created_at TIMESTAMP DEFAULT NULL,
 				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -225,7 +225,7 @@
 				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
 				sponsor_identity_type_id BIGINT REFERENCES identity_types(id) ON DELETE CASCADE,
 				sponsor_login TEXT,
-				sponsor_id BIGINT REFERENCES identities(id) ON DELETE CASCADE,
+				sponsor_id BIGINT REFERENCES identities(id) ON DELETE SET NULL,
 				created_at TIMESTAMP NOT NULL,
 				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 				is_onetime_payment BOOLEAN DEFAULT false,
@@ -240,7 +240,7 @@
 				id BIGSERIAL PRIMARY KEY,
 				sponsored_id BIGINT REFERENCES identities(id) ON DELETE CASCADE,
 				sponsor_identity_type_id BIGINT REFERENCES identity_types(id) ON DELETE CASCADE,
-				sponsor_id BIGINT REFERENCES identities(id) ON DELETE CASCADE,
+				sponsor_id BIGINT REFERENCES identities(id) ON DELETE SET NULL,
 				sponsor_login TEXT,
 				created_at TIMESTAMP NOT NULL,
 				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -274,18 +274,62 @@
 
 				CREATE TABLE IF NOT EXISTS issues(
 				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
-				issue_number TEXT,
+				issue_number INT,
 				issue_title TEXT,
 				issue_text TEXT,
 				created_at TIMESTAMP DEFAULT NULL,
 				closed_at TIMESTAMP DEFAULT NULL,
 				author_login TEXT,
-				author_id BIGINT REFERENCES identities(id) ON DELETE CASCADE,
+				author_id BIGINT REFERENCES identities(id) ON DELETE SET NULL,
+				identity_type_id BIGINT REFERENCES identity_types(id) ON DELETE CASCADE,
 				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 				PRIMARY KEY(repo_id,issue_number)
 				);
 
 				CREATE INDEX IF NOT EXISTS issues_idx_dates ON issues(repo_id,created_at,closed_at);
+
+				CREATE TABLE IF NOT EXISTS issue_comments(
+					repo_id BIGINT NOT NULL,
+					issue_number INT NOT NULL,
+					comment_id BIGINT NOT NULL,
+					comment_text TEXT,
+					author_login TEXT,
+					author_id BIGINT REFERENCES identities(id) ON DELETE SET NULL,
+					identity_type_id BIGINT REFERENCES identity_types(id) ON DELETE CASCADE,
+					PRIMARY KEY(repo_id,issue_number,comment_id),
+					FOREIGN KEY (repo_id,issue_number) REFERENCES issues(repo_id,issue_number) ON DELETE CASCADE
+				);
+
+				CREATE TABLE IF NOT EXISTS issue_labels(
+					repo_id BIGINT,
+					issue_number INT,
+					label TEXT,
+					PRIMARY KEY(repo_id,issue_number,label),
+					FOREIGN KEY (repo_id,issue_number) REFERENCES issues(repo_id,issue_number) ON DELETE CASCADE
+				);
+
+				CREATE TABLE IF NOT EXISTS issue_reactions(
+					repo_id BIGINT,
+					issue_number INT,
+					reaction TEXT,
+					author_login TEXT,
+					author_id BIGINT REFERENCES identities(id) ON DELETE SET NULL,
+					identity_type_id BIGINT REFERENCES identity_types(id) ON DELETE CASCADE,
+					PRIMARY KEY(repo_id,issue_number,author_login,reaction),
+					FOREIGN KEY (repo_id,issue_number) REFERENCES issues(repo_id,issue_number) ON DELETE CASCADE
+				);
+
+				CREATE TABLE IF NOT EXISTS issue_comment_reactions(
+					repo_id BIGINT,
+					issue_number INT,
+					comment_id BIGINT,
+					reaction TEXT,
+					author_login TEXT,
+					author_id BIGINT REFERENCES identities(id) ON DELETE SET NULL,
+					identity_type_id BIGINT REFERENCES identity_types(id) ON DELETE CASCADE,
+					PRIMARY KEY(repo_id,issue_number,author_login,reaction),
+					FOREIGN KEY (repo_id,issue_number,comment_id) REFERENCES issue_comments(repo_id,issue_number,comment_id) ON DELETE CASCADE
+				);
 
 				CREATE TABLE IF NOT EXISTS package_versions(
 				id BIGSERIAL PRIMARY KEY,
