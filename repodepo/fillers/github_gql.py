@@ -1957,6 +1957,130 @@ class IssuesGQLFiller(GHGQLFiller):
 		return query_result['repository']['issues']['totalCount']
 
 
+class PullRequestsGQLFiller(GHGQLFiller):
+	'''
+	Querying issues through the GraphQL API
+	'''
+	def __init__(self,**kwargs):
+		self.items_name = 'pullrequests'
+		self.queried_obj = 'repo'
+		self.pageinfo_path = ['repository','pullRequests','pageInfo']
+		GHGQLFiller.__init__(self,**kwargs)
+
+	def query_string(self,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: python-formatable string representing the graphql query
+		'''
+		return '''query {{
+  					repository(owner: "{repo_owner}", name: "{repo_name}") {{
+  							nameWithOwner
+    						id
+    						pullRequests(first:{page_size} {after_end_cursor}) {{
+    							totalCount
+    							pageInfo {{
+									endCursor
+									hasNextPage
+						 			}}
+      							nodes {{
+        							number
+									title
+									author {{ login }}
+									bodyText
+									createdAt
+									mergedAt
+									mergedBy {{ login }}
+      								}}
+    							}}
+  							}}
+						}}'''
+
+	def parse_query_result(self,query_result,repo_id,identity_id,repo_owner=None,repo_name=None,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: [ {'repo_id':r_id,'repo_owner':r_ow,'repo_name':r_na,'issue_number':issue_na,'issue_title':title_na,'created_at':created_date,'closed_at':closed_date} , ...]
+		'''
+		ans = []
+		if repo_owner is None:
+			repo_owner,repo_name = query_result['repository']['nameWithOwner'].split('/')
+		for e in query_result['repository']['pullRequests']['nodes']:
+			d = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type}
+			try:
+				d['created_at'] = e['createdAt']
+				d['merged_at'] = e['mergedAt']
+				d['pullrequest_number'] = e['number']
+				d['pullrequest_title'] = e['title']
+				d['pullrequest_text'] = e['bodyText']
+				try:
+					d['author_login'] = e['author']['login']
+				except (KeyError,TypeError) as err:
+					d['author_login'] = None
+				try:
+					d['merger_login'] = e['mergedBy']['login']
+				except (KeyError,TypeError) as err:
+					d['merger_login'] = None
+			except (KeyError,TypeError) as err:
+				self.logger.info('Result triggering error: {} \nError when parsing pullrequests for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+				continue
+			else:
+				ans.append(d)
+		return ans
+
+
+	def insert_items(self,items_list,commit=True,db=None):
+		'''
+		In subclasses this has to be implemented
+		inserts results in the DB
+		'''
+		if db is None:
+			db = self.db
+		if db.db_type == 'postgres':
+			extras.execute_batch(db.cursor,'''
+				INSERT INTO pullrequests(created_at,merged_at,repo_id,pullrequest_number,pullrequest_title,pullrequest_text,author_login,author_id,merger_login,merger_id,identity_type_id)
+				VALUES(%(created_at)s,
+						%(merged_at)s,
+						%(repo_id)s,
+						%(pullrequest_number)s,
+						%(pullrequest_title)s,
+						%(pullrequest_text)s,
+						%(author_login)s,
+						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
+						%(merger_login)s,
+						(SELECT id FROM identities WHERE identity=%(merger_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
+						(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
+						)
+
+				ON CONFLICT DO NOTHING
+				;''',items_list)
+				# ;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title'],s['issue_text'],s['author_login'],s['author_login'],self.target_identity_type,self.target_identity_type) for s in items_list))
+		else:
+			db.cursor.executemany('''
+					INSERT OR IGNORE INTO pullrequests(created_at,merged_at,repo_id,pullrequest_number,pullrequest_title,pullrequest_text,author_login,author_id,merger_login,merger_id,identity_type_id)
+				VALUES(:created_at,
+						:merged_at,
+						:repo_id,
+						:pullrequest_number,
+						:pullrequest_title,
+						:pullrequest_text,
+						:author_login,
+						(SELECT id FROM identities WHERE identity=:merger_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
+						:merger_login,
+						(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
+						(SELECT id FROM identity_types WHERE name=:target_identity_type)
+						)
+				;''',items_list)
+
+		if commit:
+			db.connection.commit()
+
+	def get_nb_items(self,query_result):
+		'''
+		In subclasses this has to be implemented
+		output: nb_items or None if not relevant
+		'''
+		return query_result['repository']['pullRequests']['totalCount']
+
+
 class CompleteIssuesGQLFiller(IssuesGQLFiller):
 	'''
 	Querying issues through the GraphQL API

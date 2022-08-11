@@ -349,6 +349,67 @@
 					FOREIGN KEY (repo_id,issue_number,comment_id) REFERENCES issue_comments(repo_id,issue_number,comment_id) ON DELETE CASCADE
 				);
 
+				CREATE TABLE IF NOT EXISTS pullrequests(
+				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
+				pullrequest_number INTEGER,
+				pullrequest_title TEXT,
+				pullrequest_text TEXT,
+				created_at TIMESTAMP DEFAULT NULL,
+				merged_at TIMESTAMP DEFAULT NULL,
+				author_login TEXT,
+				author_id INTEGER REFERENCES identities(id) ON DELETE SET NULL,
+				merger_login TEXT,
+				merger_id INTEGER REFERENCES identities(id) ON DELETE SET NULL,
+				identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
+				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				PRIMARY KEY(repo_id,pullrequest_number)
+				);
+
+				CREATE INDEX IF NOT EXISTS pullrequests_idx_dates ON pullrequests(repo_id,created_at,merged_at);
+
+				CREATE TABLE IF NOT EXISTS pullrequest_comments(
+					repo_id INTEGER,
+					pullrequest_number INTEGER,
+					comment_id INTEGER,
+					comment_text TEXT,
+					author_login TEXT,
+					author_id INTEGER REFERENCES identities(id) ON DELETE SET NULL,
+					identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
+					PRIMARY KEY(repo_id,pullrequest_number,comment_id),
+					FOREIGN KEY (repo_id,pullrequest_number) REFERENCES pullrequests(repo_id,pullrequest_number) ON DELETE CASCADE
+				);
+
+				CREATE TABLE IF NOT EXISTS pullrequest_labels(
+					repo_id INTEGER,
+					pullrequest_number INTEGER,
+					label TEXT,
+					PRIMARY KEY(repo_id,pullrequest_number,label),
+					FOREIGN KEY (repo_id,pullrequest_number) REFERENCES pullrequests(repo_id,pullrequest_number) ON DELETE CASCADE
+				);
+
+				CREATE TABLE IF NOT EXISTS pullrequest_reactions(
+					repo_id INTEGER,
+					pullrequest_number INTEGER,
+					reaction TEXT,
+					author_login TEXT,
+					author_id INTEGER REFERENCES identities(id) ON DELETE SET NULL,
+					identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
+					PRIMARY KEY(repo_id,pullrequest_number,author_login,reaction),
+					FOREIGN KEY (repo_id,pullrequest_number) REFERENCES pullrequests(repo_id,pullrequest_number) ON DELETE CASCADE
+				);
+
+				CREATE TABLE IF NOT EXISTS pullrequest_comment_reactions(
+					repo_id INTEGER,
+					pullrequest_number INTEGER,
+					comment_id INTEGER,
+					reaction TEXT,
+					author_login TEXT,
+					author_id INTEGER REFERENCES identities(id) ON DELETE SET NULL,
+					identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
+					PRIMARY KEY(repo_id,pullrequest_number,author_login,reaction),
+					FOREIGN KEY (repo_id,pullrequest_number,comment_id) REFERENCES pullrequest_comments(repo_id,pullrequest_number,comment_id) ON DELETE CASCADE
+				);
+
 				CREATE TABLE IF NOT EXISTS package_versions(
 				id INTEGER PRIMARY KEY,
 				package_id INTEGER NOT NULL REFERENCES packages(id) ON DELETE CASCADE,
