@@ -194,7 +194,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 		if secondary_page_size is None:
 			self.secondary_page_size = self.init_page_size
 		else:
-			self.secondary_page_size = self.secondary_page_size
+			self.secondary_page_size = secondary_page_size
 		github_rest.GithubFiller.__init__(self,identity_type=target_identity_type,**kwargs)
 
 	def apply(self):
