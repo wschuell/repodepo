@@ -664,65 +664,65 @@ class GHGQLFiller(github_rest.GithubFiller):
 								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
 									FROM identities i
 									INNER JOIN identity_types it
-									ON it.id=i.identity_type_id AND it.name='github_login'
+									ON it.id=i.identity_type_id AND it.name=%(target_identity_type)s
 									LEFT OUTER JOIN table_updates tu
-									ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
+									ON tu.identity_id=i.id AND tu.table_name=%(table_name)s
 									ORDER BY i.identity,tu.updated_at ) as t1
 								INNER JOIN
 									(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
 									FROM identities i
 									INNER JOIN identity_types it
-									ON it.id=i.identity_type_id AND it.name='github_login'
+									ON it.id=i.identity_type_id AND it.name=%(target_identity_type)s
 									LEFT OUTER JOIN table_updates tu
-									ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
+									ON tu.identity_id=i.id AND tu.table_name=%(table_name)s
 									GROUP BY i.identity,i.id,it.id ) AS t2
 							ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
 							ORDER BY t1.itid,t1.identity
-					;''')
+					;''',{'target_identity_type':self.target_identity_type,'table_name':items_name})
 				elif self.retry:
 					self.db.cursor.execute('''
 							SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
 								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
 									FROM identities i
 									INNER JOIN identity_types it
-									ON it.id=i.identity_type_id AND it.name='github_login'
+									ON it.id=i.identity_type_id AND it.name=%(target_identity_type)s
 									LEFT OUTER JOIN table_updates tu
-									ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
+									ON tu.identity_id=i.id AND tu.table_name=%(table_name)s
 									ORDER BY i.identity,tu.updated_at ) as t1
 								INNER JOIN
 									(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
 									FROM identities i
 									INNER JOIN identity_types it
-									ON it.id=i.identity_type_id AND it.name='github_login'
+									ON it.id=i.identity_type_id AND it.name=%(target_identity_type)s
 									LEFT OUTER JOIN table_updates tu
-									ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
+									ON tu.identity_id=i.id AND tu.table_name=%(table_name)s
 									GROUP BY i.identity,i.id,it.id ) AS t2
 							ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
 							AND ((NOT t1.success) OR t1.succ IS NULL)
 							ORDER BY t1.itid,t1.identity
-					;''')
+					;''',{'target_identity_type':self.target_identity_type,'table_name':items_name})
 				else:
 					self.db.cursor.execute('''
 							SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
 								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
 									FROM identities i
 									INNER JOIN identity_types it
-									ON it.id=i.identity_type_id AND it.name='github_login'
+									ON it.id=i.identity_type_id AND it.name=%(target_identity_type)s
 									LEFT OUTER JOIN table_updates tu
-									ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
+									ON tu.identity_id=i.id AND tu.table_name=%(table_name)s
 									ORDER BY i.identity,tu.updated_at ) as t1
 								INNER JOIN
 									(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
 									FROM identities i
 									INNER JOIN identity_types it
-									ON it.id=i.identity_type_id AND it.name='github_login'
+									ON it.id=i.identity_type_id AND it.name=%(target_identity_type)s
 									LEFT OUTER JOIN table_updates tu
-									ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
+									ON tu.identity_id=i.id AND tu.table_name=%(table_name)s
 									GROUP BY i.identity,i.id,it.id ) AS t2
 							ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
 							AND t1.succ IS NULL
 							ORDER BY t1.itid,t1.identity
-					;''')
+					;''',{'target_identity_type':self.target_identity_type,'table_name':items_name})
 
 				self.elt_list = list(self.db.cursor.fetchall())
 
@@ -733,65 +733,65 @@ class GHGQLFiller(github_rest.GithubFiller):
 								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
 									FROM identities i
 									INNER JOIN identity_types it
-									ON it.id=i.identity_type_id AND it.name='github_login'
+									ON it.id=i.identity_type_id AND it.name=:target_identity_type
 									LEFT OUTER JOIN table_updates tu
-									ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
+									ON tu.identity_id=i.id AND tu.table_name=:table_name
 									ORDER BY i.identity,tu.updated_at ) as t1
 								INNER JOIN
 									(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
 									FROM identities i
 									INNER JOIN identity_types it
-									ON it.id=i.identity_type_id AND it.name='github_login'
+									ON it.id=i.identity_type_id AND it.name=:target_identity_type
 									LEFT OUTER JOIN table_updates tu
-									ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
+									ON tu.identity_id=i.id AND tu.table_name=:table_name
 									GROUP BY i.identity,i.id,it.id ) AS t2
 							ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
 							ORDER BY t1.itid,t1.identity
-					;''')
+					;''',{'target_identity_type':self.target_identity_type,'table_name':items_name})
 				elif self.retry:
 					self.db.cursor.execute('''
 							SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
 								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
 									FROM identities i
 									INNER JOIN identity_types it
-									ON it.id=i.identity_type_id AND it.name='github_login'
+									ON it.id=i.identity_type_id AND it.name=:target_identity_type
 									LEFT OUTER JOIN table_updates tu
-									ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
+									ON tu.identity_id=i.id AND tu.table_name=:table_name
 									ORDER BY i.identity,tu.updated_at ) as t1
 								INNER JOIN
 									(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
 									FROM identities i
 									INNER JOIN identity_types it
-									ON it.id=i.identity_type_id AND it.name='github_login'
+									ON it.id=i.identity_type_id AND it.name=:target_identity_type
 									LEFT OUTER JOIN table_updates tu
-									ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
+									ON tu.identity_id=i.id AND tu.table_name=:table_name
 									GROUP BY i.identity,i.id,it.id ) AS t2
 							ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
 							AND ((NOT t1.success) OR t1.succ IS NULL)
 							ORDER BY t1.itid,t1.identity
-					;''')
+					;''',{'target_identity_type':self.target_identity_type,'table_name':items_name})
 				else:
 					self.db.cursor.execute('''
 							SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
 								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
 									FROM identities i
 									INNER JOIN identity_types it
-									ON it.id=i.identity_type_id AND it.name='github_login'
+									ON it.id=i.identity_type_id AND it.name=:target_identity_type
 									LEFT OUTER JOIN table_updates tu
-									ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
+									ON tu.identity_id=i.id AND tu.table_name=:table_name
 									ORDER BY i.identity,tu.updated_at ) as t1
 								INNER JOIN
 									(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
 									FROM identities i
 									INNER JOIN identity_types it
-									ON it.id=i.identity_type_id AND it.name='github_login'
+									ON it.id=i.identity_type_id AND it.name=:target_identity_type
 									LEFT OUTER JOIN table_updates tu
-									ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
+									ON tu.identity_id=i.id AND tu.table_name=:table_name
 									GROUP BY i.identity,i.id,it.id ) AS t2
 							ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
 							AND t1.succ IS NULL
 							ORDER BY t1.itid,t1.identity
-					;''')
+					;''',{'target_identity_type':self.target_identity_type,'table_name':items_name})
 
 
 				elt_list = list(self.db.cursor.fetchall())
@@ -905,167 +905,6 @@ class StarsGQLFiller(GHGQLFiller):
 		'''
 		return query_result['repository']['stargazers']['totalCount']
 
-	# def set_element_list(self):
-	# 	'''
-	# 	In subclasses this has to be implemented
-	# 	sets self.elt_list to be used in self.fill_items
-	# 	'''
-
-	# 	#if force: all elts
-	# 	#if retry: all without success false or null on last update
-	# 	#else: all with success is null on lats update
-
-	# 	if self.db.db_type == 'postgres':
-	# 		if self.force:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=%(source_name)s
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='stars'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=%(source_name)s
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='stars'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''',{'source_name':self.source_name})
-	# 		elif self.retry:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=%(source_name)s
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='stars'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=%(source_name)s
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='stars'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					AND ((NOT t1.success) OR t1.succ IS NULL)
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''',{'source_name':self.source_name})
-	# 		else:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=%(source_name)s
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='stars'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=%(source_name)s
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='stars'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					AND t1.succ IS NULL
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''',{'source_name':self.source_name})
-
-	# 		self.elt_list = list(self.db.cursor.fetchall())
-
-	# 	else:
-	# 		if self.force:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=:source_name
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='stars'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=:source_name
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='stars'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''',{'source_name':self.source_name})
-	# 		elif self.retry:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=:source_name
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='stars'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=:source_name
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='stars'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					AND ((NOT t1.success) OR t1.succ IS NULL)
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''',{'source_name':self.source_name})
-	# 		else:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=:source_name
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='stars'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=:source_name
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='stars'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					AND t1.succ IS NULL
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''',{'source_name':self.source_name})
-
-
-	# 		elt_list = list(self.db.cursor.fetchall())
-
-	# 		# specific to sqlite because no internal json parsing implemented in query
-	# 		self.elt_list = []
-	# 		for (source,owner,name,repo_id,end_cursor_info) in elt_list:
-	# 			try:
-	# 				self.elt_list.append((source,owner,name,repo_id,json.loads(end_cursor_info)['end_cursor']))
-	# 			except:
-	# 				self.elt_list.append((source,owner,name,repo_id,None))
-
-	# 	if self.start_offset is not None:
-	# 		self.elt_list = [r for r in self.elt_list if r[1]>=self.start_offset]
-
-
 class ForksGQLFiller(GHGQLFiller):
 	'''
 	Querying forks through the GraphQL API
@@ -1171,166 +1010,6 @@ class ForksGQLFiller(GHGQLFiller):
 		output: nb_items or None if not relevant
 		'''
 		return query_result['repository']['forks']['totalCount']
-
-	# def set_element_list(self):
-	# 	'''
-	# 	In subclasses this has to be implemented
-	# 	sets self.elt_list to be used in self.fill_items
-	# 	'''
-
-	# 	#if force: all elts
-	# 	#if retry: all without success false or null on last update
-	# 	#else: all with success is null on lats update
-
-	# 	if self.db.db_type == 'postgres':
-	# 		if self.force:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=%(source_name)s
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='forks'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=%(source_name)s
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='forks'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''',{'source_name':self.source_name})
-	# 		elif self.retry:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=%(source_name)s
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='forks'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=%(source_name)s
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='forks'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					AND ((NOT t1.success) OR t1.succ IS NULL)
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''',{'source_name':self.source_name})
-	# 		else:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=%(source_name)s
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='forks'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=%(source_name)s
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='forks'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					AND t1.succ IS NULL
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''',{'source_name':self.source_name})
-
-	# 		self.elt_list = list(self.db.cursor.fetchall())
-
-	# 	else:
-	# 		if self.force:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=:source_name
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='forks'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=:source_name
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='forks'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''',{'source_name':self.source_name})
-	# 		elif self.retry:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=:source_name
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='forks'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=:source_name
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='forks'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					AND ((NOT t1.success) OR t1.succ IS NULL)
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''',{'source_name':self.source_name})
-	# 		else:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=:source_name
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='forks'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=:source_name
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='forks'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					AND t1.succ IS NULL
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''',{'source_name':self.source_name})
-
-
-	# 		elt_list = list(self.db.cursor.fetchall())
-
-	# 		# specific to sqlite because no internal json parsing implemented in query
-	# 		self.elt_list = []
-	# 		for (source,owner,name,repo_id,end_cursor_info) in elt_list:
-	# 			try:
-	# 				self.elt_list.append((source,owner,name,repo_id,json.loads(end_cursor_info)['end_cursor']))
-	# 			except:
-	# 				self.elt_list.append((source,owner,name,repo_id,None))
-
-	# 	if self.start_offset is not None:
-	# 		self.elt_list = [r for r in self.elt_list if r[1]>=self.start_offset]
 
 
 class SponsorsUserFiller(GHGQLFiller):
@@ -1475,166 +1154,6 @@ class SponsorsUserFiller(GHGQLFiller):
 		'''
 		return query_result['user']['sponsorshipsAsMaintainer']['totalCount']
 
-	def set_element_list(self):
-		'''
-		In subclasses this has to be implemented
-		sets self.elt_list to be used in self.fill_items
-		'''
-
-		#if force: all elts
-		#if retry: all without success false or null on last update
-		#else: all with success is null on lats update
-
-		if self.db.db_type == 'postgres':
-			if self.force:
-				self.db.cursor.execute('''
-						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
-								ORDER BY i.identity,tu.updated_at ) as t1
-							INNER JOIN
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
-								GROUP BY i.identity,i.id,it.id ) AS t2
-						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-						ORDER BY t1.itid,t1.identity
-				;''')
-			elif self.retry:
-				self.db.cursor.execute('''
-						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
-								ORDER BY i.identity,tu.updated_at ) as t1
-							INNER JOIN
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
-								GROUP BY i.identity,i.id,it.id ) AS t2
-						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-						AND ((NOT t1.success) OR t1.succ IS NULL)
-						ORDER BY t1.itid,t1.identity
-				;''')
-			else:
-				self.db.cursor.execute('''
-						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
-								ORDER BY i.identity,tu.updated_at ) as t1
-							INNER JOIN
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
-								GROUP BY i.identity,i.id,it.id ) AS t2
-						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-						AND t1.succ IS NULL
-						ORDER BY t1.itid,t1.identity
-				;''')
-
-			self.elt_list = list(self.db.cursor.fetchall())
-
-		else:
-			if self.force:
-				self.db.cursor.execute('''
-						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
-								ORDER BY i.identity,tu.updated_at ) as t1
-							INNER JOIN
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
-								GROUP BY i.identity,i.id,it.id ) AS t2
-						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-						ORDER BY t1.itid,t1.identity
-				;''')
-			elif self.retry:
-				self.db.cursor.execute('''
-						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
-								ORDER BY i.identity,tu.updated_at ) as t1
-							INNER JOIN
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
-								GROUP BY i.identity,i.id,it.id ) AS t2
-						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-						AND ((NOT t1.success) OR t1.succ IS NULL)
-						ORDER BY t1.itid,t1.identity
-				;''')
-			else:
-				self.db.cursor.execute('''
-						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
-								ORDER BY i.identity,tu.updated_at ) as t1
-							INNER JOIN
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='sponsors_user'
-								GROUP BY i.identity,i.id,it.id ) AS t2
-						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-						AND t1.succ IS NULL
-						ORDER BY t1.itid,t1.identity
-				;''')
-
-
-			elt_list = list(self.db.cursor.fetchall())
-
-			# specific to sqlite because no internal json parsing implemented in query
-			self.elt_list = []
-			for (identity_type_id,login,identity_id,end_cursor_info) in elt_list:
-				try:
-					self.elt_list.append((identity_type_id,login,identity_id,json.loads(end_cursor_info)['end_cursor']))
-				except:
-					self.elt_list.append((identity_type_id,login,identity_id,None))
-
-		if self.start_offset is not None:
-			self.elt_list = [r for r in self.elt_list if r[1]>=self.start_offset]
-
 class FollowersGQLFiller(GHGQLFiller):
 	'''
 	Querying followers through the GraphQL API
@@ -1723,167 +1242,6 @@ class FollowersGQLFiller(GHGQLFiller):
 		output: nb_items or None if not relevant
 		'''
 		return query_result['user']['followers']['totalCount']
-
-	def set_element_list(self):
-		'''
-		In subclasses this has to be implemented
-		sets self.elt_list to be used in self.fill_items
-		'''
-
-		#if force: all elts
-		#if retry: all without success false or null on last update
-		#else: all with success is null on lats update
-
-		if self.db.db_type == 'postgres':
-			if self.force:
-				self.db.cursor.execute('''
-						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='followers'
-								ORDER BY i.identity,tu.updated_at ) as t1
-							INNER JOIN
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='followers'
-								GROUP BY i.identity,i.id,it.id ) AS t2
-						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-						ORDER BY t1.itid,t1.identity
-				;''')
-			elif self.retry:
-				self.db.cursor.execute('''
-						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='followers'
-								ORDER BY i.identity,tu.updated_at ) as t1
-							INNER JOIN
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='followers'
-								GROUP BY i.identity,i.id,it.id ) AS t2
-						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-						AND ((NOT t1.success) OR t1.succ IS NULL)
-						ORDER BY t1.itid,t1.identity
-				;''')
-			else:
-				self.db.cursor.execute('''
-						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='followers'
-								ORDER BY i.identity,tu.updated_at ) as t1
-							INNER JOIN
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='followers'
-								GROUP BY i.identity,i.id,it.id ) AS t2
-						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-						AND t1.succ IS NULL
-						ORDER BY t1.itid,t1.identity
-				;''')
-
-			self.elt_list = list(self.db.cursor.fetchall())
-
-		else:
-			if self.force:
-				self.db.cursor.execute('''
-						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='followers'
-								ORDER BY i.identity,tu.updated_at ) as t1
-							INNER JOIN
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='followers'
-								GROUP BY i.identity,i.id,it.id ) AS t2
-						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-						ORDER BY t1.itid,t1.identity
-				;''')
-			elif self.retry:
-				self.db.cursor.execute('''
-						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='followers'
-								ORDER BY i.identity,tu.updated_at ) as t1
-							INNER JOIN
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='followers'
-								GROUP BY i.identity,i.id,it.id ) AS t2
-						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-						AND ((NOT t1.success) OR t1.succ IS NULL)
-						ORDER BY t1.itid,t1.identity
-				;''')
-			else:
-				self.db.cursor.execute('''
-						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='followers'
-								ORDER BY i.identity,tu.updated_at ) as t1
-							INNER JOIN
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='followers'
-								GROUP BY i.identity,i.id,it.id ) AS t2
-						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-						AND t1.succ IS NULL
-						ORDER BY t1.itid,t1.identity
-				;''')
-
-
-			elt_list = list(self.db.cursor.fetchall())
-
-			# specific to sqlite because no internal json parsing implemented in query
-			self.elt_list = []
-			for (identity_type_id,login,identity_id,end_cursor_info) in elt_list:
-				try:
-					self.elt_list.append((identity_type_id,login,identity_id,json.loads(end_cursor_info)['end_cursor']))
-				except:
-					self.elt_list.append((identity_type_id,login,identity_id,None))
-
-		if self.start_offset is not None:
-			self.elt_list = [r for r in self.elt_list if r[1]>=self.start_offset]
-
 
 
 class BackwardsSponsorsUserFiller(SponsorsUserFiller):
@@ -2015,166 +1373,6 @@ class BackwardsSponsorsUserFiller(SponsorsUserFiller):
 		'''
 		return query_result['user']['sponsorshipsAsSponsor']['totalCount']
 
-	def set_element_list(self):
-		'''
-		In subclasses this has to be implemented
-		sets self.elt_list to be used in self.fill_items
-		'''
-
-		#if force: all elts
-		#if retry: all without success false or null on last update
-		#else: all with success is null on lats update
-
-		if self.db.db_type == 'postgres':
-			if self.force:
-				self.db.cursor.execute('''
-						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='sponsors_user_backwards'
-								ORDER BY i.identity,tu.updated_at ) as t1
-							INNER JOIN
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='sponsors_user_backwards'
-								GROUP BY i.identity,i.id,it.id ) AS t2
-						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-						ORDER BY t1.itid,t1.identity
-				;''')
-			elif self.retry:
-				self.db.cursor.execute('''
-						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='sponsors_user_backwards'
-								ORDER BY i.identity,tu.updated_at ) as t1
-							INNER JOIN
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='sponsors_user_backwards'
-								GROUP BY i.identity,i.id,it.id ) AS t2
-						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-						AND ((NOT t1.success) OR t1.succ IS NULL)
-						ORDER BY t1.itid,t1.identity
-				;''')
-			else:
-				self.db.cursor.execute('''
-						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='sponsors_user_backwards'
-								ORDER BY i.identity,tu.updated_at ) as t1
-							INNER JOIN
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='sponsors_user_backwards'
-								GROUP BY i.identity,i.id,it.id ) AS t2
-						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-						AND t1.succ IS NULL
-						ORDER BY t1.itid,t1.identity
-				;''')
-
-			self.elt_list = list(self.db.cursor.fetchall())
-
-		else:
-			if self.force:
-				self.db.cursor.execute('''
-						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='sponsors_user_backwards'
-								ORDER BY i.identity,tu.updated_at ) as t1
-							INNER JOIN
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='sponsors_user_backwards'
-								GROUP BY i.identity,i.id,it.id ) AS t2
-						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-						ORDER BY t1.itid,t1.identity
-				;''')
-			elif self.retry:
-				self.db.cursor.execute('''
-						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='sponsors_user_backwards'
-								ORDER BY i.identity,tu.updated_at ) as t1
-							INNER JOIN
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='sponsors_user_backwards'
-								GROUP BY i.identity,i.id,it.id ) AS t2
-						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-						AND ((NOT t1.success) OR t1.succ IS NULL)
-						ORDER BY t1.itid,t1.identity
-				;''')
-			else:
-				self.db.cursor.execute('''
-						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='sponsors_user_backwards'
-								ORDER BY i.identity,tu.updated_at ) as t1
-							INNER JOIN
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='sponsors_user_backwards'
-								GROUP BY i.identity,i.id,it.id ) AS t2
-						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-						AND t1.succ IS NULL
-						ORDER BY t1.itid,t1.identity
-				;''')
-
-
-			elt_list = list(self.db.cursor.fetchall())
-
-			# specific to sqlite because no internal json parsing implemented in query
-			self.elt_list = []
-			for (identity_type_id,login,identity_id,end_cursor_info) in elt_list:
-				try:
-					self.elt_list.append((identity_type_id,login,identity_id,json.loads(end_cursor_info)['end_cursor']))
-				except:
-					self.elt_list.append((identity_type_id,login,identity_id,None))
-
-		if self.start_offset is not None:
-			self.elt_list = [r for r in self.elt_list if r[1]>=self.start_offset]
-
 
 
 class ReleasesGQLFiller(GHGQLFiller):
@@ -2269,167 +1467,6 @@ class ReleasesGQLFiller(GHGQLFiller):
 		output: nb_items or None if not relevant
 		'''
 		return query_result['repository']['releases']['totalCount']
-
-	# def set_element_list(self):
-	# 	'''
-	# 	In subclasses this has to be implemented
-	# 	sets self.elt_list to be used in self.fill_items
-	# 	'''
-
-	# 	#if force: all elts
-	# 	#if retry: all without success false or null on last update
-	# 	#else: all with success is null on lats update
-
-	# 	if self.db.db_type == 'postgres':
-	# 		if self.force:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='releases'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='releases'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''')
-	# 		elif self.retry:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='releases'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='releases'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					AND ((NOT t1.success) OR t1.succ IS NULL)
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''')
-	# 		else:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='releases'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='releases'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					AND t1.succ IS NULL
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''')
-
-	# 		self.elt_list = list(self.db.cursor.fetchall())
-
-	# 	else:
-	# 		if self.force:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='releases'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='releases'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''')
-	# 		elif self.retry:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='releases'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='releases'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					AND ((NOT t1.success) OR t1.succ IS NULL)
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''')
-	# 		else:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='releases'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='releases'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					AND t1.succ IS NULL
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''')
-
-
-	# 		elt_list = list(self.db.cursor.fetchall())
-
-	# 		# specific to sqlite because no internal json parsing implemented in query
-	# 		self.elt_list = []
-	# 		for (source,owner,name,repo_id,end_cursor_info) in elt_list:
-	# 			try:
-	# 				self.elt_list.append((source,owner,name,repo_id,json.loads(end_cursor_info)['end_cursor']))
-	# 			except:
-	# 				self.elt_list.append((source,owner,name,repo_id,None))
-
-	# 	if self.start_offset is not None:
-	# 		self.elt_list = [r for r in self.elt_list if r[1]>=self.start_offset]
-
 
 class LoginsGQLFiller(GHGQLFiller):
 	'''
@@ -2918,167 +1955,6 @@ class IssuesGQLFiller(GHGQLFiller):
 		output: nb_items or None if not relevant
 		'''
 		return query_result['repository']['issues']['totalCount']
-
-	# def set_element_list(self):
-	# 	'''
-	# 	In subclasses this has to be implemented
-	# 	sets self.elt_list to be used in self.fill_items
-	# 	'''
-
-	# 	#if force: all elts
-	# 	#if retry: all without success false or null on last update
-	# 	#else: all with success is null on lats update
-
-	# 	if self.db.db_type == 'postgres':
-	# 		if self.force:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='issues'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='issues'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''')
-	# 		elif self.retry:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='issues'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='issues'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					AND ((NOT t1.success) OR t1.succ IS NULL)
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''')
-	# 		else:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='issues'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='issues'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					AND t1.succ IS NULL
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''')
-
-	# 		self.elt_list = list(self.db.cursor.fetchall())
-
-	# 	else:
-	# 		if self.force:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='issues'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='issues'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''')
-	# 		elif self.retry:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='issues'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='issues'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					AND ((NOT t1.success) OR t1.succ IS NULL)
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''')
-	# 		else:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='issues'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='issues'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					AND t1.succ IS NULL
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''')
-
-
-	# 		elt_list = list(self.db.cursor.fetchall())
-
-	# 		# specific to sqlite because no internal json parsing implemented in query
-	# 		self.elt_list = []
-	# 		for (source,owner,name,repo_id,end_cursor_info) in elt_list:
-	# 			try:
-	# 				self.elt_list.append((source,owner,name,repo_id,json.loads(end_cursor_info)['end_cursor']))
-	# 			except:
-	# 				self.elt_list.append((source,owner,name,repo_id,None))
-
-	# 	if self.start_offset is not None:
-	# 		self.elt_list = [r for r in self.elt_list if r[1]>=self.start_offset]
-
 
 
 class CompleteIssuesGQLFiller(IssuesGQLFiller):
@@ -3663,168 +2539,6 @@ class RepoLanguagesGQLFiller(GHGQLFiller):
 		'''
 		return query_result['repository']['languages']['totalCount']
 
-	# def set_element_list(self):
-	# 	'''
-	# 	In subclasses this has to be implemented
-	# 	sets self.elt_list to be used in self.fill_items
-	# 	'''
-
-	# 	#if force: all elts
-	# 	#if retry: all without success false or null on last update
-	# 	#else: all with success is null on lats update
-
-	# 	if self.db.db_type == 'postgres':
-	# 		if self.force:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='repo_languages'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='repo_languages'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''')
-	# 		elif self.retry:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='repo_languages'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='repo_languages'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					AND ((NOT t1.success) OR t1.succ IS NULL)
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''')
-	# 		else:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='repo_languages'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='repo_languages'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					AND t1.succ IS NULL
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''')
-
-	# 		self.elt_list = list(self.db.cursor.fetchall())
-
-	# 	else:
-	# 		if self.force:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='repo_languages'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='repo_languages'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''')
-	# 		elif self.retry:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='repo_languages'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='repo_languages'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					AND ((NOT t1.success) OR t1.succ IS NULL)
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''')
-	# 		else:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='repo_languages'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name='GitHub'
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='repo_languages'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					AND t1.succ IS NULL
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''')
-
-
-	# 		elt_list = list(self.db.cursor.fetchall())
-
-	# 		# specific to sqlite because no internal json parsing implemented in query
-	# 		self.elt_list = []
-	# 		for (source,owner,name,repo_id,end_cursor_info) in elt_list:
-	# 			try:
-	# 				self.elt_list.append((source,owner,name,repo_id,json.loads(end_cursor_info)['end_cursor']))
-	# 			except:
-	# 				self.elt_list.append((source,owner,name,repo_id,None))
-
-	# 	if self.start_offset is not None:
-	# 		self.elt_list = [r for r in self.elt_list if r[1]>=self.start_offset]
-
-
-
 class RepoCreatedAtGQLFiller(GHGQLFiller):
 	'''
 	Querying creation dates through the GraphQL API
@@ -3892,166 +2606,6 @@ class RepoCreatedAtGQLFiller(GHGQLFiller):
 		output: nb_items or None if not relevant
 		'''
 		return 1
-
-	# def set_element_list(self):
-	# 	'''
-	# 	In subclasses this has to be implemented
-	# 	sets self.elt_list to be used in self.fill_items
-	# 	'''
-
-	# 	#if force: all elts
-	# 	#if retry: all without success false or null on last update
-	# 	#else: all with success is null on lats update
-
-	# 	if self.db.db_type == 'postgres':
-	# 		if self.force:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=%(source_name)s
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='repo_createdat'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=%(source_name)s
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='repo_createdat'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''',{'source_name':self.source_name})
-	# 		elif self.retry:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=%(source_name)s
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='repo_createdat'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=%(source_name)s
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='repo_createdat'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					AND ((NOT t1.success) OR t1.succ IS NULL)
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''',{'source_name':self.source_name})
-	# 		else:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=%(source_name)s
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='repo_createdat'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=%(source_name)s
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='repo_createdat'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					AND t1.succ IS NULL
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''',{'source_name':self.source_name})
-
-	# 		self.elt_list = list(self.db.cursor.fetchall())
-
-	# 	else:
-	# 		if self.force:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=:source_name
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='repo_createdat'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=:source_name
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='repo_createdat'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''',{'source_name':self.source_name})
-	# 		elif self.retry:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=:source_name
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='repo_createdat'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=:source_name
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='repo_createdat'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					AND ((NOT t1.success) OR t1.succ IS NULL)
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''',{'source_name':self.source_name})
-	# 		else:
-	# 			self.db.cursor.execute('''
-	# 					SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-	# 						(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=:source_name
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='repo_createdat'
-	# 							ORDER BY r.owner,r.name,tu.updated_at ) as t1
-	# 						INNER JOIN
-	# 							(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-	# 							FROM repositories r
-	# 							INNER JOIN sources s
-	# 							ON s.id=r.source AND s.name=:source_name
-	# 							LEFT OUTER JOIN table_updates tu
-	# 							ON tu.repo_id=r.id AND tu.table_name='repo_createdat'
-	# 							GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-	# 					ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-	# 					AND t1.succ IS NULL
-	# 					ORDER BY t1.sid,t1.rowner,t1.rname
-	# 			;''',{'source_name':self.source_name})
-
-
-	# 		elt_list = list(self.db.cursor.fetchall())
-
-	# 		# specific to sqlite because no internal json parsing implemented in query
-	# 		self.elt_list = []
-	# 		for (source,owner,name,repo_id,end_cursor_info) in elt_list:
-	# 			try:
-	# 				self.elt_list.append((source,owner,name,repo_id,json.loads(end_cursor_info)['end_cursor']))
-	# 			except:
-	# 				self.elt_list.append((source,owner,name,repo_id,None))
-
-	# 	if self.start_offset is not None:
-	# 		self.elt_list = [r for r in self.elt_list if r[1]>=self.start_offset]
 
 
 
@@ -4123,168 +2677,6 @@ class UserCreatedAtGQLFiller(GHGQLFiller):
 		output: nb_items or None if not relevant
 		'''
 		return 1
-
-	def set_element_list(self):
-		'''
-		In subclasses this has to be implemented
-		sets self.elt_list to be used in self.fill_items
-		'''
-
-		#if force: all elts
-		#if retry: all without success false or null on last update
-		#else: all with success is null on lats update
-
-		if self.db.db_type == 'postgres':
-			if self.force:
-				self.db.cursor.execute('''
-						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='user_createdat'
-								ORDER BY i.identity,tu.updated_at ) as t1
-							INNER JOIN
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='user_createdat'
-								GROUP BY i.identity,i.id,it.id ) AS t2
-						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-						ORDER BY t1.itid,t1.identity
-				;''')
-			elif self.retry:
-				self.db.cursor.execute('''
-						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='user_createdat'
-								ORDER BY i.identity,tu.updated_at ) as t1
-							INNER JOIN
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='user_createdat'
-								GROUP BY i.identity,i.id,it.id ) AS t2
-						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-						AND ((NOT t1.success) OR t1.succ IS NULL)
-						ORDER BY t1.itid,t1.identity
-				;''')
-			else:
-				self.db.cursor.execute('''
-						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='user_createdat'
-								ORDER BY i.identity,tu.updated_at ) as t1
-							INNER JOIN
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='user_createdat'
-								GROUP BY i.identity,i.id,it.id ) AS t2
-						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-						AND t1.succ IS NULL
-						ORDER BY t1.itid,t1.identity
-				;''')
-
-			self.elt_list = list(self.db.cursor.fetchall())
-
-		else:
-			if self.force:
-				self.db.cursor.execute('''
-						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='user_createdat'
-								ORDER BY i.identity,tu.updated_at ) as t1
-							INNER JOIN
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='user_createdat'
-								GROUP BY i.identity,i.id,it.id ) AS t2
-						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-						ORDER BY t1.itid,t1.identity
-				;''')
-			elif self.retry:
-				self.db.cursor.execute('''
-						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='user_createdat'
-								ORDER BY i.identity,tu.updated_at ) as t1
-							INNER JOIN
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='user_createdat'
-								GROUP BY i.identity,i.id,it.id ) AS t2
-						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-						AND ((NOT t1.success) OR t1.succ IS NULL)
-						ORDER BY t1.itid,t1.identity
-				;''')
-			else:
-				self.db.cursor.execute('''
-						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='user_createdat'
-								ORDER BY i.identity,tu.updated_at ) as t1
-							INNER JOIN
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='user_createdat'
-								GROUP BY i.identity,i.id,it.id ) AS t2
-						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-						AND t1.succ IS NULL
-						ORDER BY t1.itid,t1.identity
-				;''')
-
-
-			elt_list = list(self.db.cursor.fetchall())
-
-			# specific to sqlite because no internal json parsing implemented in query
-			self.elt_list = []
-			for (identity_type_id,login,identity_id,end_cursor_info) in elt_list:
-				try:
-					self.elt_list.append((identity_type_id,login,identity_id,json.loads(end_cursor_info)['end_cursor']))
-				except:
-					self.elt_list.append((identity_type_id,login,identity_id,None))
-
-		if self.start_offset is not None:
-			self.elt_list = [r for r in self.elt_list if r[1]>=self.start_offset]
-
-
 
 class SingleQueryUserLanguagesGQLFiller(GHGQLFiller):
 	'''
@@ -4433,168 +2825,6 @@ class SingleQueryUserLanguagesGQLFiller(GHGQLFiller):
 				[e['node']['name']
 					for e in r['repository']['languages']['edges'] ])
 		return len(ans)
-
-
-	def set_element_list(self):
-		'''
-		In subclasses this has to be implemented
-		sets self.elt_list to be used in self.fill_items
-		'''
-
-		#if force: all elts
-		#if retry: all without success false or null on last update
-		#else: all with success is null on lats update
-
-		if self.db.db_type == 'postgres':
-			if self.force:
-				self.db.cursor.execute('''
-						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='user_languages'
-								ORDER BY i.identity,tu.updated_at ) as t1
-							INNER JOIN
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='user_languages'
-								GROUP BY i.identity,i.id,it.id ) AS t2
-						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-						ORDER BY t1.itid,t1.identity
-				;''')
-			elif self.retry:
-				self.db.cursor.execute('''
-						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='user_languages'
-								ORDER BY i.identity,tu.updated_at ) as t1
-							INNER JOIN
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='user_languages'
-								GROUP BY i.identity,i.id,it.id ) AS t2
-						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-						AND ((NOT t1.success) OR t1.succ IS NULL)
-						ORDER BY t1.itid,t1.identity
-				;''')
-			else:
-				self.db.cursor.execute('''
-						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='user_languages'
-								ORDER BY i.identity,tu.updated_at ) as t1
-							INNER JOIN
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='user_languages'
-								GROUP BY i.identity,i.id,it.id ) AS t2
-						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-						AND t1.succ IS NULL
-						ORDER BY t1.itid,t1.identity
-				;''')
-
-			self.elt_list = list(self.db.cursor.fetchall())
-
-		else:
-			if self.force:
-				self.db.cursor.execute('''
-						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='user_languages'
-								ORDER BY i.identity,tu.updated_at ) as t1
-							INNER JOIN
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='user_languages'
-								GROUP BY i.identity,i.id,it.id ) AS t2
-						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-						ORDER BY t1.itid,t1.identity
-				;''')
-			elif self.retry:
-				self.db.cursor.execute('''
-						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='user_languages'
-								ORDER BY i.identity,tu.updated_at ) as t1
-							INNER JOIN
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='user_languages'
-								GROUP BY i.identity,i.id,it.id ) AS t2
-						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-						AND ((NOT t1.success) OR t1.succ IS NULL)
-						ORDER BY t1.itid,t1.identity
-				;''')
-			else:
-				self.db.cursor.execute('''
-						SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-							(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='user_languages'
-								ORDER BY i.identity,tu.updated_at ) as t1
-							INNER JOIN
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-								FROM identities i
-								INNER JOIN identity_types it
-								ON it.id=i.identity_type_id AND it.name='github_login'
-								LEFT OUTER JOIN table_updates tu
-								ON tu.identity_id=i.id AND tu.table_name='user_languages'
-								GROUP BY i.identity,i.id,it.id ) AS t2
-						ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-						AND t1.succ IS NULL
-						ORDER BY t1.itid,t1.identity
-				;''')
-
-
-			elt_list = list(self.db.cursor.fetchall())
-
-			# specific to sqlite because no internal json parsing implemented in query
-			self.elt_list = []
-			for (identity_type_id,login,identity_id,end_cursor_info) in elt_list:
-				try:
-					self.elt_list.append((identity_type_id,login,identity_id,json.loads(end_cursor_info)['end_cursor']))
-				except:
-					self.elt_list.append((identity_type_id,login,identity_id,None))
-
-		if self.start_offset is not None:
-			self.elt_list = [r for r in self.elt_list if r[1]>=self.start_offset]
-
 
 
 
