@@ -141,15 +141,19 @@ class GithubFiller(fillers.Filler):
 				active_requesters = [rq for rq in requesters if self.get_rate_limit(rq) > self.querymin_threshold]
 				if len(active_requesters):
 					yield random.choice(active_requesters)
-				elif self.fail_on_wait:
-					raise IOError('All {} API keys are below the min remaining query threshold'.format(len(requesters)))
 				else:
 					earliest_reset = min([self.get_reset_at(rq) for rq in requesters])
 					time_to_reset =  earliest_reset - calendar.timegm(time.gmtime())
 					while time_to_reset <= 0:
 						time_to_reset += 3600 # hack to consider shifted reset_at time between REST and GQL APIs
-					self.logger.info('Waiting for reset of at least one github requester, sleeping {} seconds'.format(time_to_reset+1))
-					time.sleep(time_to_reset+1)
+						earliest_reset +=3600
+					date_reset = datetime.datetime.fromtimestamp(earliest_reset)
+
+					if self.fail_on_wait:
+						raise IOError('All {} API keys are below the min remaining query threshold. Estimated time to earliest reset: {}s ({})'.format(len(requesters),time_to_reset,date_reset))
+					else:
+						self.logger.info('Waiting for reset of at least one github requester, sleeping {} seconds'.format(time_to_reset+1))
+						time.sleep(time_to_reset+1)
 		else:
 			while True:
 				for i,rq in enumerate(requesters):
@@ -159,13 +163,19 @@ class GithubFiller(fillers.Filler):
 						yield rq
 				if any(((self.get_rate_limit(rq) > self.querymin_threshold) for rq in requesters)):
 					continue
-				elif self.fail_on_wait:
-					raise IOError('All {} API keys are below the min remaining query threshold'.format(len(requesters)))
 				else:
 					earliest_reset = min([self.get_reset_at(rq) for rq in requesters])
 					time_to_reset =  earliest_reset - calendar.timegm(time.gmtime())
-					self.logger.info('Waiting for reset of at least one github requester, sleeping {} seconds'.format(time_to_reset+1))
-					time.sleep(time_to_reset+1)
+					while time_to_reset <= 0:
+						time_to_reset += 3600 # hack to consider shifted reset_at time between REST and GQL APIs
+						earliest_reset +=3600
+					date_reset = datetime.datetime.fromtimestamp(earliest_reset)
+
+					if self.fail_on_wait:
+						raise IOError('All {} API keys are below the min remaining query threshold. Estimated time to earliest reset: {}s ({})'.format(len(requesters),time_to_reset,date_reset))
+					else:
+						self.logger.info('Waiting for reset of at least one github requester, sleeping {} seconds'.format(time_to_reset+1))
+						time.sleep(time_to_reset+1)
 
 
 class StarsFiller(GithubFiller):

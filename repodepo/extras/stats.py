@@ -612,7 +612,7 @@ class CommitsStats(DBStats):
 		ans = OrderedDict()
 		for cnt,s,m in self.db.cursor.fetchall():
 			if option == 'max':
-				ans[s] = int(m)
+				ans[s] = (0 if m is None else int(m))
 			elif option is None:
 				ans[s] = cnt
 			else:
