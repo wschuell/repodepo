@@ -124,6 +124,32 @@
 				UNIQUE(parent_id,child_id,rank)
 				);
 
+
+				CREATE TABLE IF NOT EXISTS commit_comments(
+					repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
+					commit_id BIGINT REFERENCES commits(id) ON DELETE CASCADE,
+					comment_id BIGINT NOT NULL,
+					comment_text TEXT,
+					author_login TEXT,
+					created_at TIMESTAMP,
+					author_id BIGINT REFERENCES identities(id) ON DELETE SET NULL,
+					identity_type_id BIGINT REFERENCES identity_types(id) ON DELETE CASCADE,
+					PRIMARY KEY(repo_id,commit_id,comment_id)
+				);
+
+				CREATE TABLE IF NOT EXISTS commit_comment_reactions(
+					repo_id BIGINT,
+					commit_id BIGINT,
+					comment_id BIGINT,
+					reaction TEXT,
+					author_login TEXT,
+					author_id BIGINT REFERENCES identities(id) ON DELETE SET NULL,
+					identity_type_id BIGINT REFERENCES identity_types(id) ON DELETE CASCADE,
+					created_at TIMESTAMP,
+					PRIMARY KEY(repo_id,commit_id,comment_id,author_login,reaction),
+					FOREIGN KEY (repo_id,commit_id,comment_id) REFERENCES commit_comments(repo_id,commit_id,comment_id) ON DELETE CASCADE
+				);
+
 				CREATE TABLE IF NOT EXISTS forks(
 				forking_repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
 				forking_repo_url TEXT,
@@ -295,6 +321,7 @@
 					comment_text TEXT,
 					author_login TEXT,
 					author_id BIGINT REFERENCES identities(id) ON DELETE SET NULL,
+					created_at TIMESTAMP,
 					identity_type_id BIGINT REFERENCES identity_types(id) ON DELETE CASCADE,
 					PRIMARY KEY(repo_id,issue_number,comment_id),
 					FOREIGN KEY (repo_id,issue_number) REFERENCES issues(repo_id,issue_number) ON DELETE CASCADE
@@ -315,6 +342,7 @@
 					author_login TEXT,
 					author_id BIGINT REFERENCES identities(id) ON DELETE SET NULL,
 					identity_type_id BIGINT REFERENCES identity_types(id) ON DELETE CASCADE,
+					created_at TIMESTAMP,
 					PRIMARY KEY(repo_id,issue_number,author_login,reaction),
 					FOREIGN KEY (repo_id,issue_number) REFERENCES issues(repo_id,issue_number) ON DELETE CASCADE
 				);
@@ -327,6 +355,7 @@
 					author_login TEXT,
 					author_id BIGINT REFERENCES identities(id) ON DELETE SET NULL,
 					identity_type_id BIGINT REFERENCES identity_types(id) ON DELETE CASCADE,
+					created_at TIMESTAMP,
 					PRIMARY KEY(repo_id,issue_number,author_login,reaction),
 					FOREIGN KEY (repo_id,issue_number,comment_id) REFERENCES issue_comments(repo_id,issue_number,comment_id) ON DELETE CASCADE
 				);
@@ -356,6 +385,7 @@
 					comment_text TEXT,
 					author_login TEXT,
 					author_id BIGINT REFERENCES identities(id) ON DELETE SET NULL,
+					created_at TIMESTAMP,
 					identity_type_id BIGINT REFERENCES identity_types(id) ON DELETE CASCADE,
 					PRIMARY KEY(repo_id,pullrequest_number,comment_id),
 					FOREIGN KEY (repo_id,pullrequest_number) REFERENCES pullrequests(repo_id,pullrequest_number) ON DELETE CASCADE
@@ -376,6 +406,7 @@
 					author_login TEXT,
 					author_id BIGINT REFERENCES identities(id) ON DELETE SET NULL,
 					identity_type_id BIGINT REFERENCES identity_types(id) ON DELETE CASCADE,
+					created_at TIMESTAMP,
 					PRIMARY KEY(repo_id,pullrequest_number,author_login,reaction),
 					FOREIGN KEY (repo_id,pullrequest_number) REFERENCES pullrequests(repo_id,pullrequest_number) ON DELETE CASCADE
 				);
@@ -388,6 +419,7 @@
 					author_login TEXT,
 					author_id BIGINT REFERENCES identities(id) ON DELETE SET NULL,
 					identity_type_id BIGINT REFERENCES identity_types(id) ON DELETE CASCADE,
+					created_at TIMESTAMP,
 					PRIMARY KEY(repo_id,pullrequest_number,author_login,reaction),
 					FOREIGN KEY (repo_id,pullrequest_number,comment_id) REFERENCES pullrequest_comments(repo_id,pullrequest_number,comment_id) ON DELETE CASCADE
 				);

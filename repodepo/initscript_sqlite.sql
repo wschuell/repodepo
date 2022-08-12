@@ -106,8 +106,8 @@
 				CREATE INDEX IF NOT EXISTS commits_cra_idx ON commits(created_at,repo_id,author_id);
 
 				CREATE TABLE IF NOT EXISTS commit_comments(
-				commit_id INTEGER REFERENCES commits(id) ON DELETE CASCADE,
 				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
+				commit_id INTEGER REFERENCES commits(id) ON DELETE CASCADE,
 				comment_id INTEGER,
 				comment_text TEXT,
 				author_login TEXT,
@@ -145,6 +145,31 @@
 				rank INTEGER,
 				PRIMARY KEY(child_id,parent_id),
 				UNIQUE(parent_id,child_id,rank)
+				);
+
+				CREATE TABLE IF NOT EXISTS commit_comments(
+					repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
+					commit_id INTEGER REFERENCES commits(id) ON DELETE CASCADE,
+					comment_id INTEGER NOT NULL,
+					comment_text TEXT,
+					author_login TEXT,
+					created_at TIMESTAMP,
+					author_id INTEGER REFERENCES identities(id) ON DELETE SET NULL,
+					identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
+					PRIMARY KEY(repo_id,commit_id,comment_id),
+				);
+
+				CREATE TABLE IF NOT EXISTS commit_comment_reactions(
+					repo_id INTEGER,
+					commt_id INTEGER,
+					comment_id INTEGER,
+					reaction TEXT,
+					author_login TEXT,
+					author_id INTEGER REFERENCES identities(id) ON DELETE SET NULL,
+					identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
+					created_at TIMESTAMP,
+					PRIMARY KEY(repo_id,commit_id,comment_id,author_login,reaction),
+					FOREIGN KEY (repo_id,commit_id,comment_id) REFERENCES commit_comments(repo_id,commit_id,comment_id) ON DELETE CASCADE
 				);
 
 				CREATE TABLE IF NOT EXISTS forks(
@@ -314,6 +339,7 @@
 					author_login TEXT,
 					author_id INTEGER REFERENCES identities(id) ON DELETE SET NULL,
 					identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
+					created_at TIMESTAMP,
 					PRIMARY KEY(repo_id,issue_number,comment_id),
 					FOREIGN KEY (repo_id,issue_number) REFERENCES issues(repo_id,issue_number) ON DELETE CASCADE
 				);
@@ -333,6 +359,7 @@
 					author_login TEXT,
 					author_id INTEGER REFERENCES identities(id) ON DELETE SET NULL,
 					identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
+					created_at TIMESTAMP,
 					PRIMARY KEY(repo_id,issue_number,author_login,reaction),
 					FOREIGN KEY (repo_id,issue_number) REFERENCES issues(repo_id,issue_number) ON DELETE CASCADE
 				);
@@ -345,6 +372,7 @@
 					author_login TEXT,
 					author_id INTEGER REFERENCES identities(id) ON DELETE SET NULL,
 					identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
+					created_at TIMESTAMP,
 					PRIMARY KEY(repo_id,issue_number,author_login,reaction),
 					FOREIGN KEY (repo_id,issue_number,comment_id) REFERENCES issue_comments(repo_id,issue_number,comment_id) ON DELETE CASCADE
 				);
@@ -375,6 +403,7 @@
 					author_login TEXT,
 					author_id INTEGER REFERENCES identities(id) ON DELETE SET NULL,
 					identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
+					created_at TIMESTAMP,
 					PRIMARY KEY(repo_id,pullrequest_number,comment_id),
 					FOREIGN KEY (repo_id,pullrequest_number) REFERENCES pullrequests(repo_id,pullrequest_number) ON DELETE CASCADE
 				);
@@ -394,6 +423,7 @@
 					author_login TEXT,
 					author_id INTEGER REFERENCES identities(id) ON DELETE SET NULL,
 					identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
+					created_at TIMESTAMP,
 					PRIMARY KEY(repo_id,pullrequest_number,author_login,reaction),
 					FOREIGN KEY (repo_id,pullrequest_number) REFERENCES pullrequests(repo_id,pullrequest_number) ON DELETE CASCADE
 				);
@@ -406,6 +436,7 @@
 					author_login TEXT,
 					author_id INTEGER REFERENCES identities(id) ON DELETE SET NULL,
 					identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
+					created_at TIMESTAMP,
 					PRIMARY KEY(repo_id,pullrequest_number,author_login,reaction),
 					FOREIGN KEY (repo_id,pullrequest_number,comment_id) REFERENCES pullrequest_comments(repo_id,pullrequest_number,comment_id) ON DELETE CASCADE
 				);
