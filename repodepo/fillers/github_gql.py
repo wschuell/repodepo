@@ -1895,10 +1895,11 @@ class CommitCommentsGQLFiller(GHGQLFiller):
 		output: [ {'repo_id':r_id,'repo_owner':r_ow,'repo_name':r_na,'issue_number':issue_na,'issue_title':title_na,'created_at':created_date,'closed_at':closed_date} , ...]
 		'''
 		ans = []
+		reactions = False
 		if repo_owner is None:
 			repo_owner,repo_name = query_result['repository']['nameWithOwner'].split('/')
 		for e in query_result['repository']['commitComments']['nodes']:
-			d = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type}
+			d = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'commit_comment'}
 			try:
 				d['created_at'] = e['createdAt']
 				# d['closed_at'] = e['closedAt']
@@ -1916,6 +1917,26 @@ class CommitCommentsGQLFiller(GHGQLFiller):
 				continue
 			else:
 				ans.append(d)
+				try:
+					if e['reactions']['totalCount']>0:
+						reactions = True
+						r = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'commit_comment_reaction'}
+						r['comment_id'] = d['comment_id']
+						r['commit_sha'] = d['commit_sha']
+						for ee in e['reactions']['nodes']:
+							r['created_at'] = ee['reactions']
+							r['content'] = ee['content']
+							try:
+								r['author_login'] = ee['author']['login']
+							except:
+								r['author_login'] = None
+				except (KeyError,TypeError) as err:
+					self.logger.info('Result triggering error: {} \nError when parsing commit_comment_reactions for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+					continue
+				else:
+					ans.append(r)
+			# if not reactions:
+			# 	submit update commit_comment_reactions for repo
 		return ans
 
 
@@ -1940,7 +1961,7 @@ class CommitCommentsGQLFiller(GHGQLFiller):
 						)
 
 				ON CONFLICT DO NOTHING
-				;''',items_list)
+				;''',(i for i in items_list if i['element_type']=='commit_comment'))
 				# ;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title'],s['issue_text'],s['author_login'],s['author_login'],self.target_identity_type,self.target_identity_type) for s in items_list))
 		else:
 			db.cursor.executemany('''
@@ -1954,7 +1975,7 @@ class CommitCommentsGQLFiller(GHGQLFiller):
 						(SELECT id FROM identities WHERE identity=author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
 						(SELECT id FROM identity_types WHERE name=target_identity_type)
 						)
-				;''',items_list)
+				;''',(i for i in items_list if i['element_type']=='commit_comment'))
 				# ;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title'],s['issue_text'],s['author_login'],s['author_login'],self.target_identity_type,self.target_identity_type) for s in items_list))
 
 

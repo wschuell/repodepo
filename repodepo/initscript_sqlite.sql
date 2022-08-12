@@ -105,29 +105,6 @@
 				CREATE INDEX IF NOT EXISTS commits_rc_idx ON commits(original_created_at) WHERE original_created_at IS NOT NULL;
 				CREATE INDEX IF NOT EXISTS commits_cra_idx ON commits(created_at,repo_id,author_id);
 
-				CREATE TABLE IF NOT EXISTS commit_comments(
-				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
-				commit_id INTEGER REFERENCES commits(id) ON DELETE CASCADE,
-				comment_id INTEGER,
-				comment_text TEXT,
-				author_login TEXT,
-				identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
-				author_id INTEGER REFERENCES identities(id) ON DELETE SET NULL,
-				PRIMARY KEY(commit_id,repo_id,comment_id)
-				);
-
-				CREATE TABLE IF NOT EXISTS commit_comment_reactions(
-				commit_id INTEGER,
-				repo_id INTEGER,
-				comment_id INTEGER,
-				author_login TEXT,
-				identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
-				author_id INTEGER REFERENCES identities(id) ON DELETE SET NULL,
-				reaction TEXT,
-				PRIMARY KEY(commit_id,repo_id,comment_id,author_login,reaction),
-				FOREIGN KEY (commit_id,repo_id,comment_id) REFERENCES commit_comments(commit_id,repo_id,comment_id) ON DELETE CASCADE
-				);
-
 				CREATE TABLE IF NOT EXISTS commit_repos(
 				commit_id INTEGER REFERENCES commits(id) ON DELETE CASCADE,
 				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
@@ -156,12 +133,12 @@
 					created_at TIMESTAMP,
 					author_id INTEGER REFERENCES identities(id) ON DELETE SET NULL,
 					identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
-					PRIMARY KEY(repo_id,commit_id,comment_id),
+					PRIMARY KEY(repo_id,commit_id,comment_id)
 				);
 
 				CREATE TABLE IF NOT EXISTS commit_comment_reactions(
 					repo_id INTEGER,
-					commt_id INTEGER,
+					commit_id INTEGER,
 					comment_id INTEGER,
 					reaction TEXT,
 					author_login TEXT,
