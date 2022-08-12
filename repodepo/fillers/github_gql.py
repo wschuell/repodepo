@@ -1917,24 +1917,24 @@ class CommitCommentsGQLFiller(GHGQLFiller):
 				continue
 			else:
 				ans.append(d)
-				try:
-					if e['reactions']['totalCount']>0:
-						reactions = True
+				if e['reactions']['totalCount']>0:
+					reactions = True
+					for ee in e['reactions']['nodes']:
 						r = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'commit_comment_reaction'}
 						r['comment_id'] = d['comment_id']
 						r['commit_sha'] = d['commit_sha']
-						for ee in e['reactions']['nodes']:
-							r['created_at'] = ee['reactions']
-							r['content'] = ee['content']
+						try:
+							r['created_at'] = ee['createdAt']
+							r['reaction'] = ee['content']
 							try:
-								r['author_login'] = ee['author']['login']
+								r['author_login'] = ee['user']['login']
 							except:
 								r['author_login'] = None
-				except (KeyError,TypeError) as err:
-					self.logger.info('Result triggering error: {} \nError when parsing commit_comment_reactions for {}/{}: {}'.format(e,repo_owner,repo_name,err))
-					continue
-				else:
-					ans.append(r)
+						except (KeyError,TypeError) as err:
+							self.logger.info('Result triggering error: {} \nError when parsing commit_comment_reactions for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+							continue
+						else:
+							ans.append(r)
 			# if not reactions:
 			# 	submit update commit_comment_reactions for repo
 		return ans
@@ -1981,6 +1981,48 @@ class CommitCommentsGQLFiller(GHGQLFiller):
 
 		if commit:
 			db.connection.commit()
+
+		self.insert_reactions(items_list=items_list,commit=commit,db=db)
+
+	def insert_reactions(self,items_list,commit=True,db=None):
+		if db is None:
+			db = self.db
+		if db.db_type == 'postgres':
+			extras.execute_batch(db.cursor,'''
+				INSERT INTO commit_comment_reactions(created_at,repo_id,commit_id,comment_id,reaction,author_login,author_id,identity_type_id)
+				VALUES(%(created_at)s,
+						%(repo_id)s,
+						(SELECT id FROM commits WHERE sha=%(commit_sha)s),
+						%(comment_id)s,
+						%(reaction)s,
+						%(author_login)s,
+						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
+						(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
+						)
+
+				--ON CONFLICT DO NOTHING
+				;''',(i for i in items_list if i['element_type']=='commit_comment_reaction'))
+				# ;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title'],s['issue_text'],s['author_login'],s['author_login'],self.target_identity_type,self.target_identity_type) for s in items_list))
+		else:
+			db.cursor.executemany('''
+					INSERT OR IGNORE INTO commit_comment_reactions(created_at,repo_id,commit_id,comment_id,reaction,author_login,author_id,identity_type_id)
+				VALUES(:created_at,
+						:repo_id,
+						(SELECT id FROM commits WHERE sha=:commit_sha),
+						:comment_id,
+						:reaction,
+						:author_login,
+						(SELECT id FROM identities WHERE identity=author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
+						(SELECT id FROM identity_types WHERE name=target_identity_type)
+						)
+				;''',(i for i in items_list if i['element_type']=='commit_comment_reaction'))
+				# ;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title'],s['issue_text'],s['author_login'],s['author_login'],self.target_identity_type,self.target_identity_type) for s in items_list))
+
+
+		if commit:
+			db.connection.commit()
+
+
 
 	def get_nb_items(self,query_result):
 		'''
