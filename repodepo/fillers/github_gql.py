@@ -1972,8 +1972,8 @@ class CommitCommentsGQLFiller(GHGQLFiller):
 						:comment_id,
 						:comment_text,
 						:author_login,
-						(SELECT id FROM identities WHERE identity=author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
-						(SELECT id FROM identity_types WHERE name=target_identity_type)
+						(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
+						(SELECT id FROM identity_types WHERE name=:target_identity_type)
 						)
 				;''',(i for i in items_list if i['element_type']=='commit_comment'))
 				# ;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title'],s['issue_text'],s['author_login'],s['author_login'],self.target_identity_type,self.target_identity_type) for s in items_list))
@@ -2012,8 +2012,8 @@ class CommitCommentsGQLFiller(GHGQLFiller):
 						:comment_id,
 						:reaction,
 						:author_login,
-						(SELECT id FROM identities WHERE identity=author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
-						(SELECT id FROM identity_types WHERE name=target_identity_type)
+						(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
+						(SELECT id FROM identity_types WHERE name=:target_identity_type)
 						)
 				;''',(i for i in items_list if i['element_type']=='commit_comment_reaction'))
 				# ;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title'],s['issue_text'],s['author_login'],s['author_login'],self.target_identity_type,self.target_identity_type) for s in items_list))
