@@ -2,6 +2,12 @@ import datetime
 import os
 import psycopg2
 import json
+import glob
+import toml
+import oyaml as yaml
+import pygit2
+import subprocess
+import csv
 
 from .. import fillers
 from ..fillers import generic
@@ -67,3 +73,229 @@ class JuliaHubFiller(generic.PackageFiller):
 	def apply(self):
 		self.fill_packages()
 		self.db.connection.commit()
+
+
+class JuliaGeneralFiller(generic.PackageFiller):
+
+	def __init__(self,
+			source='julia_general',
+			source_urlroot=None,
+			package_limit=None,
+			force=False,
+			repo_url='https://github.com/JuliaRegistries/General',
+			repo_folder='Julia_General',
+			dates_filename='julia_version_dates.csv',
+			replace_repo=False,
+			update_repo=False,
+					**kwargs):
+		generic.PackageFiller.__init__(self,**kwargs)
+		self.source = source
+		self.source_urlroot = source_urlroot
+		self.package_limit = package_limit
+		self.force = force
+		self.repo_url = repo_url
+		self.repo_folder = repo_folder
+		self.replace_repo = replace_repo
+		self.update_repo = update_repo
+		self.dates_filename = dates_filename
+
+
+	def prepare(self):
+		if self.data_folder is None:
+			self.data_folder = self.db.data_folder
+		data_folder = self.data_folder
+
+		#create folder if needed
+		if not os.path.exists(data_folder):
+			os.makedirs(data_folder)
+
+		self.db.register_source(source=self.source,source_urlroot=self.source_urlroot)
+		if self.source_urlroot is None:
+			self.source_url_root = self.db.get_source_info(source=self.source)[1]
+
+		self.clone_repo(repo_url=self.repo_url,repo_folder=self.repo_folder,update=self.update_repo,replace=self.replace_repo)
+
+		self.get_dates()
+		
+		self.package_list = []
+		for p in glob.glob(os.path.join(data_folder,self.repo_folder,'?','*')):
+			content = toml.load(os.path.join(p,'Package.toml')) 
+			elt = (content['uuid'],content['name'],self.package_dates[content['name']],content['repo'])
+			self.package_list.append(elt)
+		
+		self.package_version_list = []
+		for p in glob.glob(os.path.join(data_folder,self.repo_folder,'?','*')):
+			content_p = toml.load(os.path.join(p,'Package.toml')) 
+			content_v = toml.load(os.path.join(p,'Versions.toml'))
+			for version,version_info in content_v.items():
+				elt = (content_p['uuid'],version,self.version_dates[content_p['name']][version])
+				self.package_version_list.append(elt)
+
+		if not self.force:
+			if self.db.db_type == 'postgres':
+				self.db.cursor.execute('''SELECT COUNT(*) FROM packages p
+								INNER JOIN sources s
+								ON p.source_id=s.id
+								AND s.name=%s
+								; ''',(self.source,))
+			else:
+				self.db.cursor.execute('''SELECT COUNT(*) FROM packages p
+								INNER JOIN sources s
+								ON p.source_id=s.id
+								AND s.name=?
+								; ''',(self.source,))
+			ans = self.db.cursor.fetchone()
+			if ans is not None:
+				pk_cnt = ans[0]
+				if len(self.package_list) == pk_cnt:
+					self.package_list = []
+
+		self.db.connection.commit()
+
+	def get_versions_list(self):
+		'''
+		Need to build such a list before self.package_version_list because of get_dates() needing it; and self.package_version_list needs the dates
+		'''
+		if not hasattr(self,'versions_list'):
+			self.versions_list = []
+			for p in glob.glob(os.path.join(self.data_folder,self.repo_folder,'?','*')):
+				content_p = toml.load(os.path.join(p,'Package.toml')) 
+				content_v = toml.load(os.path.join(p,'Versions.toml'))
+				for version,version_info in content_v.items():
+					self.versions_list.append((p,content_p['name'],version))
+
+	def save_dates(self):
+		dates_filepath = os.path.join(self.data_folder,self.dates_filename)
+		loaded_dates = self.load_dates()
+		to_write = {}
+		for p,v,d in loaded_dates:
+			to_write[(p,v)] = d
+		for p,v_l in self.version_dates.items():
+			for v,d in v_l.items():
+				to_write[(p,v)] = d
+		to_write_lines = [f'''"{k[0]}","{k[1]}","{d.strftime('%Y-%m-%d %H:%M:%S')}"''' for k,d in to_write.items()]
+		with open(dates_filepath,'w') as f:
+			f.write('\n'.join(sorted(to_write_lines)))
+
+
+	def load_dates(self):
+		dates_filepath = os.path.join(self.data_folder,self.dates_filename)
+		if os.path.exists(dates_filepath):
+			with open(dates_filepath,'r') as f:
+				reader = csv.reader(f)
+				return [(p,v,datetime.datetime.strptime(d,'%Y-%m-%d %H:%M:%S')) for p,v,d in reader]
+		else:
+			return []
+
+	def get_dates(self):
+		self.get_versions_list()
+
+		total_versions = len(self.versions_list)
+		
+		self.package_dates = {}
+		self.version_dates = {}
+		
+		'''
+		Parsing from file
+		'''
+
+		loaded_versions = self.load_dates()
+		versions_dict = {}
+		for p,pname,v in self.versions_list:
+			if pname not in versions_dict.keys():
+				versions_dict[pname] = []
+			versions_dict[pname].append(v)
+
+		for p,v,d in loaded_versions:
+			if p in versions_dict.keys() and v in versions_dict[p]:
+				if p not in self.version_dates.keys():
+					self.version_dates[p] = {}
+				self.version_dates[p][v] = d
+	
+		count_versions = sum([len(v.keys()) for v in self.version_dates.values()])
+
+		self.logger.info(f'{count_versions}/{total_versions} version date info after parsing from file')
+		if count_versions != total_versions:
+	
+			'''
+			Parsing from commit messages
+			'''
+			count_parseable = 0
+			count_not_parseable = 0
+			
+			repo = pygit2.Repository(os.path.join(self.data_folder,self.repo_folder)) 
+			for c in repo.walk(repo.head.target):
+				if c.message.startswith('New package: ') or c.message.startswith('New version: '):
+					package_name = c.message.split(' ')[2]
+					version = c.message.split(' ')[3][1:]
+					version_time = datetime.datetime.fromtimestamp(c.commit_time)
+					if package_name in versions_dict.keys() and version in versions_dict[package_name]:
+						try:
+							self.version_dates[package_name][version] = version_time
+						except KeyError:
+							self.version_dates[package_name] = {version:version_time}
+						count_parseable += 1
+					else:
+						count_not_parseable += 1
+				else:
+					self.logger.debug(f'Commit message non parseable: {c.message}')
+					count_not_parseable += 1
+		
+			self.logger.info(f'{count_not_parseable} non parseable commits for getting version date from commit message')
+	
+			count_versions = sum([len(v.keys()) for v in self.version_dates.values()])
+			self.logger.info(f'{count_versions}/{total_versions} version date info after parsing from commit messages')
+			'''
+			Parsing remaining from commit contents specific to the file of each version
+			'''
+	
+			repo = pygit2.Repository(os.path.join(self.data_folder,self.repo_folder)) 
+			
+			missing_versions = total_versions - count_versions
+			count = 0
+			try:
+				for p,pname,v in sorted(self.versions_list):
+					if pname in self.version_dates.keys() and v in self.version_dates[pname].keys():
+						continue
+					else:
+						count += 1
+						rel_path = os.path.join(pname[0].upper(),pname)
+						# p_folder = os.path.join(self.data_folder,self.repo_folder,rel_path)
+						self.logger.info(f'Getting version date for {rel_path} for version {v} ({count}/{missing_versions})')
+						cmd = ['git','-C',os.path.join(self.data_folder,self.repo_folder),'log','--pretty="%H"','-S',f"""["{v}"]""",'--',os.path.join(rel_path,'Versions.toml')]#,'|','cat']
+						commit_ids = subprocess.check_output(cmd)
+						# commit_ids = subprocess.check_output(cmd,cwd=os.path.join(self.data_folder,self.repo_folder))
+						commit_ids = commit_ids.decode('utf-8').split('\n')
+	
+						if commit_ids[-1] == '':
+							commit_ids = commit_ids[:-1]
+					
+						oid = commit_ids[0].replace('"','')
+						if pname not in self.version_dates.keys():
+							self.version_dates[pname] = {}
+						self.version_dates[pname][v] = datetime.datetime.fromtimestamp(repo.get(oid).commit_time)
+			finally:
+				self.save_dates()
+
+		for p,versions in self.version_dates.items():
+			self.package_dates[p] = min([t for t in versions.values()])
+
+
+
+'''
+https://julialang-logs.s3.amazonaws.com/public_outputs/current/package_requests_by_date.csv.gz
+Downloads: only the last month.
+syntax (header): "package_uuid","status","client_type","date","request_addrs","request_count","cache_misses","body_bytes_sent","request_time"
+to be used: package_uuid, date,request_count
+
+!! to be aggregated over several possible lines.
+!! no versions provided; temporary solution: associate DL to latest version
+
+!! in_source_id should be uuid, and field as text
+!! versions info missing?
+
+For deps and versions info: https://github.com/JuliaRegistries/General
+
+versions : working number but not date. Necessary to walk the general repo for additions of the entries in all Versions.toml
+
+'''

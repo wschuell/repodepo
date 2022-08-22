@@ -211,7 +211,7 @@
 				CREATE TABLE IF NOT EXISTS packages(
 				id INTEGER PRIMARY KEY,
 				source_id INTEGER REFERENCES sources(id) ON DELETE CASCADE,
-				insource_id INTEGER DEFAULT NULL,
+				insource_id TEXT DEFAULT NULL,
 				name TEXT,
 				url_id INTEGER REFERENCES urls(id) ON DELETE CASCADE,
 				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,

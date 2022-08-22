@@ -217,7 +217,7 @@
 				CREATE TABLE IF NOT EXISTS packages(
 				id BIGSERIAL PRIMARY KEY,
 				source_id BIGINT REFERENCES sources(id) ON DELETE CASCADE,
-				insource_id BIGINT DEFAULT NULL,
+				insource_id TEXT DEFAULT NULL,
 				name TEXT,
 				url_id BIGINT REFERENCES urls(id) ON DELETE CASCADE,
 				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,

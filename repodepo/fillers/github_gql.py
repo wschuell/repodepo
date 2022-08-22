@@ -180,6 +180,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 			init_page_size=10,
 			max_page_size=100,
 			secondary_page_size=None,
+			other_update_names = None,
 			**kwargs):
 		if requester_class is None:
 			self.Requester = Requester
@@ -195,6 +196,10 @@ class GHGQLFiller(github_rest.GithubFiller):
 			self.secondary_page_size = self.init_page_size
 		else:
 			self.secondary_page_size = secondary_page_size
+		if other_update_names is None:
+			self.other_update_names = []
+		else:
+			self.other_update_names = copy.deepcopy(other_update_names)
 		github_rest.GithubFiller.__init__(self,identity_type=target_identity_type,**kwargs)
 
 	def apply(self):
@@ -218,6 +223,13 @@ class GHGQLFiller(github_rest.GithubFiller):
 			return self.init_page_size
 		else:
 			return self.max_page_size
+
+	def insert_update(self,db=None,**kwargs):
+		if db is None:
+			db = self.db
+		db.insert_update(table=self.items_name,**kwargs)
+		for t in self.other_update_names:
+			db.insert_update(table=t,**kwargs)
 
 	def set_requesters(self,fetch_schema=False):
 		'''
@@ -273,7 +285,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 		'''
 		In subclasses this has to be implemented
 		inserts results in the DB
-		output: input data for db.insert_update
+		output: input data for self.insert_update
 		'''
 		raise NotImplementedError
 
@@ -350,7 +362,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 							err_text = 'Timeout threshold reached {}, marking query as to be discarded {}: {}'.format(requester.retries,e.__class__,e)
 							self.logger.error(err_text)
 							db.log_error(err_text)
-							db.insert_update(identity_id=identity_id,repo_id=repo_id,table=self.items_name,success=False)
+							self.insert_update(db=db,identity_id=identity_id,repo_id=repo_id,success=False)
 							elt_list.pop(0)
 							new_elt = True
 							elt_nb += 1
@@ -361,7 +373,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 					# catch non existent
 					if (self.queried_obj=='repo' and result['repository'] is None) or (self.queried_obj=='user' and result['user'] is None):
 						self.logger.info('No such {}: {} ({}/{})'.format(self.queried_obj,elt_name,elt_nb,total_elt))
-						db.insert_update(identity_id=identity_id,repo_id=repo_id,table=self.items_name,success=False)
+						self.insert_update(db=db,identity_id=identity_id,repo_id=repo_id,success=False)
 						elt_list.pop(0)
 						new_elt = True
 						elt_nb += 1
@@ -395,7 +407,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 							end_cursor_json = None
 						else:
 							end_cursor_json = json.dumps({'end_cursor':end_cursor})
-						db.insert_update(identity_id=identity_id,repo_id=repo_id,table=self.items_name,success=True,info=end_cursor_json)
+						self.insert_update(db=db,identity_id=identity_id,repo_id=repo_id,success=True,info=end_cursor_json)
 						elt_list.pop(0)
 						new_elt = True
 						elt_nb += 1
@@ -403,14 +415,14 @@ class GHGQLFiller(github_rest.GithubFiller):
 
 					if (self.queried_obj=='email' and parsed_result[0]['repo_owner'] is None):
 						self.logger.info('No such repo: {}/{} for email {} ({}/{})'.format(owner,repo_name,elt_name,elt_nb,total_elt))
-						db.insert_update(identity_id=identity_id,repo_id=repo_id,table=self.items_name,success=False)
+						self.insert_update(db=db,identity_id=identity_id,repo_id=repo_id,success=False)
 						elt_list.pop(0)
 						new_elt = True
 						elt_nb += 1
 						continue
 					elif (self.queried_obj=='email' and parsed_result[0]['commit_sha'] is None):
 						self.logger.info('No such commit: {} for email {} ({}/{})'.format(commit_sha,elt_name,elt_nb,total_elt))
-						db.insert_update(identity_id=identity_id,repo_id=repo_id,table=self.items_name,success=False)
+						self.insert_update(db=db,identity_id=identity_id,repo_id=repo_id,success=False)
 						elt_list.pop(0)
 						new_elt = True
 						elt_nb += 1
@@ -428,7 +440,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 						# detect loop end
 						if not pageinfo['hasNextPage']:
 							# insert update success True (+ end cursor)
-							db.insert_update(identity_id=identity_id,repo_id=repo_id,table=self.items_name,success=True,info=end_cursor_json,autocommit=True)
+							self.insert_update(db=db,identity_id=identity_id,repo_id=repo_id,success=True,info=end_cursor_json,autocommit=True)
 							db.connection.commit()
 							# clean partial updates with NULL success (?)
 							# db.clean_null_updates(identity_id=identity_id,repo_id=repo_id,table=self.items_name,autocommit=True)
@@ -445,7 +457,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 							break
 						else:
 							# insert partial update with endcursor value and success NULL (?)
-							db.insert_update(identity_id=identity_id,repo_id=repo_id,table=self.items_name,success=None,info=end_cursor_json)
+							self.insert_update(db=db,identity_id=identity_id,repo_id=repo_id,success=None,info=end_cursor_json)
 							db.connection.commit()
 							# continue query
 							try:
@@ -455,7 +467,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 									err_text = 'Timeout threshold reached {}, marking query as to be discarded {}: {}'.format(requester.retries,e.__class__,e)
 									self.logger.error(err_text)
 									db.log_error(err_text)
-									db.insert_update(identity_id=identity_id,repo_id=repo_id,table=self.items_name,success=False)
+									self.insert_update(db=db,identity_id=identity_id,repo_id=repo_id,success=False)
 									elt_list.pop(0)
 									new_elt = True
 									elt_nb += 1
@@ -470,7 +482,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 				if e.__class__ == RuntimeError and 'cannot schedule new futures after shutdown' in str(e):
 					raise
 				elif e.__class__ == asyncio.TimeoutError and self.retry_fails_permanent:
-					db.insert_update(identity_id=identity_id,repo_id=repo_id,table=self.items_name,success=False,info=end_cursor_json)
+					self.insert_update(db=db,identity_id=identity_id,repo_id=repo_id,success=False,info=end_cursor_json)
 					self.logger.error(err_text+' retry_fails_permanent is set to True')
 				if in_thread:
 					self.logger.error(err_text)
@@ -1895,7 +1907,6 @@ class CommitCommentsGQLFiller(GHGQLFiller):
 		output: [ {'repo_id':r_id,'repo_owner':r_ow,'repo_name':r_na,'issue_number':issue_na,'issue_title':title_na,'created_at':created_date,'closed_at':closed_date} , ...]
 		'''
 		ans = []
-		reactions = False
 		if repo_owner is None:
 			repo_owner,repo_name = query_result['repository']['nameWithOwner'].split('/')
 		for e in query_result['repository']['commitComments']['nodes']:
@@ -1918,7 +1929,6 @@ class CommitCommentsGQLFiller(GHGQLFiller):
 			else:
 				ans.append(d)
 				if e['reactions']['totalCount']>0:
-					reactions = True
 					for ee in e['reactions']['nodes']:
 						r = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'commit_comment_reaction'}
 						r['comment_id'] = d['comment_id']
@@ -1935,8 +1945,6 @@ class CommitCommentsGQLFiller(GHGQLFiller):
 							continue
 						else:
 							ans.append(r)
-			# if not reactions:
-			# 	submit update commit_comment_reactions for repo
 		return ans
 
 
@@ -2000,7 +2008,7 @@ class CommitCommentsGQLFiller(GHGQLFiller):
 						(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
 						)
 
-				--ON CONFLICT DO NOTHING
+				ON CONFLICT DO NOTHING
 				;''',(i for i in items_list if i['element_type']=='commit_comment_reaction'))
 				# ;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title'],s['issue_text'],s['author_login'],s['author_login'],self.target_identity_type,self.target_identity_type) for s in items_list))
 		else:
@@ -2030,6 +2038,7 @@ class CommitCommentsGQLFiller(GHGQLFiller):
 		output: nb_items or None if not relevant
 		'''
 		return query_result['repository']['commitComments']['totalCount']
+
 
 class IssuesGQLFiller(GHGQLFiller):
 	'''
@@ -2279,7 +2288,8 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 	'''
 
 	def __init__(self,init_page_size=6,secondary_page_size=4,**kwargs):
-		IssuesGQLFiller.__init__(self,init_page_size=init_page_size,secondary_page_size=secondary_page_size,**kwargs)
+		IssuesGQLFiller.__init__(self,init_page_size=init_page_size,secondary_page_size=secondary_page_size,other_update_names=['issues'],**kwargs)
+		self.items_name = 'complete_issues'
 
 	def query_string(self,**kwargs):
 		'''
@@ -2313,6 +2323,7 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 											createdAt
 											author {{ login }}
 											bodyText
+											databaseId
 
 											reactions(first:{secondary_page_size}) {{
 												totalCount
@@ -2368,7 +2379,7 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 		if repo_owner is None:
 			repo_owner,repo_name = query_result['repository']['nameWithOwner'].split('/')
 		for e in query_result['repository']['issues']['nodes']:
-			d = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type}
+			d = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'issue'}
 			try:
 				d['created_at'] = e['createdAt']
 				d['closed_at'] = e['closedAt']
@@ -2384,6 +2395,78 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 				continue
 			else:
 				ans.append(d)
+
+				if e['labels']['totalCount']>0:
+					for ee in e['labels']['nodes']:
+						r = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'issue_label'}
+						r['issue_number'] = d['issue_number']
+						try:
+							# r['created_at'] = ee['createdAt']
+							r['label'] = ee['name']
+							# try:
+							# 	r['author_login'] = ee['user']['login']
+							# except:
+							# 	r['author_login'] = None
+						except (KeyError,TypeError) as err:
+							self.logger.info('Result triggering error: {} \nError when parsing issue_labels for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+							continue
+						else:
+							ans.append(r)
+
+				if e['reactions']['totalCount']>0:
+					for ee in e['reactions']['nodes']:
+						r = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'issue_reaction'}
+						r['issue_number'] = d['issue_number']
+						try:
+							r['created_at'] = ee['createdAt']
+							r['reaction'] = ee['content']
+							try:
+								r['author_login'] = ee['user']['login']
+							except:
+								r['author_login'] = None
+						except (KeyError,TypeError) as err:
+							self.logger.info('Result triggering error: {} \nError when parsing issue_reactions for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+							continue
+						else:
+							ans.append(r)
+
+				if e['comments']['totalCount']>0:
+					for ee in e['comments']['nodes']:
+						r = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'issue_comment'}
+						r['issue_number'] = d['issue_number']
+						try:
+							r['created_at'] = ee['createdAt']
+							r['comment_text'] = ee['bodyText']
+							r['comment_id'] = ee['databaseId']
+							try:
+								r['author_login'] = ee['user']['login']
+							except:
+								r['author_login'] = None
+
+
+						except (KeyError,TypeError) as err:
+							self.logger.info('Result triggering error: {} \nError when parsing issue_comments for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+							continue
+						else:
+							ans.append(r)
+
+						if ee['reactions']['totalCount']>0:
+							for eee in ee['reactions']['nodes']:
+								r = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'issue_comment_reaction'}
+								r['issue_number'] = d['issue_number']
+								r['comment_id'] = ee['databaseId']
+								try:
+									r['created_at'] = eee['createdAt']
+									r['reaction'] = eee['content']
+									try:
+										r['author_login'] = eee['user']['login']
+									except:
+										r['author_login'] = None
+								except (KeyError,TypeError) as err:
+									self.logger.info('Result triggering error: {} \nError when parsing issue_comment_reactions for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+									continue
+								else:
+									ans.append(r)
 		return ans
 
 
@@ -2410,7 +2493,7 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 						)
 
 				ON CONFLICT DO NOTHING
-				;''',items_list)
+				;''',(i for i in items_list if i['element_type']=='issue'))
 				# ;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title'],s['issue_text'],s['author_login'],s['author_login'],self.target_identity_type,self.target_identity_type) for s in items_list))
 		else:
 			db.cursor.executemany('''
@@ -2425,12 +2508,154 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 							(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
 							(SELECT id FROM identity_types WHERE name=:target_identity_type)
 							)
-				;''',items_list)
+				;''',(i for i in items_list if i['element_type']=='issue'))
 				# ;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title'],s['issue_text'],s['author_login'],s['author_login'],self.target_identity_type,self.target_identity_type) for s in items_list))
 
 
 		if commit:
 			db.connection.commit()
+
+		self.insert_reactions(items_list=items_list,commit=commit,db=db)
+		self.insert_labels(items_list=items_list,commit=commit,db=db)
+		self.insert_comments(items_list=items_list,commit=commit,db=db)
+		self.insert_comment_reactions(items_list=items_list,commit=commit,db=db)
+
+	def insert_reactions(self,items_list,commit=True,db=None):
+		if db is None:
+			db = self.db
+		if db.db_type == 'postgres':
+			extras.execute_batch(db.cursor,'''
+				INSERT INTO issue_reactions(created_at,repo_id,issue_number,reaction,author_login,author_id,identity_type_id)
+				VALUES(%(created_at)s,
+						%(repo_id)s,
+						%(issue_number)s),
+						%(reaction)s,
+						%(author_login)s,
+						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
+						(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
+						)
+
+				ON CONFLICT DO NOTHING
+				;''',(i for i in items_list if i['element_type']=='issue_reaction'))
+
+		else:
+			db.cursor.executemany('''
+					INSERT OR IGNORE INTO issue_reactions(created_at,repo_id,issue_number,reaction,author_login,author_id,identity_type_id)
+				VALUES(:created_at,
+						:repo_id,
+						:issue_number,
+						:reaction,
+						:author_login,
+						(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
+						(SELECT id FROM identity_types WHERE name=:target_identity_type)
+						)
+				;''',(i for i in items_list if i['element_type']=='issue_reaction'))
+
+
+		if commit:
+			db.connection.commit()
+
+	def insert_comment_reactions(self,items_list,commit=True,db=None):
+		if db is None:
+			db = self.db
+		if db.db_type == 'postgres':
+			extras.execute_batch(db.cursor,'''
+				INSERT INTO issue_comment_reactions(created_at,repo_id,issue_number,comment_id,reaction,author_login,author_id,identity_type_id)
+				VALUES(%(created_at)s,
+						%(repo_id)s,
+						%(issue_number)s),
+						%(comment_id)s,
+						%(reaction)s,
+						%(author_login)s,
+						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
+						(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
+						)
+
+				ON CONFLICT DO NOTHING
+				;''',(i for i in items_list if i['element_type']=='issue_comment_reaction'))
+
+		else:
+			db.cursor.executemany('''
+					INSERT OR IGNORE INTO issue_comment_reactions(created_at,repo_id,issue_number,comment_id,reaction,author_login,author_id,identity_type_id)
+				VALUES(:created_at,
+						:repo_id,
+						:issue_number,
+						:comment_id,
+						:reaction,
+						:author_login,
+						(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
+						(SELECT id FROM identity_types WHERE name=:target_identity_type)
+						)
+				;''',(i for i in items_list if i['element_type']=='issue_comment_reaction'))
+
+
+		if commit:
+			db.connection.commit()
+
+	def insert_comments(self,items_list,commit=True,db=None):
+		if db is None:
+			db = self.db
+		if db.db_type == 'postgres':
+			extras.execute_batch(db.cursor,'''
+				INSERT INTO issue_comments(created_at,repo_id,issue_number,comment_id,comment_text,author_login,author_id,identity_type_id)
+				VALUES(%(created_at)s,
+						%(repo_id)s,
+						%(issue_number)s),
+						%(comment_id)s,
+						%(comment_text)s,
+						%(author_login)s,
+						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
+						(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
+						)
+
+				ON CONFLICT DO NOTHING
+				;''',(i for i in items_list if i['element_type']=='issue_comment'))
+
+		else:
+			db.cursor.executemany('''
+					INSERT OR IGNORE INTO issue_comments(created_at,repo_id,issue_number,comment_id,comment_text,author_login,author_id,identity_type_id)
+				VALUES(:created_at,
+						:repo_id,
+						:issue_number,
+						:comment_id,
+						:comment_text,
+						:author_login,
+						(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
+						(SELECT id FROM identity_types WHERE name=:target_identity_type)
+						)
+				;''',(i for i in items_list if i['element_type']=='issue_comment'))
+
+
+		if commit:
+			db.connection.commit()
+
+	def insert_labels(self,items_list,commit=True,db=None):
+		if db is None:
+			db = self.db
+		if db.db_type == 'postgres':
+			extras.execute_batch(db.cursor,'''
+				INSERT INTO issue_labels(repo_id,issue_number,label)
+				VALUES(%(repo_id)s,
+						%(issue_number)s),
+						%(label)s
+						)
+
+				ON CONFLICT DO NOTHING
+				;''',(i for i in items_list if i['element_type']=='issue_label'))
+
+		else:
+			db.cursor.executemany('''
+					INSERT OR IGNORE INTO issue_labels(repo_id,issue_number,label)
+				VALUES(:repo_id,
+						:issue_number,
+						:label
+						)
+				;''',(i for i in items_list if i['element_type']=='issue_label'))
+
+
+		if commit:
+			db.connection.commit()
+
 
 class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 	'''
@@ -2439,7 +2664,8 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 	'''
 
 	def __init__(self,init_page_size=6,secondary_page_size=4,**kwargs):
-		PullRequestsGQLFiller.__init__(self,init_page_size=init_page_size,secondary_page_size=secondary_page_size,**kwargs)
+		PullRequestsGQLFiller.__init__(self,init_page_size=init_page_size,secondary_page_size=secondary_page_size,other_update_names=['pullrequests'],**kwargs)
+		self.items_name = 'complete_pullrequests'
 
 	def query_string(self,**kwargs):
 		'''
@@ -2474,6 +2700,7 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 											createdAt
 											author {{ login }}
 											bodyText
+											databaseId
 
 											reactions(first:{secondary_page_size}) {{
 												totalCount
@@ -2529,7 +2756,7 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 		if repo_owner is None:
 			repo_owner,repo_name = query_result['repository']['nameWithOwner'].split('/')
 		for e in query_result['repository']['pullRequests']['nodes']:
-			d = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type}
+			d = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'pullrequest'}
 			try:
 				d['created_at'] = e['createdAt']
 				d['merged_at'] = e['mergedAt']
@@ -2549,6 +2776,78 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 				continue
 			else:
 				ans.append(d)
+
+				if e['labels']['totalCount']>0:
+					for ee in e['labels']['nodes']:
+						r = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'pullrequest_label'}
+						r['pullrequest_number'] = d['pullrequest_number']
+						try:
+							# r['created_at'] = ee['createdAt']
+							r['label'] = ee['name']
+							# try:
+							# 	r['author_login'] = ee['user']['login']
+							# except:
+							# 	r['author_login'] = None
+						except (KeyError,TypeError) as err:
+							self.logger.info('Result triggering error: {} \nError when parsing pullrequest_labels for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+							continue
+						else:
+							ans.append(r)
+
+				if e['reactions']['totalCount']>0:
+					for ee in e['reactions']['nodes']:
+						r = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'pullrequest_reaction'}
+						r['pullrequest_number'] = d['pullrequest_number']
+						try:
+							r['created_at'] = ee['createdAt']
+							r['reaction'] = ee['content']
+							try:
+								r['author_login'] = ee['user']['login']
+							except:
+								r['author_login'] = None
+						except (KeyError,TypeError) as err:
+							self.logger.info('Result triggering error: {} \nError when parsing pullrequest_reactions for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+							continue
+						else:
+							ans.append(r)
+
+				if e['comments']['totalCount']>0:
+					for ee in e['comments']['nodes']:
+						r = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'pullrequest_comment'}
+						r['pullrequest_number'] = d['pullrequest_number']
+						try:
+							r['created_at'] = ee['createdAt']
+							r['comment_text'] = ee['bodyText']
+							r['comment_id'] = ee['databaseId']
+							try:
+								r['author_login'] = ee['user']['login']
+							except:
+								r['author_login'] = None
+
+
+						except (KeyError,TypeError) as err:
+							self.logger.info('Result triggering error: {} \nError when parsing pullrequest_comments for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+							continue
+						else:
+							ans.append(r)
+
+						if ee['reactions']['totalCount']>0:
+							for eee in ee['reactions']['nodes']:
+								r = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'pullrequest_comment_reaction'}
+								r['pullrequest_number'] = d['pullrequest_number']
+								r['comment_id'] = ee['databaseId']
+								try:
+									r['created_at'] = eee['createdAt']
+									r['reaction'] = eee['content']
+									try:
+										r['author_login'] = eee['user']['login']
+									except:
+										r['author_login'] = None
+								except (KeyError,TypeError) as err:
+									self.logger.info('Result triggering error: {} \nError when parsing pullrequest_comment_reactions for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+									continue
+								else:
+									ans.append(r)
 		return ans
 
 
@@ -2576,8 +2875,8 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 						)
 
 				ON CONFLICT DO NOTHING
-				;''',items_list)
-				# ;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title'],s['issue_text'],s['author_login'],s['author_login'],self.target_identity_type,self.target_identity_type) for s in items_list))
+				;''',(i for i in items_list if i['element_type']=='pullrequest'))
+				# ;''',((s['created_at'],s['closed_at'],s['repo_id'],s['pullrequest_number'],s['pullrequest_title'],s['pullrequest_text'],s['author_login'],s['author_login'],self.target_identity_type,self.target_identity_type) for s in items_list))
 		else:
 			db.cursor.executemany('''
 					INSERT OR IGNORE INTO pullrequests(created_at,merged_at,repo_id,pullrequest_number,pullrequest_title,pullrequest_text,author_login,author_id,merger_login,merger_id,identity_type_id)
@@ -2593,7 +2892,148 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 						(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
 						(SELECT id FROM identity_types WHERE name=:target_identity_type)
 						)
-				;''',items_list)
+				;''',(i for i in items_list if i['element_type']=='pullrequest'))
+
+		if commit:
+			db.connection.commit()
+
+		self.insert_reactions(items_list=items_list,commit=commit,db=db)
+		self.insert_labels(items_list=items_list,commit=commit,db=db)
+		self.insert_comments(items_list=items_list,commit=commit,db=db)
+		self.insert_comment_reactions(items_list=items_list,commit=commit,db=db)
+
+	def insert_reactions(self,items_list,commit=True,db=None):
+		if db is None:
+			db = self.db
+		if db.db_type == 'postgres':
+			extras.execute_batch(db.cursor,'''
+				INSERT INTO pullrequest_reactions(created_at,repo_id,pullrequest_number,reaction,author_login,author_id,identity_type_id)
+				VALUES(%(created_at)s,
+						%(repo_id)s,
+						%(pullrequest_number)s),
+						%(reaction)s,
+						%(author_login)s,
+						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
+						(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
+						)
+
+				ON CONFLICT DO NOTHING
+				;''',(i for i in items_list if i['element_type']=='pullrequest_reaction'))
+
+		else:
+			db.cursor.executemany('''
+					INSERT OR IGNORE INTO pullrequest_reactions(created_at,repo_id,pullrequest_number,reaction,author_login,author_id,identity_type_id)
+				VALUES(:created_at,
+						:repo_id,
+						:pullrequest_number,
+						:reaction,
+						:author_login,
+						(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
+						(SELECT id FROM identity_types WHERE name=:target_identity_type)
+						)
+				;''',(i for i in items_list if i['element_type']=='pullrequest_reaction'))
+
+
+		if commit:
+			db.connection.commit()
+
+	def insert_comment_reactions(self,items_list,commit=True,db=None):
+		if db is None:
+			db = self.db
+		if db.db_type == 'postgres':
+			extras.execute_batch(db.cursor,'''
+				INSERT INTO pullrequest_comment_reactions(created_at,repo_id,pullrequest_number,comment_id,reaction,author_login,author_id,identity_type_id)
+				VALUES(%(created_at)s,
+						%(repo_id)s,
+						%(pullrequest_number)s),
+						%(comment_id)s,
+						%(reaction)s,
+						%(author_login)s,
+						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
+						(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
+						)
+
+				ON CONFLICT DO NOTHING
+				;''',(i for i in items_list if i['element_type']=='pullrequest_comment_reaction'))
+
+		else:
+			db.cursor.executemany('''
+					INSERT OR IGNORE INTO pullrequest_comment_reactions(created_at,repo_id,pullrequest_number,comment_id,reaction,author_login,author_id,identity_type_id)
+				VALUES(:created_at,
+						:repo_id,
+						:pullrequest_number,
+						:comment_id,
+						:reaction,
+						:author_login,
+						(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
+						(SELECT id FROM identity_types WHERE name=:target_identity_type)
+						)
+				;''',(i for i in items_list if i['element_type']=='pullrequest_comment_reaction'))
+
+
+		if commit:
+			db.connection.commit()
+
+	def insert_comments(self,items_list,commit=True,db=None):
+		if db is None:
+			db = self.db
+		if db.db_type == 'postgres':
+			extras.execute_batch(db.cursor,'''
+				INSERT INTO pullrequest_comments(created_at,repo_id,pullrequest_number,comment_id,comment_text,author_login,author_id,identity_type_id)
+				VALUES(%(created_at)s,
+						%(repo_id)s,
+						%(pullrequest_number)s),
+						%(comment_id)s,
+						%(comment_text)s,
+						%(author_login)s,
+						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
+						(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
+						)
+
+				ON CONFLICT DO NOTHING
+				;''',(i for i in items_list if i['element_type']=='pullrequest_comment'))
+
+		else:
+			db.cursor.executemany('''
+					INSERT OR IGNORE INTO pullrequest_comments(created_at,repo_id,pullrequest_number,comment_id,comment_text,author_login,author_id,identity_type_id)
+				VALUES(:created_at,
+						:repo_id,
+						:pullrequest_number,
+						:comment_id,
+						:comment_text,
+						:author_login,
+						(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
+						(SELECT id FROM identity_types WHERE name=:target_identity_type)
+						)
+				;''',(i for i in items_list if i['element_type']=='pullrequest_comment'))
+
+
+		if commit:
+			db.connection.commit()
+
+	def insert_labels(self,items_list,commit=True,db=None):
+		if db is None:
+			db = self.db
+		if db.db_type == 'postgres':
+			extras.execute_batch(db.cursor,'''
+				INSERT INTO pullrequest_labels(repo_id,pullrequest_number,label)
+				VALUES(%(repo_id)s,
+						%(pullrequest_number)s),
+						%(label)s
+						)
+
+				ON CONFLICT DO NOTHING
+				;''',(i for i in items_list if i['element_type']=='pullrequest_label'))
+
+		else:
+			db.cursor.executemany('''
+					INSERT OR IGNORE INTO pullrequest_labels(repo_id,pullrequest_number,label)
+				VALUES(:repo_id,
+						:pullrequest_number,
+						:label
+						)
+				;''',(i for i in items_list if i['element_type']=='pullrequest_label'))
+
 
 		if commit:
 			db.connection.commit()
@@ -2827,7 +3267,7 @@ class SponsorablesGQLFiller(GHGQLFiller):
 						err_text = 'Timeout threshold reached {}, marking query as to be discarded {}: {}'.format(requester.retries,e.__class__,e)
 						self.logger.error(err_text)
 						db.log_error(err_text)
-						db.insert_update(table=self.items_name,success=False)
+						self.insert_update(db=db,success=False)
 						elt_list.pop(0)
 						return
 					else:
@@ -2841,7 +3281,7 @@ class SponsorablesGQLFiller(GHGQLFiller):
 						end_cursor_json = None
 					else:
 						end_cursor_json = json.dumps({'end_cursor':end_cursor})
-					db.insert_update(table=self.items_name,success=True,info=end_cursor_json)
+					self.insert_update(db=db,success=True,info=end_cursor_json)
 				else:
 					# loop
 					while pageinfo['hasNextPage']:
@@ -2857,7 +3297,7 @@ class SponsorablesGQLFiller(GHGQLFiller):
 							# detect loop end
 							if not pageinfo['hasNextPage']:
 								# insert update success True (+ end cursor)
-								db.insert_update(table=self.items_name,success=True,info=end_cursor_json,autocommit=True)
+								self.insert_update(db=db,success=True,info=end_cursor_json,autocommit=True)
 								nb_items = self.get_nb_items(result)
 								if nb_items is not None:
 									self.logger.info('Filled {}: {}'.format(self.items_name,nb_items))
@@ -2866,7 +3306,7 @@ class SponsorablesGQLFiller(GHGQLFiller):
 							else:
 
 								# insert partial update with endcursor value and success NULL (?)
-								db.insert_update(table=self.items_name,success=None,info=end_cursor_json)
+								self.insert_update(db=db,success=None,info=end_cursor_json)
 								db.connection.commit()
 								# continue query
 								try:
@@ -2876,7 +3316,7 @@ class SponsorablesGQLFiller(GHGQLFiller):
 										err_text = 'Timeout threshold reached {}, marking query as to be discarded {}: {}'.format(requester.retries,e.__class__,e)
 										self.logger.error(err_text)
 										db.log_error(err_text)
-										db.insert_update(table=self.items_name,success=True,info=end_cursor_json)
+										self.insert_update(db=db,success=True,info=end_cursor_json)
 										elt_list.pop(0)
 										break
 									else:

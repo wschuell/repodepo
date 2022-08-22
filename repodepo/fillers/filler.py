@@ -9,6 +9,7 @@ import json
 import subprocess
 import gzip
 import shutil
+import pygit2
 
 logger = logging.getLogger(__name__)
 ch = logging.StreamHandler()
@@ -111,3 +112,29 @@ class Filler(object):
 				shutil.copyfileobj(f_in, f_out)
 		if clean_zip:
 			os.remove(orig_file)
+
+	def clone_repo(self,repo_url,update=False,replace=False,repo_folder=None,**kwargs):
+		'''
+		Clones a repo locally.
+		If update is True, will execute git pull. Beware, this can fail, and silently. Safe way to update is with replace, but more costly
+		'''
+		if repo_folder is None:
+			repo_folder = repo_url.split('/')[-1]
+			if repo_folder.endswith('.git'):
+				repo_folder = repo_folder[:-4]
+		repo_folder = os.path.join(self.data_folder,repo_folder)
+		if os.path.exists(repo_folder):
+			if replace:
+				self.logger.info(f'Removing folder {repo_folder}')
+				shutil.rmtree(repo_folder)
+			elif update:
+				self.logger.info(f'Updating repo in {repo_folder}')
+				cmd2 = 'git pull --force --all'
+				cmd_output2 = subprocess.check_output(cmd2.split(' '),cwd=repo_folder, env=os.environ.update(dict(GIT_TERMINAL_PROMPT='0')))
+			else:
+				self.logger.info(f'Folder {repo_folder} exists, skipping cloning')
+		elif not os.path.exists(os.path.dirname(repo_folder)):
+			os.makedirs(os.path.dirname(repo_folder))
+		if not os.path.exists(repo_folder):
+			self.logger.info(f'Cloning {repo_url} into {repo_folder}')
+			pygit2.clone_repository(url=repo_url,path=repo_folder)
