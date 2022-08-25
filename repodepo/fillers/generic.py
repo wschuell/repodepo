@@ -335,7 +335,7 @@ got: {}'''.format(headers))
 							AND p.id=v.package_id AND v.version_str=:version_str),
 						(SELECT id FROM packages WHERE source_id=:package_source_id AND insource_id=:depending_on_package),
 						:semver_str
-					WHERE EXISTS (SELECT id FROM packages WHERE source_id=%(package_source_id)s AND insource_id=:depending_on_package)
+					WHERE EXISTS (SELECT id FROM packages WHERE source_id=:package_source_id AND insource_id=:depending_on_package)
 					;''',({'version_package_id':vp_id,'version_str':v_str,'depending_on_package':dop_id,'package_source_id':self.source_id,'semver_str':semver_str} for (vp_id,v_str,dop_id,semver_str) in package_deps_list))
 
 

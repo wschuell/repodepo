@@ -381,4 +381,8 @@ For deps and versions info: https://github.com/JuliaRegistries/General
 
 versions : working number but not date. Necessary to walk the general repo for additions of the entries in all Versions.toml
 
+
+
+!!! some deps are broken! Package in Deps.toml does not exist (anymore?) in the registry
+for the moment silently ignoring
 '''
