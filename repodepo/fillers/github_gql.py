@@ -2528,7 +2528,7 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 				INSERT INTO issue_reactions(created_at,repo_id,issue_number,reaction,author_login,author_id,identity_type_id)
 				VALUES(%(created_at)s,
 						%(repo_id)s,
-						%(issue_number)s),
+						%(issue_number)s,
 						%(reaction)s,
 						%(author_login)s,
 						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
@@ -2563,7 +2563,7 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 				INSERT INTO issue_comment_reactions(created_at,repo_id,issue_number,comment_id,reaction,author_login,author_id,identity_type_id)
 				VALUES(%(created_at)s,
 						%(repo_id)s,
-						%(issue_number)s),
+						%(issue_number)s,
 						%(comment_id)s,
 						%(reaction)s,
 						%(author_login)s,
@@ -2600,7 +2600,7 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 				INSERT INTO issue_comments(created_at,repo_id,issue_number,comment_id,comment_text,author_login,author_id,identity_type_id)
 				VALUES(%(created_at)s,
 						%(repo_id)s,
-						%(issue_number)s),
+						%(issue_number)s,
 						%(comment_id)s,
 						%(comment_text)s,
 						%(author_login)s,
@@ -2636,7 +2636,7 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 			extras.execute_batch(db.cursor,'''
 				INSERT INTO issue_labels(repo_id,issue_number,label)
 				VALUES(%(repo_id)s,
-						%(issue_number)s),
+						%(issue_number)s,
 						%(label)s
 						)
 
@@ -2910,7 +2910,7 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 				INSERT INTO pullrequest_reactions(created_at,repo_id,pullrequest_number,reaction,author_login,author_id,identity_type_id)
 				VALUES(%(created_at)s,
 						%(repo_id)s,
-						%(pullrequest_number)s),
+						%(pullrequest_number)s,
 						%(reaction)s,
 						%(author_login)s,
 						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
@@ -2945,7 +2945,7 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 				INSERT INTO pullrequest_comment_reactions(created_at,repo_id,pullrequest_number,comment_id,reaction,author_login,author_id,identity_type_id)
 				VALUES(%(created_at)s,
 						%(repo_id)s,
-						%(pullrequest_number)s),
+						%(pullrequest_number)s,
 						%(comment_id)s,
 						%(reaction)s,
 						%(author_login)s,
@@ -2982,7 +2982,7 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 				INSERT INTO pullrequest_comments(created_at,repo_id,pullrequest_number,comment_id,comment_text,author_login,author_id,identity_type_id)
 				VALUES(%(created_at)s,
 						%(repo_id)s,
-						%(pullrequest_number)s),
+						%(pullrequest_number)s,
 						%(comment_id)s,
 						%(comment_text)s,
 						%(author_login)s,
@@ -3018,7 +3018,7 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 			extras.execute_batch(db.cursor,'''
 				INSERT INTO pullrequest_labels(repo_id,pullrequest_number,label)
 				VALUES(%(repo_id)s,
-						%(pullrequest_number)s),
+						%(pullrequest_number)s,
 						%(label)s
 						)
 

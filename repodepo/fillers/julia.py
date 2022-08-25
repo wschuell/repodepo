@@ -144,10 +144,25 @@ class JuliaGeneralFiller(generic.PackageFiller):
 
 		# packages		
 		self.package_list = []
+		package_uuids = set()
+		removed_packages = []
 		for p in glob.glob(os.path.join(data_folder,self.repo_folder,'?','*')):
 			content = toml.load(os.path.join(p,'Package.toml')) 
 			elt = (content['uuid'],content['name'],self.package_dates[content['name']],content['repo'])
 			self.package_list.append(elt)
+			package_uuids.add(content['uuid'])
+		for p in glob.glob(os.path.join(data_folder,self.repo_folder,'?','*')):
+			content = toml.load(os.path.join(p,'Package.toml')) 
+			if content['name'] != 'julia':
+				content_deps = toml.load(os.path.join(p,'Deps.toml')) 
+				
+				for v,v_deps in content_deps.items():
+					for d,d_uuid in v_deps.items():
+						if d_uuid not in package_uuids:
+							package_uuids.add(d_uuid)
+							elt = (d_uuid,d,None,None)
+							removed_packages.append(elt)
+		self.package_list += removed_packages
 		
 		# package versions		
 		self.package_version_list = []
