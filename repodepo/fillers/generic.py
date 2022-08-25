@@ -300,13 +300,14 @@ got: {}'''.format(headers))
 			if self.db.db_type == 'postgres':
 				extras.execute_batch(self.db.cursor,'''
 					INSERT INTO package_dependencies(depending_version,depending_on_package,semver_str)
-					VALUES(
+					SELECT
 						(SELECT v.id FROM package_versions v
 							INNER JOIN packages p
 							ON p.source_id=%(package_source_id)s AND p.insource_id=%(version_package_id)s
 							AND p.id=v.package_id AND v.version_str=%(version_str)s),
 						(SELECT id FROM packages WHERE source_id=%(package_source_id)s AND insource_id=%(depending_on_package)s),
-						%(semver_str)s)
+						%(semver_str)s
+					WHERE EXISTS (SELECT id FROM packages WHERE source_id=%(package_source_id)s AND insource_id=%(depending_on_package)s)
 					ON CONFLICT DO NOTHING
 					;''',({'version_package_id':vp_id,'version_str':v_str,'depending_on_package':dop_id,'package_source_id':self.source_id,'semver_str':semver_str} for (vp_id,v_str,dop_id,semver_str) in package_deps_list),
 					page_size=self.page_size)
@@ -327,13 +328,14 @@ got: {}'''.format(headers))
 			else:
 				self.db.cursor.executemany('''
 					INSERT OR IGNORE INTO package_dependencies(depending_version,depending_on_package,semver_str)
-					VALUES(
+					SELECT
 						(SELECT v.id FROM package_versions v
 							INNER JOIN packages p
 							ON p.source_id=:package_source_id AND p.insource_id=:version_package_id
 							AND p.id=v.package_id AND v.version_str=:version_str),
 						(SELECT id FROM packages WHERE source_id=:package_source_id AND insource_id=:depending_on_package),
-						:semver_str)
+						:semver_str
+					WHERE EXISTS (SELECT id FROM packages WHERE source_id=%(package_source_id)s AND insource_id=:depending_on_package)
 					;''',({'version_package_id':vp_id,'version_str':v_str,'depending_on_package':dop_id,'package_source_id':self.source_id,'semver_str':semver_str} for (vp_id,v_str,dop_id,semver_str) in package_deps_list))
 
 

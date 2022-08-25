@@ -8,9 +8,33 @@ import oyaml as yaml
 import pygit2
 import subprocess
 import csv
+import semantic_version
 
 from .. import fillers
 from ..fillers import generic
+
+
+def pseudosemver_check(version,pattern):
+	version = version.replace('"','').replace('[','').replace(']','')
+	pattern = pattern.replace('"','').replace('[','').replace(']','')
+
+	if version == pattern:
+		return True
+	else:
+		if '-' not in pattern:
+			min_pattern = pattern
+			max_pattern = pattern
+		else:
+			parts = pattern.split('-')
+			if len(parts) != 2:
+				raise SyntaxError(f'Range semver pattern not parseable: {pattern}')
+			else:
+				min_pattern = parts[0]
+				max_pattern = parts[1]
+		min_cond = semantic_version.Version(version) in semantic_version.SimpleSpec(f'>={min_pattern}')
+		max_cond = semantic_version.Version(version) in semantic_version.SimpleSpec(f'<={max_pattern}')
+		return (min_cond and max_cond)
+
 
 class JuliaHubFiller(generic.PackageFiller):
 	"""
@@ -116,13 +140,16 @@ class JuliaGeneralFiller(generic.PackageFiller):
 		self.clone_repo(repo_url=self.repo_url,repo_folder=self.repo_folder,update=self.update_repo,replace=self.replace_repo)
 
 		self.get_dates()
-		
+
+
+		# packages		
 		self.package_list = []
 		for p in glob.glob(os.path.join(data_folder,self.repo_folder,'?','*')):
 			content = toml.load(os.path.join(p,'Package.toml')) 
 			elt = (content['uuid'],content['name'],self.package_dates[content['name']],content['repo'])
 			self.package_list.append(elt)
 		
+		# package versions		
 		self.package_version_list = []
 		for p in glob.glob(os.path.join(data_folder,self.repo_folder,'?','*')):
 			content_p = toml.load(os.path.join(p,'Package.toml')) 
@@ -149,6 +176,19 @@ class JuliaGeneralFiller(generic.PackageFiller):
 				pk_cnt = ans[0]
 				if len(self.package_list) == pk_cnt:
 					self.package_list = []
+					self.package_version_list = []
+					self.package_version_download_list = []
+
+		# package version deps
+		self.parse_deps()
+
+		self.package_deps_list = []
+		for p,v_deps in self.deps_content.items():
+			for v,deps in v_deps.items():
+				for d,dv in deps.items():
+					self.package_deps_list.append((p,v,d,dv)) ## p and v are uuid not package name
+
+
 
 		self.db.connection.commit()
 
@@ -281,6 +321,49 @@ class JuliaGeneralFiller(generic.PackageFiller):
 			self.package_dates[p] = min([t for t in versions.values()])
 
 
+	def parse_deps(self):
+		'''
+		parsing dependencies from toml files.
+		Output format: {package1:{version1:{dep1:depv1}}}
+		'''
+		if not hasattr(self,'deps_content'):
+			self.deps_content = {}
+			p_list = sorted(glob.glob(os.path.join(self.data_folder,self.repo_folder,'?','*')))
+			for i,p in enumerate(p_list):
+				content_p = toml.load(os.path.join(p,'Package.toml')) 
+				if content_p['name'] == 'julia':
+					continue
+				else:
+					self.logger.info(f'''Parsing dependencies for package {content_p['name']} ({i+1}/{len(p_list)})''')
+				content_v = toml.load(os.path.join(p,'Versions.toml'))
+				content_d = toml.load(os.path.join(p,'Deps.toml')) 
+				content_c = toml.load(os.path.join(p,'Compat.toml'))
+				
+				versions = [v.replace('"','').replace('[','').replace(']','') for v in content_v.keys()]
+				p_name = content_p['name']
+				p_uuid = content_p['uuid']
+
+				self.deps_content[p_uuid] = {}
+				
+				uuid_dict = {}
+				for categ_d,deps in content_d.items():
+					for dep,d_uuid in deps.items():
+						uuid_dict[dep] = d_uuid
+				uuid_dict['julia'] = "1222c4b2-2114-5bfd-aeef-88e4692bbb3e"
+
+				for v in versions:
+					deps_v = {}
+					for categ_d,deps in content_d.items():
+						if pseudosemver_check(version=v,pattern=categ_d):
+							for dep,d_uuid in deps.items():
+								deps_v[d_uuid] = '*'
+					
+					for categ_c,deps in content_c.items():
+						if pseudosemver_check(version=v,pattern=categ_d):
+							for dep,sv in deps.items():
+								deps_v[uuid_dict[dep]] = str(sv)
+
+					self.deps_content[p_uuid][v] = deps_v
 
 '''
 https://julialang-logs.s3.amazonaws.com/public_outputs/current/package_requests_by_date.csv.gz

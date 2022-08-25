@@ -11,3 +11,4 @@ sh
 psutil
 python-dateutil
 networkx
+semantic-version
