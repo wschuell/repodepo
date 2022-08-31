@@ -51,7 +51,7 @@ def test_github_gql(testdb):
 	# testdb.add_filler(github_gql.UserLanguagesGQLFiller(fail_on_wait=True,workers=workers,start=datetime.datetime(2015,1,1),end=datetime.datetime.now()))
 	testdb.add_filler(github_gql.UserLanguagesGQLFiller(fail_on_wait=True,workers=workers,start=None,end=datetime.datetime.now()))
 	testdb.add_filler(github_gql.SponsorsUserFiller(fail_on_wait=True,workers=workers))
-	testdb.add_filler(github_gql.CommitCommentsGQLFiller(fail_on_wait=True,workers=workers))
+	testdb.add_filler(github_gql.CommitCommentsGQLFiller(fail_on_wait=True,workers=workers,secondary_page_size=1))
 	testdb.add_filler(github_gql.IssuesGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.PullRequestsGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.BackwardsSponsorsUserFiller(fail_on_wait=True,workers=workers))

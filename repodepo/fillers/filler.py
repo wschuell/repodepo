@@ -70,7 +70,11 @@ class Filler(object):
 		pass
 
 
+	def check_requirements(self):
+		return True
 
+	def after_insert(self):
+		pass
 
 
 	def download(self,url,destination,wget=False,force=False):

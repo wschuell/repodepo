@@ -337,9 +337,12 @@ class Database(object):
 				f.prepare()
 				self.logger.info('Prepared filler {}'.format(f.name))
 				if not f.done:
-					f.apply()
-					f.done = True
-					self.logger.info('Filled with filler {}'.format(f.name))
+					if not f.check_requirements():
+						raise Exception(f'Requirements not fulfilled for filler: {f.name}')
+					else:
+						f.apply()
+						f.done = True
+						self.logger.info('Filled with filler {}'.format(f.name))
 			else:
 				self.logger.info('Already filled with filler {}, skipping'.format(f.name))
 		self.connection.commit()
@@ -347,11 +350,12 @@ class Database(object):
 	def add_filler(self,f):
 		if f.name in [ff.name for ff in self.fillers if ff.unique_name]:
 			self.logger.warning('Filler {} already present'.format(f.name))
-			return
-		f.db = self
-		self.fillers.append(f)
-		f.logger = self.logger
-		self.logger.info('Added filler {}'.format(f.name))
+		else:
+			f.db = self
+			self.fillers.append(f)
+			f.logger = self.logger
+			f.after_insert()
+			self.logger.info('Added filler {}'.format(f.name))
 
 	def register_repo(self,source,owner,repo,cloned=False):
 		'''
@@ -1470,7 +1474,10 @@ class Database(object):
 		Inserting an update in table_updates
 		'''
 		if isinstance(info,dict):
-			info = json.dumps(info)
+			if len(info.keys()) == 0:
+				info = None
+			else:
+				info = json.dumps(info)
 		if self.db_type == 'postgres':
 			self.cursor.execute('''INSERT INTO table_updates(repo_id,identity_id,table_name,success,info)
 				VALUES(%s,%s,%s,%s,%s)

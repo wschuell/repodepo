@@ -200,7 +200,35 @@ class GHGQLFiller(github_rest.GithubFiller):
 			self.other_update_names = []
 		else:
 			self.other_update_names = copy.deepcopy(other_update_names)
+		if not hasattr(self,'sub_queried_obj'):
+			self.sub_queried_obj = self.queried_obj
 		github_rest.GithubFiller.__init__(self,identity_type=target_identity_type,**kwargs)
+
+	def get_generic_kwargs(self):
+		return dict(
+				requester_class=self.Requester,
+				source_name=self.source_name,
+				target_identity_type=self.target_identity_type,
+				retry_fails_permanent=self.retry_fails_permanent,
+				init_page_size=self.init_page_size,
+				max_page_size=self.max_page_size,
+				secondary_page_size=self.secondary_page_size,
+				# other_update_names = self.other_update_names,
+				data_folder=self.data_folder,
+				querymin_threshold=self.querymin_threshold,
+				per_page=self.per_page,
+				env_apikey=self.env_apikey,
+				workers=self.workers,
+				# identity_type=self.identity_type,
+				no_unauth=self.no_unauth,
+				api_keys_file=self.api_keys_file,
+				api_keys=self.api_keys,
+				fail_on_wait=self.fail_on_wait,
+				start_offset=self.start_offset,
+				retry=self.retry,
+				force=self.force,
+				incremental_update=self.incremental_update,
+				)
 
 	def apply(self):
 		self.fill_items(elt_list=self.elt_list,workers=self.workers,incremental_update=self.incremental_update)
@@ -323,8 +351,17 @@ class GHGQLFiller(github_rest.GithubFiller):
 				new_elt = True
 				while len(elt_list):
 					current_elt = elt_list[0]
+					local_additional_query_attributes = {}
+					update_info = {}
 					if self.queried_obj == 'repo':
-						source,owner,repo_name,repo_id,end_cursor_orig = current_elt
+						if self.sub_queried_obj != 'repo':
+							source,owner,repo_name,repo_id,sq_id,sq_gql_id,end_cursor_orig = current_elt
+							local_additional_query_attributes[self.sub_queried_obj+'_id'] = sq_id
+							local_additional_query_attributes[self.sub_queried_obj+'_gql_id'] = sq_gql_id
+							update_info[self.sub_queried_obj+'_id'] = sq_id
+							update_info[self.sub_queried_obj+'_gql_id'] = sq_gql_id
+						else:
+							source,owner,repo_name,repo_id,end_cursor_orig = current_elt
 						identity_id = None
 						identity_type_id = None
 						email = None
@@ -353,6 +390,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 
 					params = {'repo_owner':owner,'repo_name':repo_name,'user_login':login,'commit_sha':commit_sha,'after_end_cursor':end_cursor,'page_size':self.get_page_size(),'secondary_page_size':self.secondary_page_size}
 					params.update(self.additional_query_attributes())
+					params.update(local_additional_query_attributes)
 					# first request (with endcursor)
 					paginated_query = requester.paginated_query(gql_query=self.query_string(),params=params,pageinfo_path=self.pageinfo_path)
 					try:
@@ -362,7 +400,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 							err_text = 'Timeout threshold reached {}, marking query as to be discarded {}: {}'.format(requester.retries,e.__class__,e)
 							self.logger.error(err_text)
 							db.log_error(err_text)
-							self.insert_update(db=db,identity_id=identity_id,repo_id=repo_id,success=False)
+							self.insert_update(db=db,identity_id=identity_id,repo_id=repo_id,success=False,info=update_info)
 							elt_list.pop(0)
 							new_elt = True
 							elt_nb += 1
@@ -373,7 +411,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 					# catch non existent
 					if (self.queried_obj=='repo' and result['repository'] is None) or (self.queried_obj=='user' and result['user'] is None):
 						self.logger.info('No such {}: {} ({}/{})'.format(self.queried_obj,elt_name,elt_nb,total_elt))
-						self.insert_update(db=db,identity_id=identity_id,repo_id=repo_id,success=False)
+						self.insert_update(db=db,identity_id=identity_id,repo_id=repo_id,success=False,info=update_info)
 						elt_list.pop(0)
 						new_elt = True
 						elt_nb += 1
@@ -403,11 +441,13 @@ class GHGQLFiller(github_rest.GithubFiller):
 					parsed_result = self.parse_query_result(result,repo_id=repo_id,identity_id=identity_id,identity_type_id=identity_type_id)
 					if len(parsed_result) == 0:
 						self.logger.info('No new {} for {} {} ({}/{})'.format(self.items_name,self.queried_obj,elt_name,elt_nb,total_elt))
-						if end_cursor is None:
-							end_cursor_json = None
-						else:
-							end_cursor_json = json.dumps({'end_cursor':end_cursor})
-						self.insert_update(db=db,identity_id=identity_id,repo_id=repo_id,success=True,info=end_cursor_json)
+						# if end_cursor is None:
+						# 	end_cursor_json = None
+						# else:
+						# 	end_cursor_json = json.dumps({'end_cursor':end_cursor})
+						if end_cursor is not None:
+							update_info.update({'end_cursor':end_cursor})
+						self.insert_update(db=db,identity_id=identity_id,repo_id=repo_id,success=True,info=update_info)
 						elt_list.pop(0)
 						new_elt = True
 						elt_nb += 1
@@ -415,14 +455,14 @@ class GHGQLFiller(github_rest.GithubFiller):
 
 					if (self.queried_obj=='email' and parsed_result[0]['repo_owner'] is None):
 						self.logger.info('No such repo: {}/{} for email {} ({}/{})'.format(owner,repo_name,elt_name,elt_nb,total_elt))
-						self.insert_update(db=db,identity_id=identity_id,repo_id=repo_id,success=False)
+						self.insert_update(db=db,identity_id=identity_id,repo_id=repo_id,success=False,info=update_info)
 						elt_list.pop(0)
 						new_elt = True
 						elt_nb += 1
 						continue
 					elif (self.queried_obj=='email' and parsed_result[0]['commit_sha'] is None):
 						self.logger.info('No such commit: {} for email {} ({}/{})'.format(commit_sha,elt_name,elt_nb,total_elt))
-						self.insert_update(db=db,identity_id=identity_id,repo_id=repo_id,success=False)
+						self.insert_update(db=db,identity_id=identity_id,repo_id=repo_id,success=False,info=update_info)
 						elt_list.pop(0)
 						new_elt = True
 						elt_nb += 1
@@ -433,14 +473,12 @@ class GHGQLFiller(github_rest.GithubFiller):
 						# insert results
 						self.insert_items(items_list=parsed_result,commit=True,db=db)
 						end_cursor = pageinfo['endCursor']
-						if end_cursor is None:
-							end_cursor_json = None
-						else:
-							end_cursor_json = json.dumps({'end_cursor':end_cursor})
+						if end_cursor is not None:
+							update_info.update({'end_cursor':end_cursor})
 						# detect loop end
 						if not pageinfo['hasNextPage']:
 							# insert update success True (+ end cursor)
-							self.insert_update(db=db,identity_id=identity_id,repo_id=repo_id,success=True,info=end_cursor_json,autocommit=True)
+							self.insert_update(db=db,identity_id=identity_id,repo_id=repo_id,success=True,info=update_info,autocommit=True)
 							db.connection.commit()
 							# clean partial updates with NULL success (?)
 							# db.clean_null_updates(identity_id=identity_id,repo_id=repo_id,table=self.items_name,autocommit=True)
@@ -457,7 +495,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 							break
 						else:
 							# insert partial update with endcursor value and success NULL (?)
-							self.insert_update(db=db,identity_id=identity_id,repo_id=repo_id,success=None,info=end_cursor_json)
+							self.insert_update(db=db,identity_id=identity_id,repo_id=repo_id,success=None,info=update_info)
 							db.connection.commit()
 							# continue query
 							try:
@@ -467,7 +505,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 									err_text = 'Timeout threshold reached {}, marking query as to be discarded {}: {}'.format(requester.retries,e.__class__,e)
 									self.logger.error(err_text)
 									db.log_error(err_text)
-									self.insert_update(db=db,identity_id=identity_id,repo_id=repo_id,success=False)
+									self.insert_update(db=db,identity_id=identity_id,repo_id=repo_id,success=False,info=update_info)
 									elt_list.pop(0)
 									new_elt = True
 									elt_nb += 1
@@ -482,7 +520,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 				if e.__class__ == RuntimeError and 'cannot schedule new futures after shutdown' in str(e):
 					raise
 				elif e.__class__ == asyncio.TimeoutError and self.retry_fails_permanent:
-					self.insert_update(db=db,identity_id=identity_id,repo_id=repo_id,success=False,info=end_cursor_json)
+					self.insert_update(db=db,identity_id=identity_id,repo_id=repo_id,success=False,info=update_info)
 					self.logger.error(err_text+' retry_fails_permanent is set to True')
 				if in_thread:
 					self.logger.error(err_text)
@@ -506,14 +544,16 @@ class GHGQLFiller(github_rest.GithubFiller):
 						break
 
 
-	def set_element_list(self,queried_obj=None,items_name=None):
+	def set_element_list(self,sub_queried_obj=None,queried_obj=None,items_name=None):
 
+		if sub_queried_obj is None:
+			sub_queried_obj = self.sub_queried_obj
 		if queried_obj is None:
 			queried_obj = self.queried_obj
 		if items_name is None:
 			items_name = self.items_name
 
-		if queried_obj == 'repo':
+		if sub_queried_obj == 'repo':
 			if self.db.db_type == 'postgres':
 				if self.force:
 					self.db.cursor.execute('''
@@ -587,7 +627,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 				if self.force:
 					self.db.cursor.execute('''
 							SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-								(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
+								(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, json_extract(tu.info,'$.end_cursor') as end_cursor
 									FROM repositories r
 									INNER JOIN sources s
 									ON s.id=r.source AND s.name=:source_name
@@ -608,7 +648,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 				elif self.retry:
 					self.db.cursor.execute('''
 							SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-								(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
+								(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, json_extract(tu.info,'$.end_cursor') as end_cursor
 									FROM repositories r
 									INNER JOIN sources s
 									ON s.id=r.source AND s.name=:source_name
@@ -630,7 +670,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 				else:
 					self.db.cursor.execute('''
 							SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-								(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
+								(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, json_extract(tu.info,'$.end_cursor') as end_cursor
 									FROM repositories r
 									INNER JOIN sources s
 									ON s.id=r.source AND s.name=:source_name
@@ -651,15 +691,15 @@ class GHGQLFiller(github_rest.GithubFiller):
 					;''',{'source_name':self.source_name,'table_name':items_name})
 
 
-				elt_list = list(self.db.cursor.fetchall())
+				self.elt_list = list(self.db.cursor.fetchall())
 
-				# specific to sqlite because no internal json parsing implemented in query
-				self.elt_list = []
-				for (source,owner,name,repo_id,end_cursor_info) in elt_list:
-					try:
-						self.elt_list.append((source,owner,name,repo_id,json.loads(end_cursor_info)['end_cursor']))
-					except:
-						self.elt_list.append((source,owner,name,repo_id,None))
+				# # specific to sqlite because no internal json parsing implemented in query
+				# self.elt_list = []
+				# for (source,owner,name,repo_id,end_cursor_info) in elt_list:
+				# 	try:
+				# 		self.elt_list.append((source,owner,name,repo_id,json.loads(end_cursor_info)['end_cursor']))
+				# 	except:
+				# 		self.elt_list.append((source,owner,name,repo_id,None))
 
 			if self.start_offset is not None:
 				self.elt_list = [r for r in self.elt_list if r[1]>=self.start_offset]
@@ -667,7 +707,149 @@ class GHGQLFiller(github_rest.GithubFiller):
 
 
 	################################################################
-		elif queried_obj == 'user':
+		elif queried_obj == 'repo' and sub_queried_obj != 'repo':
+			#source,owner,repo_name,repo_id,comment_id,comment_gql_id,end_cursor_orig
+			if self.db.db_type == 'postgres':
+				if self.retry:
+					
+					self.db.cursor.execute('''
+						SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.sq_id,t1.sq_gql_id,t2.info ->> 'end_cursor' AS end_cursor FROM
+							(SELECT s.id AS sid,
+									r.owner AS rowner,
+									r.name AS rname,
+									r.id AS rid,
+									tu.info ->> (%(sub_queried_obj)s||'_id') as sq_id,
+									tu.info ->> (%(sub_queried_obj)s||'_gql_id') as sq_gql_id,
+									--tu.info ->> 'end_cursor' as end_cursor
+									MAX(tu.updated_at) AS max_updated_at
+								FROM table_updates tu
+								INNER JOIN sources s
+								ON table_name=%(table_name)s
+								AND sq_id IS NOT NULL
+								AND sq_gql_id IS NOT NULL
+								AND s.name=%(source_name)s
+								INNER JOIN repositories r
+								ON s.id=r.source AND tu.repo_id=r.id
+								GROUP BY sid,rowner,rname,rid,sq_id,sq_gql_id
+								HAVING SUM(CASE WHEN (tu.success IS NULL OR NOT tu.success) THEN 0 ELSE 1 END)=0
+							) AS t1
+						INNER JOIN table_updates t2
+							ON t2.repo_id=t1.rid
+							AND t2.table_name=%(table_name)s
+							--AND tu.info ->>( %(sub_queried_obj)s||'_id') = t1.sq_id
+							AND t2.info ->> (%(sub_queried_obj)s||'_gql_id') = t1.sq_gql_id
+							AND t2.updated_at=t1.max_updated_at
+					;''',{'source_name':self.source_name,'table_name':items_name,'sub_queried_obj':sub_queried_obj})
+				else:
+					self.db.cursor.execute('''
+						SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.sq_id,t1.sq_gql_id,t2.info ->> 'end_cursor' AS end_cursor FROM
+							(SELECT s.id AS sid,
+									r.owner AS rowner,
+									r.name AS rname,
+									r.id AS rid,
+									tu.info ->> (%(sub_queried_obj)s||'_id') as sq_id,
+									tu.info ->> (%(sub_queried_obj)s||'_gql_id') as sq_gql_id,
+									--tu.info ->> 'end_cursor' as end_cursor
+									MAX(tu.updated_at) AS max_updated_at
+								FROM table_updates tu
+								INNER JOIN sources s
+								ON table_name=%(table_name)s
+								AND tu.info ->> (%(sub_queried_obj)s||'_id') IS NOT NULL
+								AND tu.info ->> (%(sub_queried_obj)s||'_gql_id') IS NOT NULL
+								AND s.name=%(source_name)s
+								INNER JOIN repositories r
+								ON s.id=r.source AND tu.repo_id=r.id
+								GROUP BY sid,rowner,rname,rid,sq_id,sq_gql_id
+								HAVING SUM(CASE WHEN tu.success IS NULL THEN 0 ELSE 1 END)=0
+							) AS t1
+						INNER JOIN table_updates t2
+							ON t2.repo_id=t1.rid
+							AND t2.table_name=%(table_name)s
+							--AND tu.info ->> (%(sub_queried_obj)s||'_id') = t1.sq_id
+							AND t2.info ->> (%(sub_queried_obj)s||'_gql_id') = t1.sq_gql_id
+							AND t2.updated_at=t1.max_updated_at
+					;''',{'source_name':self.source_name,'table_name':items_name,'sub_queried_obj':sub_queried_obj})
+
+				self.elt_list = list(self.db.cursor.fetchall())
+
+			else:
+				if self.retry:
+					self.db.cursor.execute('''
+						SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.sq_id,t1.sq_gql_id,json_extract(t2.info, '$.end_cursor') AS end_cursor FROM
+							(SELECT s.id AS sid,
+									r.owner AS rowner,
+									r.name AS rname,
+									r.id AS rid,
+									json_extract(tu.info, '$.' || :sub_queried_obj || '_id') as sq_id,
+									json_extract(tu.info, '$.' || :sub_queried_obj || '_gql_id') as sq_gql_id,
+									--tu.info ->> 'end_cursor' as end_cursor
+									MAX(tu.updated_at) AS max_updated_at
+								FROM table_updates tu
+								INNER JOIN sources s
+								ON table_name=:table_name
+								AND json_extract(tu.info, '$.' || :sub_queried_obj || '_id') IS NOT NULL
+								AND json_extract(tu.info, '$.' || :sub_queried_obj || '_gql_id') IS NOT NULL
+								AND s.name=:source_name
+								INNER JOIN repositories r
+								ON s.id=r.source AND tu.repo_id=r.id
+								GROUP BY sid,rowner,rname,rid,sq_id,sq_gql_id
+								HAVING SUM(CASE WHEN (tu.success IS NULL OR NOT tu.success) THEN 0 ELSE 1 END)=0
+							) AS t1
+						INNER JOIN table_updates t2
+							ON t2.repo_id=t1.rid
+							AND t2.table_name=:table_name
+							--AND tu.info ->> :sub_queried_obj||'_id' = t1.sq_id
+							AND json_extract(t2.info, '$.' || :sub_queried_obj || '_gql_id') = t1.sq_gql_id
+							AND t2.updated_at=t1.max_updated_at
+					;''',{'source_name':self.source_name,'table_name':items_name,'sub_queried_obj':sub_queried_obj})
+				else:
+					self.db.cursor.execute('''
+						SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.sq_id,t1.sq_gql_id,json_extract(t2.info, '$.end_cursor') AS end_cursor FROM
+							(SELECT s.id AS sid,
+									r.owner AS rowner,
+									r.name AS rname,
+									r.id AS rid,
+									json_extract(tu.info, '$.' || :sub_queried_obj || '_id') as sq_id,
+									json_extract(tu.info, '$.' || :sub_queried_obj || '_gql_id') as sq_gql_id,
+									--tu.info ->> 'end_cursor' as end_cursor
+									MAX(tu.updated_at) AS max_updated_at
+								FROM table_updates tu
+								INNER JOIN sources s
+								ON table_name=:table_name
+								AND json_extract(tu.info, '$.' || :sub_queried_obj || '_id') IS NOT NULL
+								AND json_extract(tu.info, '$.' || :sub_queried_obj || '_gql_id') IS NOT NULL
+								AND s.name=:source_name
+								INNER JOIN repositories r
+								ON s.id=r.source AND tu.repo_id=r.id
+								GROUP BY sid,rowner,rname,rid,sq_id,sq_gql_id
+								HAVING SUM(CASE WHEN tu.success IS NULL THEN 0 ELSE 1 END)=0
+							) AS t1
+						INNER JOIN table_updates t2
+							ON t2.repo_id=t1.rid
+							AND t2.table_name=:table_name
+							--AND tu.info ->> :sub_queried_obj||'_id' = t1.sq_id
+							AND json_extract(t2.info, '$.' || :sub_queried_obj || '_gql_id') = t1.sq_gql_id
+							AND t2.updated_at=t1.max_updated_at
+					;''',{'source_name':self.source_name,'table_name':items_name,'sub_queried_obj':sub_queried_obj})
+
+
+				self.elt_list = list(self.db.cursor.fetchall())
+
+				# # specific to sqlite because no internal json parsing implemented in query
+				# self.elt_list = []
+				# for (source,owner,name,repo_id,end_cursor_info) in elt_list:
+				# 	try:
+				# 		self.elt_list.append((source,owner,name,repo_id,json.loads(end_cursor_info)['end_cursor']))
+				# 	except:
+				# 		self.elt_list.append((source,owner,name,repo_id,None))
+
+			if self.start_offset is not None:
+				self.elt_list = [r for r in self.elt_list if r[1]>=self.start_offset]
+
+
+
+	################################################################
+		elif sub_queried_obj == 'user':
 
 			if self.db.db_type == 'postgres':
 				if self.force:
@@ -742,7 +924,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 				if self.force:
 					self.db.cursor.execute('''
 							SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
+								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, json_extract(tu.info,'$.end_cursor') as end_cursor
 									FROM identities i
 									INNER JOIN identity_types it
 									ON it.id=i.identity_type_id AND it.name=:target_identity_type
@@ -763,7 +945,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 				elif self.retry:
 					self.db.cursor.execute('''
 							SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
+								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, json_extract(tu.info,'$.end_cursor') as end_cursor
 									FROM identities i
 									INNER JOIN identity_types it
 									ON it.id=i.identity_type_id AND it.name=:target_identity_type
@@ -785,7 +967,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 				else:
 					self.db.cursor.execute('''
 							SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info as end_cursor
+								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, json_extract(tu.info,'$.end_cursor') as end_cursor
 									FROM identities i
 									INNER JOIN identity_types it
 									ON it.id=i.identity_type_id AND it.name=:target_identity_type
@@ -806,15 +988,15 @@ class GHGQLFiller(github_rest.GithubFiller):
 					;''',{'target_identity_type':self.target_identity_type,'table_name':items_name})
 
 
-				elt_list = list(self.db.cursor.fetchall())
+				self.elt_list = list(self.db.cursor.fetchall())
 
-				# specific to sqlite because no internal json parsing implemented in query
-				self.elt_list = []
-				for (identity_type_id,login,identity_id,end_cursor_info) in elt_list:
-					try:
-						self.elt_list.append((identity_type_id,login,identity_id,json.loads(end_cursor_info)['end_cursor']))
-					except:
-						self.elt_list.append((identity_type_id,login,identity_id,None))
+				# # specific to sqlite because no internal json parsing implemented in query
+				# self.elt_list = []
+				# for (identity_type_id,login,identity_id,end_cursor_info) in elt_list:
+				# 	try:
+				# 		self.elt_list.append((identity_type_id,login,identity_id,json.loads(end_cursor_info)['end_cursor']))
+				# 	except:
+				# 		self.elt_list.append((identity_type_id,login,identity_id,None))
 
 			if self.start_offset is not None:
 				self.elt_list = [r for r in self.elt_list if r[1]>=self.start_offset]
@@ -1851,16 +2033,135 @@ class RandomCommitLoginsGQLFiller(LoginsGQLFiller):
 		self.elt_list = list(self.db.cursor.fetchall())
 		self.logger.info(self.force)
 
+class CommitCommentReactionsGQLFiller(GHGQLFiller):
+	def __init__(self,**kwargs):
+		self.items_name = 'commit_comment_reactions'
+		self.queried_obj = 'repo'
+		self.sub_queried_obj = 'commit_comment'
+		self.pageinfo_path = ['node','reactions','pageInfo']
+		GHGQLFiller.__init__(self,**kwargs)
+
+	def check_requirements(self):
+		self.db.cursor.execute('''
+			SELECT update_type,updated_at FROM full_updates
+			WHERE update_type='commit_comments'
+			ORDER BY updated_at DESC
+			LIMIT 1
+			;
+			''')
+		ans = list(self.db.cursor.fetchall())
+		if len(ans) == 0:
+			self.logger.info('missing commit_comments filler, necessary prior to commit_comment_reactions')
+			return False
+		else:
+			return True
+
+	def query_string(self,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: python-formatable string representing the graphql query
+		'''
+		return '''query {{
+					repository(owner: "{repo_owner}", name: "{repo_name}") {{
+  							nameWithOwner
+    						id }}
+  					node(id:"{commit_comment_gql_id}") {{
+  					    ... on CommitComment {{
+
+        							commit {{ oid }}
+									databaseId
+									id
+									author {{ login }}
+									bodyText
+									createdAt
+									reactions(first:{page_size}  {after_end_cursor}) {{
+										totalCount
+										pageInfo {{
+											hasNextPage
+											endCursor
+											}}
+										nodes {{
+											createdAt
+											user {{ login }}
+											content
+											}}
+      								}}
+    							
+    							}}
+  							}}
+						}}'''
+
+
+	def parse_query_result(self,query_result,repo_id,identity_id,repo_owner=None,repo_name=None,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: [ {'repo_id':r_id,'repo_owner':r_ow,'repo_name':r_na,'issue_number':issue_na,'issue_title':title_na,'created_at':created_date,'closed_at':closed_date} , ...]
+		'''
+		ans = []
+		if repo_owner is None:
+			repo_owner,repo_name = query_result['repository']['nameWithOwner'].split('/')
+		for e in [query_result['node']]:
+			d = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'commit_comment'}
+			try:
+				# d['created_at'] = e['createdAt']
+				# d['closed_at'] = e['closedAt']
+				d['commit_comment_id'] = e['databaseId']
+				d['commit_comment_gql_id'] = e['id']
+				# d['issue_title'] = e['title']
+				# d['comment_text'] = e['bodyText']
+				d['commit_sha'] = e['commit']['oid']
+
+			except (KeyError,TypeError) as err:
+				self.logger.info('Result triggering error: {} \nError when parsing commit_comments for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+				continue
+			else:
+				ans.append(d)
+				if e['reactions']['totalCount']>0:
+					for ee in e['reactions']['nodes']:
+						r = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'commit_comment_reaction'}
+						r['commit_comment_id'] = d['commit_comment_id']
+						r['commit_comment_gql_id'] = d['commit_comment_gql_id']
+						r['commit_sha'] = d['commit_sha']
+						try:
+							r['created_at'] = ee['createdAt']
+							r['reaction'] = ee['content']
+							try:
+								r['author_login'] = ee['user']['login']
+							except:
+								r['author_login'] = None
+						except (KeyError,TypeError) as err:
+							self.logger.info('Result triggering error: {} \nError when parsing commit_comment_reactions for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+							continue
+						else:
+							ans.append(r)
+		return ans
+
+	def insert_items(self,**kwargs):
+		CommitCommentsGQLFiller.insert_reactions(self,**kwargs)
+
+
+	def get_nb_items(self,query_result):
+		'''
+		In subclasses this has to be implemented
+		output: nb_items or None if not relevant
+		'''
+		return query_result['node']['reactions']['totalCount']
+
 
 class CommitCommentsGQLFiller(GHGQLFiller):
 	'''
 	Querying issues through the GraphQL API
 	'''
-	def __init__(self,**kwargs):
+	def __init__(self,complete_reactions=True,**kwargs):
 		self.items_name = 'commit_comments'
 		self.queried_obj = 'repo'
 		self.pageinfo_path = ['repository','commitComments','pageInfo']
+		self.complete_reactions = complete_reactions
 		GHGQLFiller.__init__(self,**kwargs)
+
+	def after_insert(self):
+		if self.complete_reactions:
+			self.db.add_filler(CommitCommentReactionsGQLFiller(**self.get_generic_kwargs()))
 
 	def query_string(self,**kwargs):
 		'''
@@ -1880,6 +2181,7 @@ class CommitCommentsGQLFiller(GHGQLFiller):
       							nodes {{
         							commit {{ oid }}
 									databaseId
+									id
 									author {{ login }}
 									bodyText
 									createdAt
@@ -1914,7 +2216,8 @@ class CommitCommentsGQLFiller(GHGQLFiller):
 			try:
 				d['created_at'] = e['createdAt']
 				# d['closed_at'] = e['closedAt']
-				d['comment_id'] = e['databaseId']
+				d['commit_comment_id'] = e['databaseId']
+				d['commit_comment_gql_id'] = e['id']
 				# d['issue_title'] = e['title']
 				d['comment_text'] = e['bodyText']
 				d['commit_sha'] = e['commit']['oid']
@@ -1922,6 +2225,8 @@ class CommitCommentsGQLFiller(GHGQLFiller):
 					d['author_login'] = e['author']['login']
 				except (KeyError,TypeError) as err:
 					d['author_login'] = None
+
+				d['reactions_pageinfo'] = e['reactions']['pageInfo']
 
 			except (KeyError,TypeError) as err:
 				self.logger.info('Result triggering error: {} \nError when parsing commit_comments for {}/{}: {}'.format(e,repo_owner,repo_name,err))
@@ -1931,7 +2236,8 @@ class CommitCommentsGQLFiller(GHGQLFiller):
 				if e['reactions']['totalCount']>0:
 					for ee in e['reactions']['nodes']:
 						r = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'commit_comment_reaction'}
-						r['comment_id'] = d['comment_id']
+						r['commit_comment_id'] = d['commit_comment_id']
+						r['commit_comment_gql_id'] = d['commit_comment_gql_id']
 						r['commit_sha'] = d['commit_sha']
 						try:
 							r['created_at'] = ee['createdAt']
@@ -1961,7 +2267,7 @@ class CommitCommentsGQLFiller(GHGQLFiller):
 				VALUES(%(created_at)s,
 						%(repo_id)s,
 						(SELECT id FROM commits WHERE sha=%(commit_sha)s),
-						%(comment_id)s,
+						%(commit_comment_id)s,
 						%(comment_text)s,
 						%(author_login)s,
 						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
@@ -1977,7 +2283,7 @@ class CommitCommentsGQLFiller(GHGQLFiller):
 				VALUES(:created_at,
 						:repo_id,
 						(SELECT id FROM commits WHERE sha=:commit_sha),
-						:comment_id,
+						:commit_comment_id,
 						:comment_text,
 						:author_login,
 						(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
@@ -1990,7 +2296,10 @@ class CommitCommentsGQLFiller(GHGQLFiller):
 		if commit:
 			db.connection.commit()
 
-		self.insert_reactions(items_list=items_list,commit=commit,db=db)
+		self.insert_reactions(items_list=items_list,commit=False,db=db)
+		self.insert_reaction_updates(items_list=items_list,commit=commit,db=db)
+
+		db.cursor.execute('''INSERT INTO full_updates(update_type) SELECT 'commit_comments' ;''')
 
 	def insert_reactions(self,items_list,commit=True,db=None):
 		if db is None:
@@ -2001,7 +2310,7 @@ class CommitCommentsGQLFiller(GHGQLFiller):
 				VALUES(%(created_at)s,
 						%(repo_id)s,
 						(SELECT id FROM commits WHERE sha=%(commit_sha)s),
-						%(comment_id)s,
+						%(commit_comment_id)s,
 						%(reaction)s,
 						%(author_login)s,
 						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
@@ -2017,7 +2326,7 @@ class CommitCommentsGQLFiller(GHGQLFiller):
 				VALUES(:created_at,
 						:repo_id,
 						(SELECT id FROM commits WHERE sha=:commit_sha),
-						:comment_id,
+						:commit_comment_id,
 						:reaction,
 						:author_login,
 						(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
@@ -2025,6 +2334,30 @@ class CommitCommentsGQLFiller(GHGQLFiller):
 						)
 				;''',(i for i in items_list if i['element_type']=='commit_comment_reaction'))
 				# ;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title'],s['issue_text'],s['author_login'],s['author_login'],self.target_identity_type,self.target_identity_type) for s in items_list))
+
+
+
+		if commit:
+			db.connection.commit()
+
+
+	def insert_reaction_updates(self,items_list,commit=True,db=None):
+		if db is None:
+			db = self.db
+
+		for i in items_list:
+			if i['element_type'] == 'commit_comment':
+				update_info = {'commit_comment_id':i['commit_comment_id'],
+								'commit_comment_gql_id':i['commit_comment_gql_id']
+								}
+				if i['reactions_pageinfo']['hasNextPage']:
+					success = None
+					update_info['end_cursor'] = i['reactions_pageinfo']['endCursor']
+					db.insert_update(table='commit_comment_reactions',repo_id=i['repo_id'],success=success,info=update_info)
+				# else:
+				# 	success = True
+				# self.insert_update(db=db,repo_id=repo_id,success=success,info=update_info)
+
 
 
 		if commit:
