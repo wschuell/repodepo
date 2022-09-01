@@ -2628,7 +2628,7 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 	def after_insert(self):
 		if self.complete_info:
 			self.db.add_filler(IssueReactionsGQLFiller(**self.get_generic_kwargs()))
-			# self.db.add_filler(IssueLabelsGQLFiller(**self.get_generic_kwargs()))
+			self.db.add_filler(IssueLabelsGQLFiller(**self.get_generic_kwargs()))
 			# self.db.add_filler(IssueCommentsGQLFiller(**self.get_generic_kwargs()))
 			# self.db.add_filler(IssueCommentReactionsGQLFiller(**self.get_generic_kwargs()))
 
@@ -2875,7 +2875,7 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 		self.insert_reaction_updates(items_list=items_list,commit=commit,db=db)
 
 		self.insert_labels(items_list=items_list,commit=commit,db=db)
-		# self.insert_label_updates(items_list=items_list,commit=commit,db=db)
+		self.insert_label_updates(items_list=items_list,commit=commit,db=db)
 
 		self.insert_comments(items_list=items_list,commit=commit,db=db)
 		# self.insert_comment_updates(items_list=items_list,commit=commit,db=db)
@@ -3040,6 +3040,23 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 		if commit:
 			db.connection.commit()
 
+	def insert_label_updates(self,items_list,commit=True,db=None):
+		if db is None:
+			db = self.db
+
+		for i in items_list:
+			if i['element_type'] == 'issue':
+				update_info = {'issue_id':i['issue_number'],
+								'issue_gql_id':i['issue_gql_id']
+								}
+				if i['labels_pageinfo']['hasNextPage']:
+					success = None
+					update_info['end_cursor'] = i['labels_pageinfo']['endCursor']
+					db.insert_update(table='issue_labels',repo_id=i['repo_id'],success=success,info=update_info)
+
+		if commit:
+			db.connection.commit()
+
 class IssueReactionsGQLFiller(GHGQLFiller):
 	def __init__(self,**kwargs):
 		self.items_name = 'issue_reactions'
@@ -3145,6 +3162,112 @@ class IssueReactionsGQLFiller(GHGQLFiller):
 		output: nb_items or None if not relevant
 		'''
 		return query_result['node']['reactions']['totalCount']
+
+
+class IssueLabelsGQLFiller(GHGQLFiller):
+	def __init__(self,**kwargs):
+		self.items_name = 'issue_labels'
+		self.queried_obj = 'repo'
+		self.sub_queried_obj = 'issue'
+		self.pageinfo_path = ['node','labels','pageInfo']
+		GHGQLFiller.__init__(self,**kwargs)
+
+	def check_requirements(self):
+		self.db.cursor.execute('''
+			SELECT update_type,updated_at FROM full_updates
+			WHERE update_type='complete_issues'
+			ORDER BY updated_at DESC
+			LIMIT 1
+			;
+			''')
+		ans = list(self.db.cursor.fetchall())
+		if len(ans) == 0:
+			self.logger.info('missing complete_issues filler, necessary prior to issue_labels')
+			return False
+		else:
+			return True
+
+	def query_string(self,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: python-formatable string representing the graphql query
+		'''
+		return '''query {{
+					repository(owner: "{repo_owner}", name: "{repo_name}") {{
+  							nameWithOwner
+    						id }}
+  					node(id:"{issue_gql_id}") {{
+  					    ... on Issue {{
+
+									id
+									number
+									
+									labels(first:{page_size} {after_end_cursor}) {{
+										totalCount
+										pageInfo {{
+											endCursor
+											hasNextPage
+											}}
+										nodes {{
+											name
+											createdAt
+											}}
+										}}
+    							
+    							}}
+  							}}
+						}}'''
+
+
+	def parse_query_result(self,query_result,repo_id,identity_id,repo_owner=None,repo_name=None,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: [ {'repo_id':r_id,'repo_owner':r_ow,'repo_name':r_na,'issue_number':issue_na,'issue_title':title_na,'created_at':created_date,'closed_at':closed_date} , ...]
+		'''
+		ans = []
+		if repo_owner is None:
+			repo_owner,repo_name = query_result['repository']['nameWithOwner'].split('/')
+		for e in [query_result['node']]:
+			d = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'issue'}
+			try:
+				d['issue_gql_id'] = e['id']
+				d['issue_number'] = e['number']
+				d['issue_id'] = e['number']
+				
+			except (KeyError,TypeError) as err:
+				self.logger.info('Result triggering error: {} \nError when parsing issues for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+				continue
+			else:
+				ans.append(d)
+				if e['labels']['totalCount']>0:
+					for ee in e['labels']['nodes']:
+						r = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'issue_label'}
+						r['issue_number'] = d['issue_number']
+						r['issue_gql_id'] = d['issue_gql_id']
+						try:
+							# r['created_at'] = ee['createdAt']
+							r['issue_label'] = ee['name']
+							# try:
+							# 	r['author_login'] = ee['user']['login']
+							# except:
+							# 	r['author_login'] = None
+						except (KeyError,TypeError) as err:
+							self.logger.info('Result triggering error: {} \nError when parsing issue_labels for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+							continue
+						else:
+							ans.append(r)
+		return ans
+
+	def insert_items(self,**kwargs):
+		CompleteIssuesGQLFiller.insert_labels(self,**kwargs)
+
+
+	def get_nb_items(self,query_result):
+		'''
+		In subclasses this has to be implemented
+		output: nb_items or None if not relevant
+		'''
+		return query_result['node']['labels']['totalCount']
 
 
 
