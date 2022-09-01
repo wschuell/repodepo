@@ -2868,9 +2868,6 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 				# ;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title'],s['issue_text'],s['author_login'],s['author_login'],self.target_identity_type,self.target_identity_type) for s in items_list))
 
 
-		if commit:
-			db.connection.commit()
-
 		self.insert_reactions(items_list=items_list,commit=commit,db=db)
 		self.insert_reaction_updates(items_list=items_list,commit=commit,db=db)
 
@@ -2885,6 +2882,9 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 
 
 		db.cursor.execute('''INSERT INTO full_updates(update_type) SELECT 'complete_issues' ;''')
+
+		if commit:
+			db.connection.commit()
 
 	def insert_reactions(self,items_list,commit=True,db=None):
 		if db is None:
@@ -3587,9 +3587,17 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 	Adding comments, labels and reactions (first 100 per issue), and first 40 reactions to comments.
 	'''
 
-	def __init__(self,init_page_size=6,secondary_page_size=4,**kwargs):
+	def __init__(self,init_page_size=6,secondary_page_size=4,complete_info=True,**kwargs):
 		PullRequestsGQLFiller.__init__(self,init_page_size=init_page_size,secondary_page_size=secondary_page_size,other_update_names=['pullrequests'],**kwargs)
 		self.items_name = 'complete_pullrequests'
+		self.complete_info = complete_info
+
+	def after_insert(self):
+		if self.complete_info:
+			self.db.add_filler(PRReactionsGQLFiller(**self.get_generic_kwargs()))
+			self.db.add_filler(PRLabelsGQLFiller(**self.get_generic_kwargs()))
+			self.db.add_filler(PRCommentsGQLFiller(**self.get_generic_kwargs()))
+			self.db.add_filler(PRCommentReactionsGQLFiller(**self.get_generic_kwargs()))
 
 	def query_string(self,**kwargs):
 		'''
@@ -3609,6 +3617,7 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
       							nodes {{
         							number
 									title
+									id
 									author {{ login }}
 									bodyText
 									createdAt
@@ -3621,6 +3630,7 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 											hasNextPage
 											}}
 										nodes {{
+											id
 											createdAt
 											author {{ login }}
 											bodyText
@@ -3686,7 +3696,13 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 				d['merged_at'] = e['mergedAt']
 				d['pullrequest_number'] = e['number']
 				d['pullrequest_title'] = e['title']
+				d['pullrequest_gql_id'] = e['id']
 				d['pullrequest_text'] = e['bodyText']
+
+				d['reactions_pageinfo'] = e['reactions']['pageInfo']
+				d['labels_pageinfo'] = e['labels']['pageInfo']
+				d['comments_pageinfo'] = e['comments']['pageInfo']
+
 				try:
 					d['author_login'] = e['author']['login']
 				except (KeyError,TypeError) as err:
@@ -3705,9 +3721,10 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 					for ee in e['labels']['nodes']:
 						r = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'pullrequest_label'}
 						r['pullrequest_number'] = d['pullrequest_number']
+						r['pullrequest_gql_id'] = d['pullrequest_gql_id']
 						try:
 							# r['created_at'] = ee['createdAt']
-							r['label'] = ee['name']
+							r['pullrequest_label'] = ee['name']
 							# try:
 							# 	r['author_login'] = ee['user']['login']
 							# except:
@@ -3722,9 +3739,10 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 					for ee in e['reactions']['nodes']:
 						r = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'pullrequest_reaction'}
 						r['pullrequest_number'] = d['pullrequest_number']
+						r['pullrequest_gql_id'] = d['pullrequest_gql_id']
 						try:
 							r['created_at'] = ee['createdAt']
-							r['reaction'] = ee['content']
+							r['pullrequest_reaction'] = ee['content']
 							try:
 								r['author_login'] = ee['user']['login']
 							except:
@@ -3739,10 +3757,13 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 					for ee in e['comments']['nodes']:
 						r = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'pullrequest_comment'}
 						r['pullrequest_number'] = d['pullrequest_number']
+						r['pullrequest_gql_id'] = d['pullrequest_gql_id']
 						try:
 							r['created_at'] = ee['createdAt']
-							r['comment_text'] = ee['bodyText']
-							r['comment_id'] = ee['databaseId']
+							r['pullrequest_comment_text'] = ee['bodyText']
+							r['pullrequest_comment_id'] = ee['databaseId']
+							r['pullrequest_comment_gql_id'] = ee['id']
+							r['comment_reactions_pageinfo'] = ee['reactions']['pageInfo']
 							try:
 								r['author_login'] = ee['user']['login']
 							except:
@@ -3759,10 +3780,11 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 							for eee in ee['reactions']['nodes']:
 								r = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'pullrequest_comment_reaction'}
 								r['pullrequest_number'] = d['pullrequest_number']
-								r['comment_id'] = ee['databaseId']
+								r['pullrequest_comment_id'] = ee['databaseId']
+								r['pullrequest_comment_gql_id'] = ee['id']
 								try:
 									r['created_at'] = eee['createdAt']
-									r['reaction'] = eee['content']
+									r['pullrequest_comment_reaction'] = eee['content']
 									try:
 										r['author_login'] = eee['user']['login']
 									except:
@@ -3821,10 +3843,24 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 		if commit:
 			db.connection.commit()
 
+
 		self.insert_reactions(items_list=items_list,commit=commit,db=db)
+		self.insert_reaction_updates(items_list=items_list,commit=commit,db=db)
+
 		self.insert_labels(items_list=items_list,commit=commit,db=db)
+		self.insert_label_updates(items_list=items_list,commit=commit,db=db)
+
 		self.insert_comments(items_list=items_list,commit=commit,db=db)
+		self.insert_comment_updates(items_list=items_list,commit=commit,db=db)
+
 		self.insert_comment_reactions(items_list=items_list,commit=commit,db=db)
+		self.insert_comment_reaction_updates(items_list=items_list,commit=commit,db=db)
+
+
+		db.cursor.execute('''INSERT INTO full_updates(update_type) SELECT 'complete_pullrequests' ;''')
+
+		if commit:
+			db.connection.commit()
 
 	def insert_reactions(self,items_list,commit=True,db=None):
 		if db is None:
@@ -3835,7 +3871,7 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 				VALUES(%(created_at)s,
 						%(repo_id)s,
 						%(pullrequest_number)s,
-						%(reaction)s,
+						%(pullrequest_reaction)s,
 						%(author_login)s,
 						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
 						(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
@@ -3850,7 +3886,7 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 				VALUES(:created_at,
 						:repo_id,
 						:pullrequest_number,
-						:reaction,
+						:pullrequest_reaction,
 						:author_login,
 						(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
 						(SELECT id FROM identity_types WHERE name=:target_identity_type)
@@ -3870,8 +3906,8 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 				VALUES(%(created_at)s,
 						%(repo_id)s,
 						%(pullrequest_number)s,
-						%(comment_id)s,
-						%(reaction)s,
+						%(pullrequest_comment_id)s,
+						%(pullrequest_comment_reaction)s,
 						%(author_login)s,
 						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
 						(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
@@ -3886,8 +3922,8 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 				VALUES(:created_at,
 						:repo_id,
 						:pullrequest_number,
-						:comment_id,
-						:reaction,
+						:pullrequest_comment_id,
+						:pullrequest_comment_reaction,
 						:author_login,
 						(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
 						(SELECT id FROM identity_types WHERE name=:target_identity_type)
@@ -3907,8 +3943,8 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 				VALUES(%(created_at)s,
 						%(repo_id)s,
 						%(pullrequest_number)s,
-						%(comment_id)s,
-						%(comment_text)s,
+						%(pullrequest_comment_id)s,
+						%(pullrequest_comment_text)s,
 						%(author_login)s,
 						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
 						(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
@@ -3923,8 +3959,8 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 				VALUES(:created_at,
 						:repo_id,
 						:pullrequest_number,
-						:comment_id,
-						:comment_text,
+						:pullrequest_comment_id,
+						:pullrequest_comment_text,
 						:author_login,
 						(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
 						(SELECT id FROM identity_types WHERE name=:target_identity_type)
@@ -3943,7 +3979,7 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 				INSERT INTO pullrequest_labels(repo_id,pullrequest_number,label)
 				VALUES(%(repo_id)s,
 						%(pullrequest_number)s,
-						%(label)s
+						%(pullrequest_label)s
 						)
 
 				ON CONFLICT DO NOTHING
@@ -3954,13 +3990,573 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 					INSERT OR IGNORE INTO pullrequest_labels(repo_id,pullrequest_number,label)
 				VALUES(:repo_id,
 						:pullrequest_number,
-						:label
+						:pullrequest_label
 						)
 				;''',(i for i in items_list if i['element_type']=='pullrequest_label'))
 
 
 		if commit:
 			db.connection.commit()
+
+
+	def insert_reaction_updates(self,items_list,commit=True,db=None):
+		if db is None:
+			db = self.db
+
+		for i in items_list:
+			if i['element_type'] == 'pullrequest':
+				update_info = {'pullrequest_id':i['pullrequest_number'],
+								'pullrequest_gql_id':i['pullrequest_gql_id']
+								}
+				if i['reactions_pageinfo']['hasNextPage']:
+					success = None
+					update_info['end_cursor'] = i['reactions_pageinfo']['endCursor']
+					db.insert_update(table='pullrequest_reactions',repo_id=i['repo_id'],success=success,info=update_info)
+
+		if commit:
+			db.connection.commit()
+
+	def insert_label_updates(self,items_list,commit=True,db=None):
+		if db is None:
+			db = self.db
+
+		for i in items_list:
+			if i['element_type'] == 'pullrequest':
+				update_info = {'pullrequest_id':i['pullrequest_number'],
+								'pullrequest_gql_id':i['pullrequest_gql_id']
+								}
+				if i['labels_pageinfo']['hasNextPage']:
+					success = None
+					update_info['end_cursor'] = i['labels_pageinfo']['endCursor']
+					db.insert_update(table='pullrequest_labels',repo_id=i['repo_id'],success=success,info=update_info)
+
+		if commit:
+			db.connection.commit()
+
+	def insert_comment_updates(self,items_list,commit=True,db=None):
+		if db is None:
+			db = self.db
+
+		for i in items_list:
+			if i['element_type'] == 'pullrequest':
+				update_info = {'pullrequest_id':i['pullrequest_number'],
+								'pullrequest_gql_id':i['pullrequest_gql_id']
+								}
+				if i['comments_pageinfo']['hasNextPage']:
+					success = None
+					update_info['end_cursor'] = i['comments_pageinfo']['endCursor']
+					db.insert_update(table='pullrequest_comments',repo_id=i['repo_id'],success=success,info=update_info)
+
+		if commit:
+			db.connection.commit()
+
+	def insert_comment_reaction_updates(self,items_list,commit=True,db=None):
+		if db is None:
+			db = self.db
+
+		for i in items_list:
+			if i['element_type'] == 'pullrequest_comment':
+				update_info = {'pullrequest_comment_id':i['pullrequest_comment_id'],
+								'pullrequest_comment_gql_id':i['pullrequest_comment_gql_id']
+								}
+				if i['comment_reactions_pageinfo']['hasNextPage']:
+					success = None
+					update_info['end_cursor'] = i['comment_reactions_pageinfo']['endCursor']
+					db.insert_update(table='pullrequest_comment_reactions',repo_id=i['repo_id'],success=success,info=update_info)
+
+		if commit:
+			db.connection.commit()
+
+
+class PRReactionsGQLFiller(GHGQLFiller):
+	def __init__(self,**kwargs):
+		self.items_name = 'pullrequest_reactions'
+		self.queried_obj = 'repo'
+		self.sub_queried_obj = 'pullrequest'
+		self.pageinfo_path = ['node','reactions','pageInfo']
+		GHGQLFiller.__init__(self,**kwargs)
+
+	def check_requirements(self):
+		self.db.cursor.execute('''
+			SELECT update_type,updated_at FROM full_updates
+			WHERE update_type='complete_pullrequests'
+			ORDER BY updated_at DESC
+			LIMIT 1
+			;
+			''')
+		ans = list(self.db.cursor.fetchall())
+		if len(ans) == 0:
+			self.logger.info('missing complete_pullrequests filler, necessary prior to pullrequest_reactions')
+			return False
+		else:
+			return True
+
+	def query_string(self,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: python-formatable string representing the graphql query
+		'''
+		return '''query {{
+					repository(owner: "{repo_owner}", name: "{repo_name}") {{
+  							nameWithOwner
+    						id }}
+  					node(id:"{pullrequest_gql_id}") {{
+  					    ... on PullRequest {{
+
+									id
+									number
+									reactions(first:{page_size}  {after_end_cursor}) {{
+										totalCount
+										pageInfo {{
+											hasNextPage
+											endCursor
+											}}
+										nodes {{
+											createdAt
+											user {{ login }}
+											content
+											}}
+      								}}
+    							
+    							}}
+  							}}
+						}}'''
+
+
+	def parse_query_result(self,query_result,repo_id,identity_id,repo_owner=None,repo_name=None,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: [ {'repo_id':r_id,'repo_owner':r_ow,'repo_name':r_na,'pullrequest_number':pullrequest_na,'pullrequest_title':title_na,'created_at':created_date,'closed_at':closed_date} , ...]
+		'''
+		ans = []
+		if repo_owner is None:
+			repo_owner,repo_name = query_result['repository']['nameWithOwner'].split('/')
+		for e in [query_result['node']]:
+			d = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'pullrequest'}
+			try:
+				d['pullrequest_gql_id'] = e['id']
+				d['pullrequest_number'] = e['number']
+				d['pullrequest_id'] = e['number']
+				
+			except (KeyError,TypeError) as err:
+				self.logger.info('Result triggering error: {} \nError when parsing pullrequests for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+				continue
+			else:
+				ans.append(d)
+				if e['reactions']['totalCount']>0:
+					for ee in e['reactions']['nodes']:
+						r = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'pullrequest_reaction'}
+						r['pullrequest_id'] = d['pullrequest_id']
+						r['pullrequest_number'] = d['pullrequest_id']
+						r['pullrequest_gql_id'] = d['pullrequest_gql_id']
+						try:
+							r['created_at'] = ee['createdAt']
+							r['pullrequest_reaction'] = ee['content']
+							try:
+								r['author_login'] = ee['user']['login']
+							except:
+								r['author_login'] = None
+						except (KeyError,TypeError) as err:
+							self.logger.info('Result triggering error: {} \nError when parsing pullrequest_reactions for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+							continue
+						else:
+							ans.append(r)
+		return ans
+
+	def insert_items(self,**kwargs):
+		CompletePullRequestsGQLFiller.insert_reactions(self,**kwargs)
+
+
+	def get_nb_items(self,query_result):
+		'''
+		In subclasses this has to be implemented
+		output: nb_items or None if not relevant
+		'''
+		return query_result['node']['reactions']['totalCount']
+
+
+class PRCommentsGQLFiller(GHGQLFiller):
+	def __init__(self,**kwargs):
+		self.items_name = 'pullrequest_comments'
+		self.queried_obj = 'repo'
+		self.sub_queried_obj = 'pullrequest'
+		self.pageinfo_path = ['node','comments','pageInfo']
+		GHGQLFiller.__init__(self,**kwargs)
+
+	def check_requirements(self):
+		self.db.cursor.execute('''
+			SELECT update_type,updated_at FROM full_updates
+			WHERE update_type='complete_pullrequests'
+			ORDER BY updated_at DESC
+			LIMIT 1
+			;
+			''')
+		ans = list(self.db.cursor.fetchall())
+		if len(ans) == 0:
+			self.logger.info('missing complete_pullrequests filler, necessary prior to pullrequest_comments')
+			return False
+		else:
+			return True
+
+	def query_string(self,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: python-formatable string representing the graphql query
+		'''
+		return '''query {{
+					repository(owner: "{repo_owner}", name: "{repo_name}") {{
+  							nameWithOwner
+    						id }}
+  					node(id:"{pullrequest_gql_id}") {{
+  					    ... on PullRequest {{
+
+									id
+									number
+									comments(first:{page_size} {after_end_cursor}) {{
+										totalCount
+										pageInfo {{
+											endCursor
+											hasNextPage
+											}}
+										nodes {{
+											id
+											createdAt
+											author {{ login }}
+											bodyText
+											databaseId
+
+											reactions(first:{secondary_page_size}) {{
+												totalCount
+												pageInfo {{
+													endCursor
+													hasNextPage
+													}}
+												nodes {{
+													user {{ login }}
+													createdAt
+													content
+													}}
+												}}
+											}}
+										}}
+    							
+    							}}
+  							}}
+						}}'''
+
+
+	def parse_query_result(self,query_result,repo_id,identity_id,repo_owner=None,repo_name=None,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: [ {'repo_id':r_id,'repo_owner':r_ow,'repo_name':r_na,'pullrequest_number':pullrequest_na,'pullrequest_title':title_na,'created_at':created_date,'closed_at':closed_date} , ...]
+		'''
+		ans = []
+		if repo_owner is None:
+			repo_owner,repo_name = query_result['repository']['nameWithOwner'].split('/')
+		for e in [query_result['node']]:
+			d = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'pullrequest'}
+			try:
+				d['pullrequest_gql_id'] = e['id']
+				d['pullrequest_number'] = e['number']
+				d['pullrequest_id'] = e['number']
+				
+			except (KeyError,TypeError) as err:
+				self.logger.info('Result triggering error: {} \nError when parsing pullrequests for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+				continue
+			else:
+				ans.append(d)
+				if e['comments']['totalCount']>0:
+					for ee in e['comments']['nodes']:
+						r = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'pullrequest_comment'}
+						r['pullrequest_number'] = d['pullrequest_number']
+						r['pullrequest_gql_id'] = d['pullrequest_gql_id']
+						try:
+							r['created_at'] = ee['createdAt']
+							r['pullrequest_comment_text'] = ee['bodyText']
+							r['pullrequest_comment_id'] = ee['databaseId']
+							r['pullrequest_comment_gql_id'] = ee['id']
+							r['comment_reactions_pageinfo'] = ee['reactions']['pageInfo']
+							try:
+								r['author_login'] = ee['user']['login']
+							except:
+								r['author_login'] = None
+
+
+						except (KeyError,TypeError) as err:
+							self.logger.info('Result triggering error: {} \nError when parsing pullrequest_comments for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+							continue
+						else:
+							ans.append(r)
+
+						if ee['reactions']['totalCount']>0:
+							for eee in ee['reactions']['nodes']:
+								r = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'pullrequest_comment_reaction'}
+								r['pullrequest_number'] = d['pullrequest_number']
+								r['pullrequest_gql_id'] = d['pullrequest_gql_id']
+								r['pullrequest_comment_id'] = ee['databaseId']
+								r['pullrequest_comment_gql_id'] = ee['id']
+								try:
+									r['created_at'] = eee['createdAt']
+									r['pullrequest_comment_reaction'] = eee['content']
+									try:
+										r['author_login'] = eee['user']['login']
+									except:
+										r['author_login'] = None
+								except (KeyError,TypeError) as err:
+									self.logger.info('Result triggering error: {} \nError when parsing pullrequest_comment_reactions for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+									continue
+								else:
+									ans.append(r)
+		return ans
+
+	def insert_items(self,db=None,**kwargs):
+
+		if db is None:
+			db = self.db
+
+		CompletePullRequestsGQLFiller.insert_comments(self,db=db,**kwargs)
+		CompletePullRequestsGQLFiller.insert_comment_reactions(self,db=db,**kwargs)
+		CompletePullRequestsGQLFiller.insert_comment_reaction_updates(self,db=db,**kwargs)
+
+		db.cursor.execute('''INSERT INTO full_updates(update_type) SELECT 'pullrequest_comments' ;''')
+
+	def get_nb_items(self,query_result):
+		'''
+		In subclasses this has to be implemented
+		output: nb_items or None if not relevant
+		'''
+		return query_result['node']['comments']['totalCount']
+
+
+class PRCommentReactionsGQLFiller(GHGQLFiller):
+	def __init__(self,**kwargs):
+		self.items_name = 'pullrequest_comment_reactions'
+		self.queried_obj = 'repo'
+		self.sub_queried_obj = 'pullrequest_comment'
+		self.pageinfo_path = ['node','reactions','pageInfo']
+		GHGQLFiller.__init__(self,**kwargs)
+
+	def check_requirements(self):
+		self.db.cursor.execute('''
+			SELECT update_type,updated_at FROM full_updates
+			WHERE update_type='complete_pullrequests'
+			ORDER BY updated_at DESC
+			LIMIT 1
+			;
+			''')
+		ans = list(self.db.cursor.fetchall())
+		if len(ans) == 0:
+			self.logger.info('missing complete_pullrequests filler, necessary prior to pullrequest_reactions')
+			return False
+
+		self.db.cursor.execute('''
+			SELECT update_type,updated_at FROM full_updates
+			WHERE update_type='pullrequest_comments'
+			ORDER BY updated_at DESC
+			LIMIT 1
+			;
+			''')
+		ans = list(self.db.cursor.fetchall())
+		if len(ans) == 0:
+			self.logger.info('missing pullrequest_comments filler, necessary prior to pullrequest_reactions')
+			return False
+		else:
+			return True
+
+	def query_string(self,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: python-formatable string representing the graphql query
+		'''
+		return '''query {{
+					repository(owner: "{repo_owner}", name: "{repo_name}") {{
+  							nameWithOwner
+    						id }}
+  					node(id:"{pullrequest_comment_gql_id}") {{
+  					    ... on IssueComment {{
+  					    			pullRequest {{ number }}
+									id
+									databaseId
+									reactions(first:{page_size}  {after_end_cursor}) {{
+										totalCount
+										pageInfo {{
+											hasNextPage
+											endCursor
+											}}
+										nodes {{
+											createdAt
+											user {{ login }}
+											content
+											}}
+      								}}
+    							
+    							}}
+  							}}
+						}}'''
+
+
+	def parse_query_result(self,query_result,repo_id,identity_id,repo_owner=None,repo_name=None,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: [ {'repo_id':r_id,'repo_owner':r_ow,'repo_name':r_na,'pullrequest_number':pullrequest_na,'pullrequest_title':title_na,'created_at':created_date,'closed_at':closed_date} , ...]
+		'''
+		ans = []
+		if repo_owner is None:
+			repo_owner,repo_name = query_result['repository']['nameWithOwner'].split('/')
+		for e in [query_result['node']]:
+			d = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'pullrequest_comment'}
+			try:
+				# d['pullrequest_gql_id'] = e['id']
+				d['pullrequest_number'] = e['pullRequest']['number']
+				# d['pullrequest_id'] = e['number']
+				d['pullrequest_comment_id'] = e['databaseId']
+				d['pullrequest_comment_gql_id'] = e['id']
+				d['comment_reactions_pageinfo'] = e['reactions']['pageInfo']
+				
+			except (KeyError,TypeError) as err:
+				self.logger.info('Result triggering error: {} \nError when parsing pullrequest_comments for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+				continue
+			else:
+				ans.append(d)
+				
+				if e['reactions']['totalCount']>0:
+					for ee in e['reactions']['nodes']:
+						r = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'pullrequest_comment_reaction'}
+						r['pullrequest_number'] = d['pullrequest_number']
+						r['pullrequest_comment_id'] = e['databaseId']
+						r['pullrequest_comment_gql_id'] = e['id']
+						try:
+							r['created_at'] = ee['createdAt']
+							r['pullrequest_comment_reaction'] = ee['content']
+							try:
+								r['author_login'] = ee['user']['login']
+							except:
+								r['author_login'] = None
+						except (KeyError,TypeError) as err:
+							self.logger.info('Result triggering error: {} \nError when parsing pullrequest_comment_reactions for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+							continue
+						else:
+							ans.append(r)
+		return ans
+
+	def insert_items(self,**kwargs):
+		CompletePullRequestsGQLFiller.insert_comment_reactions(self,**kwargs)
+
+
+	def get_nb_items(self,query_result):
+		'''
+		In subclasses this has to be implemented
+		output: nb_items or None if not relevant
+		'''
+		return query_result['node']['reactions']['totalCount']
+
+
+class PRLabelsGQLFiller(GHGQLFiller):
+	def __init__(self,**kwargs):
+		self.items_name = 'pullrequest_labels'
+		self.queried_obj = 'repo'
+		self.sub_queried_obj = 'pullrequest'
+		self.pageinfo_path = ['node','labels','pageInfo']
+		GHGQLFiller.__init__(self,**kwargs)
+
+	def check_requirements(self):
+		self.db.cursor.execute('''
+			SELECT update_type,updated_at FROM full_updates
+			WHERE update_type='complete_pullrequests'
+			ORDER BY updated_at DESC
+			LIMIT 1
+			;
+			''')
+		ans = list(self.db.cursor.fetchall())
+		if len(ans) == 0:
+			self.logger.info('missing complete_pullrequests filler, necessary prior to pullrequest_labels')
+			return False
+		else:
+			return True
+
+	def query_string(self,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: python-formatable string representing the graphql query
+		'''
+		return '''query {{
+					repository(owner: "{repo_owner}", name: "{repo_name}") {{
+  							nameWithOwner
+    						id }}
+  					node(id:"{pullrequest_gql_id}") {{
+  					    ... on PullRequest {{
+
+									id
+									number
+									
+									labels(first:{page_size} {after_end_cursor}) {{
+										totalCount
+										pageInfo {{
+											endCursor
+											hasNextPage
+											}}
+										nodes {{
+											name
+											createdAt
+											}}
+										}}
+    							
+    							}}
+  							}}
+						}}'''
+
+
+	def parse_query_result(self,query_result,repo_id,identity_id,repo_owner=None,repo_name=None,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: [ {'repo_id':r_id,'repo_owner':r_ow,'repo_name':r_na,'pullrequest_number':pullrequest_na,'pullrequest_title':title_na,'created_at':created_date,'closed_at':closed_date} , ...]
+		'''
+		ans = []
+		if repo_owner is None:
+			repo_owner,repo_name = query_result['repository']['nameWithOwner'].split('/')
+		for e in [query_result['node']]:
+			d = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'pullrequest'}
+			try:
+				d['pullrequest_gql_id'] = e['id']
+				d['pullrequest_number'] = e['number']
+				d['pullrequest_id'] = e['number']
+				
+			except (KeyError,TypeError) as err:
+				self.logger.info('Result triggering error: {} \nError when parsing pullrequests for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+				continue
+			else:
+				ans.append(d)
+				if e['labels']['totalCount']>0:
+					for ee in e['labels']['nodes']:
+						r = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'pullrequest_label'}
+						r['pullrequest_number'] = d['pullrequest_number']
+						r['pullrequest_gql_id'] = d['pullrequest_gql_id']
+						try:
+							# r['created_at'] = ee['createdAt']
+							r['pullrequest_label'] = ee['name']
+							# try:
+							# 	r['author_login'] = ee['user']['login']
+							# except:
+							# 	r['author_login'] = None
+						except (KeyError,TypeError) as err:
+							self.logger.info('Result triggering error: {} \nError when parsing pullrequest_labels for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+							continue
+						else:
+							ans.append(r)
+		return ans
+
+	def insert_items(self,**kwargs):
+		CompletePullRequestsGQLFiller.insert_labels(self,**kwargs)
+
+
+	def get_nb_items(self,query_result):
+		'''
+		In subclasses this has to be implemented
+		output: nb_items or None if not relevant
+		'''
+		return query_result['node']['labels']['totalCount']
+
+
 
 class SponsorablesGQLFiller(GHGQLFiller):
 	'''
