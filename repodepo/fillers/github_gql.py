@@ -2629,8 +2629,8 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 		if self.complete_info:
 			self.db.add_filler(IssueReactionsGQLFiller(**self.get_generic_kwargs()))
 			self.db.add_filler(IssueLabelsGQLFiller(**self.get_generic_kwargs()))
-			# self.db.add_filler(IssueCommentsGQLFiller(**self.get_generic_kwargs()))
-			# self.db.add_filler(IssueCommentReactionsGQLFiller(**self.get_generic_kwargs()))
+			self.db.add_filler(IssueCommentsGQLFiller(**self.get_generic_kwargs()))
+			self.db.add_filler(IssueCommentReactionsGQLFiller(**self.get_generic_kwargs()))
 
 	def query_string(self,**kwargs):
 		'''
@@ -2878,10 +2878,10 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 		self.insert_label_updates(items_list=items_list,commit=commit,db=db)
 
 		self.insert_comments(items_list=items_list,commit=commit,db=db)
-		# self.insert_comment_updates(items_list=items_list,commit=commit,db=db)
+		self.insert_comment_updates(items_list=items_list,commit=commit,db=db)
 
 		self.insert_comment_reactions(items_list=items_list,commit=commit,db=db)
-		# self.insert_comment_reaction_updates(items_list=items_list,commit=commit,db=db)
+		self.insert_comment_reaction_updates(items_list=items_list,commit=commit,db=db)
 
 
 		db.cursor.execute('''INSERT INTO full_updates(update_type) SELECT 'complete_issues' ;''')
@@ -3057,6 +3057,40 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 		if commit:
 			db.connection.commit()
 
+	def insert_comment_updates(self,items_list,commit=True,db=None):
+		if db is None:
+			db = self.db
+
+		for i in items_list:
+			if i['element_type'] == 'issue':
+				update_info = {'issue_id':i['issue_number'],
+								'issue_gql_id':i['issue_gql_id']
+								}
+				if i['comments_pageinfo']['hasNextPage']:
+					success = None
+					update_info['end_cursor'] = i['comments_pageinfo']['endCursor']
+					db.insert_update(table='issue_comments',repo_id=i['repo_id'],success=success,info=update_info)
+
+		if commit:
+			db.connection.commit()
+
+	def insert_comment_reaction_updates(self,items_list,commit=True,db=None):
+		if db is None:
+			db = self.db
+
+		for i in items_list:
+			if i['element_type'] == 'issue_comment':
+				update_info = {'issue_comment_id':i['issue_comment_id'],
+								'issue_comment_gql_id':i['issue_comment_gql_id']
+								}
+				if i['comment_reactions_pageinfo']['hasNextPage']:
+					success = None
+					update_info['end_cursor'] = i['comment_reactions_pageinfo']['endCursor']
+					db.insert_update(table='issue_comment_reactions',repo_id=i['repo_id'],success=success,info=update_info)
+
+		if commit:
+			db.connection.commit()
+
 class IssueReactionsGQLFiller(GHGQLFiller):
 	def __init__(self,**kwargs):
 		self.items_name = 'issue_reactions'
@@ -3154,6 +3188,282 @@ class IssueReactionsGQLFiller(GHGQLFiller):
 
 	def insert_items(self,**kwargs):
 		CompleteIssuesGQLFiller.insert_reactions(self,**kwargs)
+
+
+	def get_nb_items(self,query_result):
+		'''
+		In subclasses this has to be implemented
+		output: nb_items or None if not relevant
+		'''
+		return query_result['node']['reactions']['totalCount']
+
+
+class IssueCommentsGQLFiller(GHGQLFiller):
+	def __init__(self,**kwargs):
+		self.items_name = 'issue_comments'
+		self.queried_obj = 'repo'
+		self.sub_queried_obj = 'issue'
+		self.pageinfo_path = ['node','comments','pageInfo']
+		GHGQLFiller.__init__(self,**kwargs)
+
+	def check_requirements(self):
+		self.db.cursor.execute('''
+			SELECT update_type,updated_at FROM full_updates
+			WHERE update_type='complete_issues'
+			ORDER BY updated_at DESC
+			LIMIT 1
+			;
+			''')
+		ans = list(self.db.cursor.fetchall())
+		if len(ans) == 0:
+			self.logger.info('missing complete_issues filler, necessary prior to issue_comments')
+			return False
+		else:
+			return True
+
+	def query_string(self,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: python-formatable string representing the graphql query
+		'''
+		return '''query {{
+					repository(owner: "{repo_owner}", name: "{repo_name}") {{
+  							nameWithOwner
+    						id }}
+  					node(id:"{issue_gql_id}") {{
+  					    ... on Issue {{
+
+									id
+									number
+									comments(first:{page_size} {after_end_cursor}) {{
+										totalCount
+										pageInfo {{
+											endCursor
+											hasNextPage
+											}}
+										nodes {{
+											id
+											createdAt
+											author {{ login }}
+											bodyText
+											databaseId
+
+											reactions(first:{secondary_page_size}) {{
+												totalCount
+												pageInfo {{
+													endCursor
+													hasNextPage
+													}}
+												nodes {{
+													user {{ login }}
+													createdAt
+													content
+													}}
+												}}
+											}}
+										}}
+    							
+    							}}
+  							}}
+						}}'''
+
+
+	def parse_query_result(self,query_result,repo_id,identity_id,repo_owner=None,repo_name=None,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: [ {'repo_id':r_id,'repo_owner':r_ow,'repo_name':r_na,'issue_number':issue_na,'issue_title':title_na,'created_at':created_date,'closed_at':closed_date} , ...]
+		'''
+		ans = []
+		if repo_owner is None:
+			repo_owner,repo_name = query_result['repository']['nameWithOwner'].split('/')
+		for e in [query_result['node']]:
+			d = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'issue'}
+			try:
+				d['issue_gql_id'] = e['id']
+				d['issue_number'] = e['number']
+				d['issue_id'] = e['number']
+				
+			except (KeyError,TypeError) as err:
+				self.logger.info('Result triggering error: {} \nError when parsing issues for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+				continue
+			else:
+				ans.append(d)
+				if e['comments']['totalCount']>0:
+					for ee in e['comments']['nodes']:
+						r = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'issue_comment'}
+						r['issue_number'] = d['issue_number']
+						r['issue_gql_id'] = d['issue_gql_id']
+						try:
+							r['created_at'] = ee['createdAt']
+							r['issue_comment_text'] = ee['bodyText']
+							r['issue_comment_id'] = ee['databaseId']
+							r['issue_comment_gql_id'] = ee['id']
+							r['comment_reactions_pageinfo'] = ee['reactions']['pageInfo']
+							try:
+								r['author_login'] = ee['user']['login']
+							except:
+								r['author_login'] = None
+
+
+						except (KeyError,TypeError) as err:
+							self.logger.info('Result triggering error: {} \nError when parsing issue_comments for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+							continue
+						else:
+							ans.append(r)
+
+						if ee['reactions']['totalCount']>0:
+							for eee in ee['reactions']['nodes']:
+								r = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'issue_comment_reaction'}
+								r['issue_number'] = d['issue_number']
+								r['issue_gql_id'] = d['issue_gql_id']
+								r['issue_comment_id'] = ee['databaseId']
+								r['issue_comment_gql_id'] = ee['id']
+								try:
+									r['created_at'] = eee['createdAt']
+									r['issue_comment_reaction'] = eee['content']
+									try:
+										r['author_login'] = eee['user']['login']
+									except:
+										r['author_login'] = None
+								except (KeyError,TypeError) as err:
+									self.logger.info('Result triggering error: {} \nError when parsing issue_comment_reactions for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+									continue
+								else:
+									ans.append(r)
+		return ans
+
+	def insert_items(self,db=None,**kwargs):
+
+		if db is None:
+			db = self.db
+
+		CompleteIssuesGQLFiller.insert_comments(self,db=db,**kwargs)
+		CompleteIssuesGQLFiller.insert_comment_reactions(self,db=db,**kwargs)
+		CompleteIssuesGQLFiller.insert_comment_reaction_updates(self,db=db,**kwargs)
+
+		db.cursor.execute('''INSERT INTO full_updates(update_type) SELECT 'issue_comments' ;''')
+
+	def get_nb_items(self,query_result):
+		'''
+		In subclasses this has to be implemented
+		output: nb_items or None if not relevant
+		'''
+		return query_result['node']['comments']['totalCount']
+
+
+class IssueCommentReactionsGQLFiller(GHGQLFiller):
+	def __init__(self,**kwargs):
+		self.items_name = 'issue_comment_reactions'
+		self.queried_obj = 'repo'
+		self.sub_queried_obj = 'issue_comment'
+		self.pageinfo_path = ['node','reactions','pageInfo']
+		GHGQLFiller.__init__(self,**kwargs)
+
+	def check_requirements(self):
+		self.db.cursor.execute('''
+			SELECT update_type,updated_at FROM full_updates
+			WHERE update_type='complete_issues'
+			ORDER BY updated_at DESC
+			LIMIT 1
+			;
+			''')
+		ans = list(self.db.cursor.fetchall())
+		if len(ans) == 0:
+			self.logger.info('missing complete_issues filler, necessary prior to issue_reactions')
+			return False
+
+		self.db.cursor.execute('''
+			SELECT update_type,updated_at FROM full_updates
+			WHERE update_type='issue_comments'
+			ORDER BY updated_at DESC
+			LIMIT 1
+			;
+			''')
+		ans = list(self.db.cursor.fetchall())
+		if len(ans) == 0:
+			self.logger.info('missing issue_comments filler, necessary prior to issue_reactions')
+			return False
+		else:
+			return True
+
+	def query_string(self,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: python-formatable string representing the graphql query
+		'''
+		return '''query {{
+					repository(owner: "{repo_owner}", name: "{repo_name}") {{
+  							nameWithOwner
+    						id }}
+  					node(id:"{issue_comment_gql_id}") {{
+  					    ... on IssueComment {{
+  					    			issue {{ number }}
+									id
+									databaseId
+									reactions(first:{page_size}  {after_end_cursor}) {{
+										totalCount
+										pageInfo {{
+											hasNextPage
+											endCursor
+											}}
+										nodes {{
+											createdAt
+											user {{ login }}
+											content
+											}}
+      								}}
+    							
+    							}}
+  							}}
+						}}'''
+
+
+	def parse_query_result(self,query_result,repo_id,identity_id,repo_owner=None,repo_name=None,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: [ {'repo_id':r_id,'repo_owner':r_ow,'repo_name':r_na,'issue_number':issue_na,'issue_title':title_na,'created_at':created_date,'closed_at':closed_date} , ...]
+		'''
+		ans = []
+		if repo_owner is None:
+			repo_owner,repo_name = query_result['repository']['nameWithOwner'].split('/')
+		for e in [query_result['node']]:
+			d = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'issue_comment'}
+			try:
+				# d['issue_gql_id'] = e['id']
+				d['issue_number'] = e['issue']['number']
+				# d['issue_id'] = e['number']
+				d['issue_comment_id'] = e['databaseId']
+				d['issue_comment_gql_id'] = e['id']
+				d['comment_reactions_pageinfo'] = e['reactions']['pageInfo']
+				
+			except (KeyError,TypeError) as err:
+				self.logger.info('Result triggering error: {} \nError when parsing issue_comments for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+				continue
+			else:
+				ans.append(d)
+				
+				if e['reactions']['totalCount']>0:
+					for ee in e['reactions']['nodes']:
+						r = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'issue_comment_reaction'}
+						r['issue_number'] = d['issue_number']
+						r['issue_comment_id'] = e['databaseId']
+						r['issue_comment_gql_id'] = e['id']
+						try:
+							r['created_at'] = ee['createdAt']
+							r['issue_comment_reaction'] = ee['content']
+							try:
+								r['author_login'] = ee['user']['login']
+							except:
+								r['author_login'] = None
+						except (KeyError,TypeError) as err:
+							self.logger.info('Result triggering error: {} \nError when parsing issue_comment_reactions for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+							continue
+						else:
+							ans.append(r)
+		return ans
+
+	def insert_items(self,**kwargs):
+		CompleteIssuesGQLFiller.insert_comment_reactions(self,**kwargs)
 
 
 	def get_nb_items(self,query_result):
