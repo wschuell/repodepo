@@ -2124,7 +2124,7 @@ class CommitCommentReactionsGQLFiller(GHGQLFiller):
 						r['commit_sha'] = d['commit_sha']
 						try:
 							r['created_at'] = ee['createdAt']
-							r['reaction'] = ee['content']
+							r['commit_comment_reaction'] = ee['content']
 							try:
 								r['author_login'] = ee['user']['login']
 							except:
@@ -2241,7 +2241,7 @@ class CommitCommentsGQLFiller(GHGQLFiller):
 						r['commit_sha'] = d['commit_sha']
 						try:
 							r['created_at'] = ee['createdAt']
-							r['reaction'] = ee['content']
+							r['commit_comment_reaction'] = ee['content']
 							try:
 								r['author_login'] = ee['user']['login']
 							except:
@@ -2311,7 +2311,7 @@ class CommitCommentsGQLFiller(GHGQLFiller):
 						%(repo_id)s,
 						(SELECT id FROM commits WHERE sha=%(commit_sha)s),
 						%(commit_comment_id)s,
-						%(reaction)s,
+						%(commit_comment_reaction)s,
 						%(author_login)s,
 						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
 						(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
@@ -2327,7 +2327,7 @@ class CommitCommentsGQLFiller(GHGQLFiller):
 						:repo_id,
 						(SELECT id FROM commits WHERE sha=:commit_sha),
 						:commit_comment_id,
-						:reaction,
+						:commit_comment_reaction,
 						:author_login,
 						(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
 						(SELECT id FROM identity_types WHERE name=:target_identity_type)
@@ -2620,9 +2620,17 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 	Adding comments, labels and reactions (first 100 per issue), and first 40 reactions to comments.
 	'''
 
-	def __init__(self,init_page_size=6,secondary_page_size=4,**kwargs):
+	def __init__(self,init_page_size=6,secondary_page_size=4,complete_info=True,**kwargs):
 		IssuesGQLFiller.__init__(self,init_page_size=init_page_size,secondary_page_size=secondary_page_size,other_update_names=['issues'],**kwargs)
 		self.items_name = 'complete_issues'
+		self.complete_info = complete_info
+
+	def after_insert(self):
+		if self.complete_info:
+			self.db.add_filler(IssueReactionsGQLFiller(**self.get_generic_kwargs()))
+			# self.db.add_filler(IssueLabelsGQLFiller(**self.get_generic_kwargs()))
+			# self.db.add_filler(IssueCommentsGQLFiller(**self.get_generic_kwargs()))
+			# self.db.add_filler(IssueCommentReactionsGQLFiller(**self.get_generic_kwargs()))
 
 	def query_string(self,**kwargs):
 		'''
@@ -2642,6 +2650,7 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
       							nodes {{
         							number
 									title
+									id
 									author {{ login }}
 									bodyText
 									createdAt
@@ -2653,6 +2662,7 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 											hasNextPage
 											}}
 										nodes {{
+											id
 											createdAt
 											author {{ login }}
 											bodyText
@@ -2718,7 +2728,13 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 				d['closed_at'] = e['closedAt']
 				d['issue_number'] = e['number']
 				d['issue_title'] = e['title']
+				d['issue_gql_id'] = e['id']
 				d['issue_text'] = e['bodyText']
+
+				d['reactions_pageinfo'] = e['reactions']['pageInfo']
+				d['labels_pageinfo'] = e['labels']['pageInfo']
+				d['comments_pageinfo'] = e['comments']['pageInfo']
+
 				try:
 					d['author_login'] = e['author']['login']
 				except (KeyError,TypeError) as err:
@@ -2733,9 +2749,10 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 					for ee in e['labels']['nodes']:
 						r = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'issue_label'}
 						r['issue_number'] = d['issue_number']
+						r['issue_gql_id'] = d['issue_gql_id']
 						try:
 							# r['created_at'] = ee['createdAt']
-							r['label'] = ee['name']
+							r['issue_label'] = ee['name']
 							# try:
 							# 	r['author_login'] = ee['user']['login']
 							# except:
@@ -2750,9 +2767,10 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 					for ee in e['reactions']['nodes']:
 						r = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'issue_reaction'}
 						r['issue_number'] = d['issue_number']
+						r['issue_gql_id'] = d['issue_gql_id']
 						try:
 							r['created_at'] = ee['createdAt']
-							r['reaction'] = ee['content']
+							r['issue_reaction'] = ee['content']
 							try:
 								r['author_login'] = ee['user']['login']
 							except:
@@ -2767,10 +2785,13 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 					for ee in e['comments']['nodes']:
 						r = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'issue_comment'}
 						r['issue_number'] = d['issue_number']
+						r['issue_gql_id'] = d['issue_gql_id']
 						try:
 							r['created_at'] = ee['createdAt']
-							r['comment_text'] = ee['bodyText']
-							r['comment_id'] = ee['databaseId']
+							r['issue_comment_text'] = ee['bodyText']
+							r['issue_comment_id'] = ee['databaseId']
+							r['issue_comment_gql_id'] = ee['id']
+							r['comment_reactions_pageinfo'] = ee['reactions']['pageInfo']
 							try:
 								r['author_login'] = ee['user']['login']
 							except:
@@ -2787,10 +2808,12 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 							for eee in ee['reactions']['nodes']:
 								r = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'issue_comment_reaction'}
 								r['issue_number'] = d['issue_number']
-								r['comment_id'] = ee['databaseId']
+								r['issue_gql_id'] = d['issue_gql_id']
+								r['issue_comment_id'] = ee['databaseId']
+								r['issue_comment_gql_id'] = ee['id']
 								try:
 									r['created_at'] = eee['createdAt']
-									r['reaction'] = eee['content']
+									r['issue_comment_reaction'] = eee['content']
 									try:
 										r['author_login'] = eee['user']['login']
 									except:
@@ -2849,9 +2872,19 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 			db.connection.commit()
 
 		self.insert_reactions(items_list=items_list,commit=commit,db=db)
+		self.insert_reaction_updates(items_list=items_list,commit=commit,db=db)
+
 		self.insert_labels(items_list=items_list,commit=commit,db=db)
+		# self.insert_label_updates(items_list=items_list,commit=commit,db=db)
+
 		self.insert_comments(items_list=items_list,commit=commit,db=db)
+		# self.insert_comment_updates(items_list=items_list,commit=commit,db=db)
+
 		self.insert_comment_reactions(items_list=items_list,commit=commit,db=db)
+		# self.insert_comment_reaction_updates(items_list=items_list,commit=commit,db=db)
+
+
+		db.cursor.execute('''INSERT INTO full_updates(update_type) SELECT 'complete_issues' ;''')
 
 	def insert_reactions(self,items_list,commit=True,db=None):
 		if db is None:
@@ -2862,7 +2895,7 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 				VALUES(%(created_at)s,
 						%(repo_id)s,
 						%(issue_number)s,
-						%(reaction)s,
+						%(issue_reaction)s,
 						%(author_login)s,
 						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
 						(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
@@ -2877,7 +2910,7 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 				VALUES(:created_at,
 						:repo_id,
 						:issue_number,
-						:reaction,
+						:issue_reaction,
 						:author_login,
 						(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
 						(SELECT id FROM identity_types WHERE name=:target_identity_type)
@@ -2897,8 +2930,8 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 				VALUES(%(created_at)s,
 						%(repo_id)s,
 						%(issue_number)s,
-						%(comment_id)s,
-						%(reaction)s,
+						%(issue_comment_id)s,
+						%(issue_comment_reaction)s,
 						%(author_login)s,
 						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
 						(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
@@ -2913,8 +2946,8 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 				VALUES(:created_at,
 						:repo_id,
 						:issue_number,
-						:comment_id,
-						:reaction,
+						:issue_comment_id,
+						:issue_comment_reaction,
 						:author_login,
 						(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
 						(SELECT id FROM identity_types WHERE name=:target_identity_type)
@@ -2934,8 +2967,8 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 				VALUES(%(created_at)s,
 						%(repo_id)s,
 						%(issue_number)s,
-						%(comment_id)s,
-						%(comment_text)s,
+						%(issue_comment_id)s,
+						%(issue_comment_text)s,
 						%(author_login)s,
 						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
 						(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
@@ -2950,8 +2983,8 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 				VALUES(:created_at,
 						:repo_id,
 						:issue_number,
-						:comment_id,
-						:comment_text,
+						:issue_comment_id,
+						:issue_comment_text,
 						:author_login,
 						(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
 						(SELECT id FROM identity_types WHERE name=:target_identity_type)
@@ -2970,7 +3003,7 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 				INSERT INTO issue_labels(repo_id,issue_number,label)
 				VALUES(%(repo_id)s,
 						%(issue_number)s,
-						%(label)s
+						%(issue_label)s
 						)
 
 				ON CONFLICT DO NOTHING
@@ -2981,13 +3014,138 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 					INSERT OR IGNORE INTO issue_labels(repo_id,issue_number,label)
 				VALUES(:repo_id,
 						:issue_number,
-						:label
+						:issue_label
 						)
 				;''',(i for i in items_list if i['element_type']=='issue_label'))
 
 
 		if commit:
 			db.connection.commit()
+
+
+	def insert_reaction_updates(self,items_list,commit=True,db=None):
+		if db is None:
+			db = self.db
+
+		for i in items_list:
+			if i['element_type'] == 'issue':
+				update_info = {'issue_id':i['issue_number'],
+								'issue_gql_id':i['issue_gql_id']
+								}
+				if i['reactions_pageinfo']['hasNextPage']:
+					success = None
+					update_info['end_cursor'] = i['reactions_pageinfo']['endCursor']
+					db.insert_update(table='issue_reactions',repo_id=i['repo_id'],success=success,info=update_info)
+
+		if commit:
+			db.connection.commit()
+
+class IssueReactionsGQLFiller(GHGQLFiller):
+	def __init__(self,**kwargs):
+		self.items_name = 'issue_reactions'
+		self.queried_obj = 'repo'
+		self.sub_queried_obj = 'issue'
+		self.pageinfo_path = ['node','reactions','pageInfo']
+		GHGQLFiller.__init__(self,**kwargs)
+
+	def check_requirements(self):
+		self.db.cursor.execute('''
+			SELECT update_type,updated_at FROM full_updates
+			WHERE update_type='complete_issues'
+			ORDER BY updated_at DESC
+			LIMIT 1
+			;
+			''')
+		ans = list(self.db.cursor.fetchall())
+		if len(ans) == 0:
+			self.logger.info('missing complete_issues filler, necessary prior to issue_reactions')
+			return False
+		else:
+			return True
+
+	def query_string(self,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: python-formatable string representing the graphql query
+		'''
+		return '''query {{
+					repository(owner: "{repo_owner}", name: "{repo_name}") {{
+  							nameWithOwner
+    						id }}
+  					node(id:"{issue_gql_id}") {{
+  					    ... on Issue {{
+
+									id
+									number
+									reactions(first:{page_size}  {after_end_cursor}) {{
+										totalCount
+										pageInfo {{
+											hasNextPage
+											endCursor
+											}}
+										nodes {{
+											createdAt
+											user {{ login }}
+											content
+											}}
+      								}}
+    							
+    							}}
+  							}}
+						}}'''
+
+
+	def parse_query_result(self,query_result,repo_id,identity_id,repo_owner=None,repo_name=None,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: [ {'repo_id':r_id,'repo_owner':r_ow,'repo_name':r_na,'issue_number':issue_na,'issue_title':title_na,'created_at':created_date,'closed_at':closed_date} , ...]
+		'''
+		ans = []
+		if repo_owner is None:
+			repo_owner,repo_name = query_result['repository']['nameWithOwner'].split('/')
+		for e in [query_result['node']]:
+			d = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'issue'}
+			try:
+				d['issue_gql_id'] = e['id']
+				d['issue_number'] = e['number']
+				d['issue_id'] = e['number']
+				
+			except (KeyError,TypeError) as err:
+				self.logger.info('Result triggering error: {} \nError when parsing issues for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+				continue
+			else:
+				ans.append(d)
+				if e['reactions']['totalCount']>0:
+					for ee in e['reactions']['nodes']:
+						r = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'issue_reaction'}
+						r['issue_id'] = d['issue_id']
+						r['issue_number'] = d['issue_id']
+						r['issue_gql_id'] = d['issue_gql_id']
+						try:
+							r['created_at'] = ee['createdAt']
+							r['issue_reaction'] = ee['content']
+							try:
+								r['author_login'] = ee['user']['login']
+							except:
+								r['author_login'] = None
+						except (KeyError,TypeError) as err:
+							self.logger.info('Result triggering error: {} \nError when parsing issue_reactions for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+							continue
+						else:
+							ans.append(r)
+		return ans
+
+	def insert_items(self,**kwargs):
+		CompleteIssuesGQLFiller.insert_reactions(self,**kwargs)
+
+
+	def get_nb_items(self,query_result):
+		'''
+		In subclasses this has to be implemented
+		output: nb_items or None if not relevant
+		'''
+		return query_result['node']['reactions']['totalCount']
+
 
 
 class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
