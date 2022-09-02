@@ -9,6 +9,8 @@ import pygit2
 import subprocess
 import csv
 import semantic_version
+import sqlite3
+import pandas as pd
 
 from .. import fillers
 from ..fillers import generic
@@ -111,6 +113,9 @@ class JuliaGeneralFiller(generic.PackageFiller):
 			dates_filename='julia_version_dates.csv',
 			replace_repo=False,
 			update_repo=False,
+			genie_pkgs_url='https://www.dropbox.com/s/ogohqe5bo7qfzl2/dev.sqlite?dl=1',
+			dlstats_url='https://julialang-logs.s3.amazonaws.com/public_outputs/current/package_requests_by_date.csv.gz',
+			silent_discont_statsintervals=False,
 					**kwargs):
 		generic.PackageFiller.__init__(self,**kwargs)
 		self.source = source
@@ -122,12 +127,44 @@ class JuliaGeneralFiller(generic.PackageFiller):
 		self.replace_repo = replace_repo
 		self.update_repo = update_repo
 		self.dates_filename = dates_filename
+		self.silent_discont_statsintervals = silent_discont_statsintervals
+		self.genie_pkgs_url = genie_pkgs_url
+		self.dlstats_url = dlstats_url
+
+	def get_downloadstats_overlap(self):
+		statsdb_conn = sqlite3.connect(os.path.join(self.data_folder,'pkgs_genie.db'))
+		statsdb_cur = statsdb_conn.cursor()
+		statsdb_cur.execute('SELECT MAX(date),MIN(date) FROM stats;')
+		max_db,min_db = statsdb_cur.fetchone()
+		statsdb_conn.close()
+		intervals = [[datetime.datetime.strptime(min_db,'%Y-%m-%d'),datetime.datetime.strptime(max_db,'%Y-%m-%d')]]
+		for statsfile in glob.glob(os.path.join(self.data_folder,'julia_pkg_dlstats','*.csv')):
+			df = pd.read_csv(statsfile)
+			intervals.append([datetime.datetime.strptime(df['date'].min(),'%Y-%m-%d'),datetime.datetime.strptime(df['date'].max(),'%Y-%m-%d')])
+
+		intervals = sorted(intervals)
+		concat_intervals = [intervals[0]]
+		for i_min,i_max in intervals:
+			if i_min <= concat_intervals[-1][1]:
+				concat_intervals[-1][1] = i_max
+			else:
+				concat_intervals.append([i_min,i_max])
+		return concat_intervals
+
 
 
 	def prepare(self):
 		if self.data_folder is None:
 			self.data_folder = self.db.data_folder
 		data_folder = self.data_folder
+
+		self.db.cursor.execute('''SELECT 1 FROM full_updates WHERE update_type='julia_packages_general' LIMIT 1;''')
+		ans = list(self.db.cursor.fetchall())
+		if len(ans)>0 and not self.force:
+			self.done = True
+			self.logger.info('Julia packages info from General Registry already present in DB, skipping')
+			return
+
 
 		#create folder if needed
 		if not os.path.exists(data_folder):
@@ -138,6 +175,38 @@ class JuliaGeneralFiller(generic.PackageFiller):
 			self.source_url_root = self.db.get_source_info(source=self.source)[1]
 
 		self.clone_repo(repo_url=self.repo_url,repo_folder=self.repo_folder,update=self.update_repo,replace=self.replace_repo)
+
+
+		self.download(url=self.genie_pkgs_url,destination=os.path.join(self.data_folder,'pkgs_genie.db'))
+		
+		self.download(url=self.dlstats_url,destination=os.path.join(self.data_folder,'julia_pkg_dlstats',f'''package_requests_by_date_{datetime.datetime.now().strftime('%Y_%m_%d')}.csv.gz'''))
+		for gzfile in glob.glob(os.path.join(self.data_folder,'julia_pkg_dlstats','*.gz')):
+			self.ungzip(orig_file=gzfile,destination=gzfile[:-3])
+
+		if not len(self.get_downloadstats_overlap()) == 1:
+			self.download(force=True,url=self.genie_pkgs_url,destination=os.path.join(self.data_folder,'pkgs_genie.db'))
+			new_overlap = self.get_downloadstats_overlap()
+			if not len(new_overlap) == 1:
+				message = f' Download statistics not spanning a continuous interval: {new_overlap}'
+				if not self.silent_discont_statsintervals:
+					raise ValueError(message)
+				else:
+					self.logger.info(message)
+
+		self.package_version_download_list = []
+		dlstats_conn = sqlite3.connect(os.path.join(self.data_folder,'pkgs_genie.db'))
+		dlstats_cur = dlstats_conn.cursor()
+		dlstats_cur.execute('''
+			SELECT package_uuid,NULL,SUM(request_count),date
+			FROM stats
+			GROUP BY package_uuid,date
+			;''')
+		self.package_version_download_list += list(dlstats_cur.fetchall())
+		dlstats_conn.close()
+		for statsfile in glob.glob(os.path.join(self.data_folder,'julia_pkg_dlstats','*.csv')):
+			df = pd.read_csv(statsfile)
+			df['version_str'] = None
+			self.package_version_download_list += df[['package_uuid','version_str','request_count','date']].values.tolist()
 
 		self.get_dates()
 
@@ -379,6 +448,12 @@ class JuliaGeneralFiller(generic.PackageFiller):
 								deps_v[uuid_dict[dep]] = str(sv)
 
 					self.deps_content[p_uuid][v] = deps_v
+
+	def apply(self):
+		generic.PackageFiller.apply(self)
+		self.db.cursor.execute('''INSERT INTO full_updates SELECT 'julia_packages_general';''')
+		self.db.connection.commit()
+
 
 '''
 https://julialang-logs.s3.amazonaws.com/public_outputs/current/package_requests_by_date.csv.gz

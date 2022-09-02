@@ -82,6 +82,8 @@ class Filler(object):
 			self.logger.info('Skipping download {}'.format(url))
 		else:
 			self.logger.info('Downloading {}'.format(url))
+			if not os.path.exists(os.path.dirname(destination)):
+				os.makedirs(os.path.dirname(destination))
 			if not wget:
 				r = requests.get(url, allow_redirects=True)
 				with open(destination, 'wb') as f:
@@ -110,11 +112,15 @@ class Filler(object):
 		self.db.record_file(folder=self.data_folder,**kwargs)
 
 	def ungzip(self,orig_file,destination,clean_zip=False):
-		self.logger.info('UnGzipping {}'.format(orig_file))
-		with gzip.open(orig_file, 'rb') as f_in:
-			with open(destination, 'wb') as f_out:
-				shutil.copyfileobj(f_in, f_out)
-		if clean_zip:
+		if os.path.exists(destination):
+			self.logger.info('Skipping UnGzipping of {}'.format(orig_file))
+		else:
+			self.logger.info('UnGzipping {}'.format(orig_file))
+			with gzip.open(orig_file, 'rb') as f_in:
+				with open(destination, 'wb') as f_out:
+					shutil.copyfileobj(f_in, f_out)
+
+		if clean_zip and os.path.exists(orig_file):
 			os.remove(orig_file)
 
 	def clone_repo(self,repo_url,update=False,replace=False,repo_folder=None,**kwargs):

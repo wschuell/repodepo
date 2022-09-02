@@ -30,7 +30,7 @@ class PackageFiller(fillers.Filler):
 	or
 	name,created_at,repository
 	"""
-	def __init__(self,package_list=None,package_list_file=None,package_version_list=None,package_deps_list=None,package_version_download_list=None,force=False,deps_to_delete=None,package_limit=None,page_size=10**4,**kwargs):
+	def __init__(self,package_list=None,package_list_file=None,package_version_list=None,package_deps_list=None,package_download_list=None,package_version_download_list=None,force=False,deps_to_delete=None,package_limit=None,page_size=10**4,**kwargs):
 		self.package_list = package_list
 		self.package_list_file = package_list_file
 		self.package_limit = package_limit
@@ -38,6 +38,10 @@ class PackageFiller(fillers.Filler):
 			self.package_version_download_list = []
 		else:
 			self.package_version_download_list = package_version_download_list
+		if package_download_list is None:
+			self.package_download_list = []
+		else:
+			self.package_download_list = package_download_list
 		if package_version_list is None:
 			self.package_version_list = []
 		else:
@@ -238,27 +242,116 @@ got: {}'''.format(headers))
 			if self.db.db_type == 'postgres':
 				extras.execute_batch(self.db.cursor,'''
 					INSERT INTO package_version_downloads(package_version,downloaded_at,downloads)
-					VALUES(
-						(SELECT v.id FROM package_versions v
+					SELECT
+						(CASE WHEN %(version_str)s IS NOT NULL THEN (SELECT v.id FROM package_versions v
 							INNER JOIN packages p
 							ON p.source_id=%(package_source_id)s AND p.insource_id=%(package_insource_id)s
 							AND p.id=v.package_id AND v.version_str=%(version_str)s)
-						,%(downloaded_at)s,%(nb_downloads)s)
+						ELSE
+							(SELECT pv.id FROM package_versions pv 
+							INNER JOIN packages p 
+							ON p.insource_id = %(package_insource_id)s
+							ON p.source_id = %(package_source_id)s
+							AND p.id=pv.package_id 
+							-- AND pv.created_at::date <= %(downloaded_at)s::date
+							ORDER BY (pv.created_at::date <= %(downloaded_at)s::date) DESC, GREATEST(pv.created_at-%(downloaded_at)s::date,%(downloaded_at)s::date-pv.created_at) ASC 
+							LIMIT 1)
+							
+						END)
+						,%(downloaded_at)s,%(nb_downloads)s
+					WHERE EXISTS (SELECT id FROM packages WHERE insource_id=%(package_insource_id)s AND p.source_id=%(package_source_id)s)
 					ON CONFLICT DO NOTHING
 					;''',({'version_str':v_str,'package_insource_id':p_id,'package_source_id':self.source_id,'downloaded_at':dl_at,'nb_downloads':nb_dl} for (p_id,v_str,nb_dl,dl_at) in package_version_download_list),
 					page_size=self.page_size)
+
 			else:
 				self.db.cursor.executemany('''
 					INSERT OR IGNORE INTO package_version_downloads(package_version,downloaded_at,downloads)
-					VALUES(
-						(SELECT v.id FROM package_versions v
+					SELECT
+						(CASE WHEN %(version_str)s IS NOT NULL THEN (SELECT v.id FROM package_versions v
 							INNER JOIN packages p
 							ON p.source_id=:package_source_id AND p.insource_id=:package_insource_id
 							AND p.id=v.package_id AND v.version_str=:version_str)
-						,:downloaded_at,:nb_downloads)
+						ELSE
+							(SELECT pv.id FROM package_versions pv 
+							INNER JOIN packages p 
+							ON p.insource_id = :package_insource_id
+							ON p.source_id = :package_source_id
+							AND p.id=pv.package_id 
+							-- AND pv.created_at <= :downloaded_at
+							ORDER BY (pv.created_at <= :downloaded_at) DESC, GREATEST(pv.created_at-:downloaded_at,:downloaded_at-pv.created_at) ASC 
+							LIMIT 1)
+						END)
+						,:downloaded_at,:nb_downloads
+					WHERE EXISTS (SELECT id FROM packages WHERE insource_id=:package_insource_id AND p.source_id=:package_source_id)
 					;''',({'version_str':v_str,'package_insource_id':p_id,'package_source_id':self.source_id,'downloaded_at':dl_at,'nb_downloads':nb_dl} for (p_id,v_str,nb_dl,dl_at) in package_version_download_list))
 
 			self.logger.info('Filled package version downloads')
+
+
+	# def fill_package_downloads(self,package_download_list=None,source=None,force=False,clean_urls=True):
+	# 	'''
+	# 	syntax of package_download list:
+	# 	package id (in source), nb_downloads ,downloaded_at (datetime.datetime)
+
+	# 	'''
+
+	# 	if package_download_list is None:
+	# 		package_download_list = self.package_download_list
+	# 	if source is None:
+	# 		source = self.source
+	# 	if not force:
+	# 		if self.db.db_type == 'postgres':
+	# 			self.db.cursor.execute('''SELECT 1 FROM package_version_downloads pvd
+	# 				INNER JOIN package_versions pv
+	# 				ON pv.id=pvd.package_version
+	# 				INNER JOIN packages p
+	# 				ON pv.package_id=p.id
+	# 				INNER JOIN sources s
+	# 				ON p.source_id=s.id AND s.name=%s
+	# 				LIMIT 1;''',(source,))
+	# 		else:
+	# 			self.db.cursor.execute('''SELECT 1 FROM package_version_downloads pvd
+	# 				INNER JOIN package_versions pv
+	# 				ON pv.id=pvd.package_version
+	# 				INNER JOIN packages p
+	# 				ON pv.package_id=p.id
+	# 				INNER JOIN sources s
+	# 				ON p.source_id=s.id AND s.name=?
+	# 				LIMIT 1;''',(source,))
+	# 		sample_package = self.db.cursor.fetchone()
+	# 		if sample_package is not None:
+	# 			self.logger.info('Skipping package downloads from {}'.format(source))
+	# 		else:
+	# 			self.fill_package_downloads(package_download_list=package_download_list,source=source,force=True)
+	# 	else:
+	# 		self.logger.info('Filling package downloads from {}'.format(source))
+	# 		self.db.register_source(source)
+	# 		self.set_source_id()
+	# 		if self.db.db_type == 'postgres':
+	# 			extras.execute_batch(self.db.cursor,'''
+	# 				INSERT INTO package_version_downloads(package_version,downloaded_at,downloads)
+	# 				VALUES(
+	# 					(SELECT v.id FROM package_versions v
+	# 						INNER JOIN packages p
+	# 						ON p.source_id=%(package_source_id)s AND p.insource_id=%(package_insource_id)s
+	# 						AND p.id=v.package_id AND v.version_str=%(version_str)s)
+	# 					,%(downloaded_at)s,%(nb_downloads)s)
+	# 				ON CONFLICT DO NOTHING
+	# 				;''',({'package_insource_id':p_id,'package_source_id':self.source_id,'downloaded_at':dl_at,'nb_downloads':nb_dl} for (p_id,nb_dl,dl_at) in package_download_list),
+	# 				page_size=self.page_size)
+	# 		else:
+	# 			self.db.cursor.executemany('''
+	# 				INSERT OR IGNORE INTO package_version_downloads(package_version,downloaded_at,downloads)
+	# 				VALUES(
+	# 					(SELECT v.id FROM package_versions v
+	# 						INNER JOIN packages p
+	# 						ON p.source_id=:package_source_id AND p.insource_id=:package_insource_id
+	# 						AND p.id=v.package_id AND v.version_str=:version_str)
+	# 					,:downloaded_at,:nb_downloads)
+	# 				;''',({'package_insource_id':p_id,'package_source_id':self.source_id,'downloaded_at':dl_at,'nb_downloads':nb_dl} for (p_id,nb_dl,dl_at) in package_download_list))
+
+	# 		self.logger.info('Filled package downloads')
 
 
 
