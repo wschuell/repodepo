@@ -451,7 +451,7 @@ class JuliaGeneralFiller(generic.PackageFiller):
 
 	def apply(self):
 		generic.PackageFiller.apply(self)
-		self.db.cursor.execute('''INSERT INTO full_updates SELECT 'julia_packages_general';''')
+		self.db.cursor.execute('''INSERT INTO full_updates(update_type) SELECT 'julia_packages_general';''')
 		self.db.connection.commit()
 
 

@@ -251,7 +251,7 @@ got: {}'''.format(headers))
 							(SELECT pv.id FROM package_versions pv 
 							INNER JOIN packages p 
 							ON p.insource_id = %(package_insource_id)s
-							ON p.source_id = %(package_source_id)s
+							AND p.source_id = %(package_source_id)s
 							AND p.id=pv.package_id 
 							-- AND pv.created_at::date <= %(downloaded_at)s::date
 							ORDER BY (pv.created_at::date <= %(downloaded_at)s::date) DESC, GREATEST(pv.created_at-%(downloaded_at)s::date,%(downloaded_at)s::date-pv.created_at) ASC 
@@ -259,7 +259,7 @@ got: {}'''.format(headers))
 							
 						END)
 						,%(downloaded_at)s,%(nb_downloads)s
-					WHERE EXISTS (SELECT id FROM packages WHERE insource_id=%(package_insource_id)s AND p.source_id=%(package_source_id)s)
+					WHERE EXISTS (SELECT id FROM packages WHERE insource_id=%(package_insource_id)s AND source_id=%(package_source_id)s)
 					ON CONFLICT DO NOTHING
 					;''',({'version_str':v_str,'package_insource_id':p_id,'package_source_id':self.source_id,'downloaded_at':dl_at,'nb_downloads':nb_dl} for (p_id,v_str,nb_dl,dl_at) in package_version_download_list),
 					page_size=self.page_size)
@@ -268,7 +268,7 @@ got: {}'''.format(headers))
 				self.db.cursor.executemany('''
 					INSERT OR IGNORE INTO package_version_downloads(package_version,downloaded_at,downloads)
 					SELECT
-						(CASE WHEN %(version_str)s IS NOT NULL THEN (SELECT v.id FROM package_versions v
+						(CASE WHEN :version_str IS NOT NULL THEN (SELECT v.id FROM package_versions v
 							INNER JOIN packages p
 							ON p.source_id=:package_source_id AND p.insource_id=:package_insource_id
 							AND p.id=v.package_id AND v.version_str=:version_str)
@@ -276,14 +276,14 @@ got: {}'''.format(headers))
 							(SELECT pv.id FROM package_versions pv 
 							INNER JOIN packages p 
 							ON p.insource_id = :package_insource_id
-							ON p.source_id = :package_source_id
+							AND p.source_id = :package_source_id
 							AND p.id=pv.package_id 
 							-- AND pv.created_at <= :downloaded_at
-							ORDER BY (pv.created_at <= :downloaded_at) DESC, GREATEST(pv.created_at-:downloaded_at,:downloaded_at-pv.created_at) ASC 
+							ORDER BY (pv.created_at <= :downloaded_at) DESC, MAX(pv.created_at-:downloaded_at,:downloaded_at-pv.created_at) ASC 
 							LIMIT 1)
 						END)
 						,:downloaded_at,:nb_downloads
-					WHERE EXISTS (SELECT id FROM packages WHERE insource_id=:package_insource_id AND p.source_id=:package_source_id)
+					WHERE EXISTS (SELECT id FROM packages WHERE insource_id=:package_insource_id AND source_id=:package_source_id)
 					;''',({'version_str':v_str,'package_insource_id':p_id,'package_source_id':self.source_id,'downloaded_at':dl_at,'nb_downloads':nb_dl} for (p_id,v_str,nb_dl,dl_at) in package_version_download_list))
 
 			self.logger.info('Filled package version downloads')
