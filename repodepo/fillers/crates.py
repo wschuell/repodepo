@@ -166,7 +166,6 @@ class CratesFiller(generic.PackageFiller):
 							new_schema_script += c
 					schema_script = new_schema_script
 
-			print(schema_script)
 
 			with open(os.path.join(self.crates_folder,f'dump_{t_str}',subfolder,'import.sql'),'r') as f:
 				import_script = f.read()
