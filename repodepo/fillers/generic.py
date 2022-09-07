@@ -1283,3 +1283,45 @@ class GithubNoreplyEmailMerger(IdentitiesFiller):
 			self.db.merge_identities(identity1=i,identity2=ghlogin_ids[login],autocommit=False,reason='Parsed email {} as github_login {}'.format(email,login))
 		self.db.connection.commit()
 
+
+
+class DLSamplePackages(fillers.Filler):
+	def __init__(self,nb_packages=100,**kwargs):
+		self.nb_packages = nb_packages
+		fillers.Filler.__init__(self,**kwargs)
+
+	def apply(self):
+		self.logger.info(f'Trimming dataset to retain only {self.nb_packages} most downloaded packages.')
+
+		if self.db.db_type == 'postgres':
+			self.db.cursor.execute('''SELECT COUNT(*) FROM (SELECT * FROM packages LIMIT %(nb_packages)s+1); ''',{'nb_packages':self.nb_packages})
+		else:
+			self.db.cursor.execute('''SELECT COUNT(*) FROM (SELECT * FROM packages LIMIT :nb_packages+1); ''',{'nb_packages':self.nb_packages})
+
+		if self.db.cursor.fetchall()[0][0]>100:
+			self.trim_packages()
+
+	def trim_packages(self):
+		if self.db.db_type == 'postgres':
+			self.db.cursor.execute('''
+					DELETE FROM packages WHERE id NOT IN 
+					 (SELECT pv.package_id FROM package_version_downloads pvd
+					 	INNER JOIN package_versions pv
+					 	ON pv.id=pvd.package_version
+					 	GROUP BY pv.package_id
+					 	ORDER BY SUM(downloads) DESC
+					 	LIMIT %(nb_packages)s)
+					;''',{'nb_packages':self.nb_packages})
+		else:
+
+			self.db.cursor.execute('''
+					DELETE FROM packages WHERE id NOT IN 
+					 (SELECT pv.package_id FROM package_version_downloads pvd
+					 	INNER JOIN package_versions pv
+					 	ON pv.id=pvd.package_version
+					 	GROUP BY pv.package_id
+					 	ORDER BY SUM(downloads) DESC
+					 	LIMIT :nb_packages)
+					;''',{'nb_packages':self.nb_packages})
+
+		self.db.connection.commit()

@@ -11,14 +11,29 @@ class Stats(generic_getters.Getter):
 	'''
 	abstract class to be inherited from
 	'''
+	def __init__(self,autosave_tmp=False,tmp_filepath=None,**kwargs):
+		self.autosave_tmp = autosave_tmp
+		if tmp_filepath is None:
+			self.tmp_filepath = os.path.join('tmp',self.__class__.__name__+'_tmp.yml')
+		else:
+			self.tmp_filepath = tmp_filepath
+		generic_getters.Getter.__init__(self,**kwargs)
 
-	def format_result(self,**kwargs):
+	def format_result(self,tmp=False,**kwargs):
 		'''
 		formats results in yml format
 		'''
-		if not hasattr(self,'results'):
-			self.get_result(**kwargs)
-		return yaml.dump(self.results)
+		if tmp:
+			if hasattr(self,'results'):
+				return yaml.dump(self.results)
+			elif hasattr(self,'tmp_results'):
+				return yaml.dump(self.tmp_results)
+			else:
+				return {}
+		else:
+			if not hasattr(self,'results'):
+				self.get_result(**kwargs)
+			return yaml.dump(self.results)
 
 	def print_result(self,**kwargs):
 		'''
@@ -35,12 +50,20 @@ class Stats(generic_getters.Getter):
 		with open(filepath,'w') as f:
 			f.write(self.format_result(**kwargs))
 
+	def autosave(self,force=False,**kwargs):
+		if self.autosave_tmp or force:
+			self.save(filepath=self.tmp_filepath,tmp=True,**kwargs)
+		
 	def get_result(self,db=None,force=False,**kwargs):
 		'''
 		sets self.results as an ordered dict, potentially nested, by calling .get() if necessary
 		'''
 		if db is None:
 			db = self.db
+		if self.autosave_tmp and not hasattr(self,'tmp_results') and not force:
+			if os.path.exists(self.tmp_filepath):
+				with open(self.tmp_filepath,'r') as f:
+					self.tmp_results = yaml.load(f.read())
 		if not hasattr(self,'results') or force:
 			self.results = self.get(db=db,**kwargs)
 		return self.results

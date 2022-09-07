@@ -10,6 +10,7 @@ import subprocess
 import gzip
 import shutil
 import pygit2
+import tarfile
 
 logger = logging.getLogger(__name__)
 ch = logging.StreamHandler()
@@ -119,6 +120,17 @@ class Filler(object):
 			with gzip.open(orig_file, 'rb') as f_in:
 				with open(destination, 'wb') as f_out:
 					shutil.copyfileobj(f_in, f_out)
+
+		if clean_zip and os.path.exists(orig_file):
+			os.remove(orig_file)
+
+	def untar(self,orig_file,destination,clean_zip=False):
+		if os.path.exists(destination):
+			self.logger.info('Skipping UnTaring of {}'.format(orig_file))
+		else:
+			self.logger.info('UnTaring {}'.format(orig_file))
+			with tarfile.open(orig_file) as f_in:
+				f_in.extractall(destination)
 
 		if clean_zip and os.path.exists(orig_file):
 			os.remove(orig_file)
