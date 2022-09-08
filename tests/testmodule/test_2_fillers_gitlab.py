@@ -41,7 +41,7 @@ def test_gitlab(testdb):
 	testdb.add_filler(gitlab_gql.RepoCreatedAtFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(gitlab_gql.LoginsFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(gitlab_gql.CompleteIssuesGQLFiller(fail_on_wait=True,workers=workers,secondary_page_size=2,init_page_size=2,max_page_size=2))
-	# testdb.add_filler(gitlab_gql.CompletePullRequestsGQLFiller(fail_on_wait=True,workers=workers,secondary_page_size=2,init_page_size=2,max_page_size=2))
+	testdb.add_filler(gitlab_gql.CompletePullRequestsGQLFiller(fail_on_wait=True,workers=workers,secondary_page_size=2,init_page_size=2,max_page_size=2))
 	testdb.fill_db()
 
 # Deactivated LoginsFiller: Causing trouble on Github Actions. Missing properties of the Requester class (remaining query count, time to reset)
