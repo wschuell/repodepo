@@ -110,6 +110,7 @@ class Database(object):
 					clean_first=False,
 					do_init=False,
 					timeout=5,
+					fallback_db='postgres',
 					computation_db_name='repo_db_computation.db',
 					reconnect_on_pickling=False):
 		self.reconnect_on_pickling = reconnect_on_pickling
@@ -139,15 +140,35 @@ class Database(object):
 				logger.warning('You are providing your password directly, this could be a security concern, consider using solutions like .pgpass file.')
 			try:
 				self.connection = psycopg2.connect(user=db_user,port=port,host=host,database=db_name,password=password,options=options)
-			except psycopg2.OperationalError:
-				pgpass_env = 'PGPASSFILE'
-				default_pgpass = os.path.join(os.environ[homepath()],'.pgpass')
-				if pgpass_env not in os.environ.keys():
-					os.environ[pgpass_env] = default_pgpass
-					self.logger.info('Password authentication failed,trying to set .pgpass env variable')
-					self.connection = psycopg2.connect(user=db_user,port=port,host=host,database=db_name,password=password,options=options)
+			except psycopg2.OperationalError as e:
+			
+				self.db_conninfo = {'database':db_name,'user':db_user,'password':password,'options':options,'host':host,'port':port}
+				if 'database "{}" does not exist\n'.format(db_name) in str(e):
+					pgpass_env = 'PGPASSFILE'
+					default_pgpass = os.path.join(os.environ['HOME'],'.pgpass')
+					if pgpass_env not in os.environ.keys():
+						os.environ[pgpass_env] = default_pgpass
+					conninfo_nodb = copy.deepcopy(self.db_conninfo)
+					conninfo_nodb['database'] = fallback_db
+					self.logger.warning('Database {} does not exist: trying to create it via connecting primarily to database {}'.format(self.db_conninfo['database'],conninfo_nodb['database']))
+					conn = psycopg2.connect(**conninfo_nodb)
+					conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
+					cur = conn.cursor()
+					cur.execute(psycopg2.sql.SQL(
+						"CREATE DATABASE {};"
+						).format(psycopg2.sql.Identifier(self.db_conninfo['database'])))
+					cur.close()
+					conn.close()
+					self.connection = psycopg2.connect(**self.db_conninfo)
 				else:
-					raise
+					pgpass_env = 'PGPASSFILE'
+					default_pgpass = os.path.join(os.environ['HOME'],'.pgpass')
+					if pgpass_env not in os.environ.keys():
+						os.environ[pgpass_env] = default_pgpass
+						self.logger.info('Password authentication failed,trying to set .pgpass env variable')
+						self.connection = psycopg2.connect(**self.db_conninfo)
+					else:
+						raise
 			self.cursor = self.connection.cursor()
 		else:
 			raise ValueError('Unknown DB type: {}'.format(db_type))

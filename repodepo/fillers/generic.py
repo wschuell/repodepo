@@ -174,7 +174,7 @@ got: {}'''.format(headers))
 					-- WHERE p.source_id=%(package_source_id)s
 					VALUES((SELECT id FROM packages WHERE source_id=%(package_source_id)s AND insource_id=%(package_insource_id)s),%(version_str)s,%(created_at)s)
 					ON CONFLICT DO NOTHING
-					;''',({'version_str':v_str,'package_insource_id':p_id,'package_source_id':self.source_id,'created_at':created_at} for (p_id,v_str,created_at) in package_version_list),
+					;''',({'version_str':v_str,'package_insource_id':str(p_id),'package_source_id':self.source_id,'created_at':created_at} for (p_id,v_str,created_at) in package_version_list),
 					page_size=self.page_size)
 			else:
 				self.db.cursor.executemany('''
@@ -183,7 +183,7 @@ got: {}'''.format(headers))
 						AND insource_id=:package_insource_id)
 					,:version_str,
 					:created_at)
-					;''',({'version_str':v_str,'package_insource_id':p_id,'package_source_id':self.source_id,'created_at':created_at} for (p_id,v_str,created_at) in package_version_list))
+					;''',({'version_str':v_str,'package_insource_id':str(p_id),'package_source_id':self.source_id,'created_at':created_at} for (p_id,v_str,created_at) in package_version_list))
 
 			self.logger.info('Filled package versions')
 
@@ -261,7 +261,7 @@ got: {}'''.format(headers))
 						,%(downloaded_at)s,%(nb_downloads)s
 					WHERE EXISTS (SELECT id FROM packages WHERE insource_id=%(package_insource_id)s AND source_id=%(package_source_id)s)
 					ON CONFLICT DO NOTHING
-					;''',({'version_str':v_str,'package_insource_id':p_id,'package_source_id':self.source_id,'downloaded_at':dl_at,'nb_downloads':nb_dl} for (p_id,v_str,nb_dl,dl_at) in package_version_download_list),
+					;''',({'version_str':v_str,'package_insource_id':str(p_id),'package_source_id':self.source_id,'downloaded_at':dl_at,'nb_downloads':nb_dl} for (p_id,v_str,nb_dl,dl_at) in package_version_download_list),
 					page_size=self.page_size)
 
 			else:
@@ -284,7 +284,7 @@ got: {}'''.format(headers))
 						END)
 						,:downloaded_at,:nb_downloads
 					WHERE EXISTS (SELECT id FROM packages WHERE insource_id=:package_insource_id AND source_id=:package_source_id)
-					;''',({'version_str':v_str,'package_insource_id':p_id,'package_source_id':self.source_id,'downloaded_at':dl_at,'nb_downloads':nb_dl} for (p_id,v_str,nb_dl,dl_at) in package_version_download_list))
+					;''',({'version_str':v_str,'package_insource_id':str(p_id),'package_source_id':self.source_id,'downloaded_at':dl_at,'nb_downloads':nb_dl} for (p_id,v_str,nb_dl,dl_at) in package_version_download_list))
 
 			self.logger.info('Filled package version downloads')
 
@@ -402,7 +402,7 @@ got: {}'''.format(headers))
 						%(semver_str)s
 					--WHERE EXISTS (SELECT id FROM packages WHERE source_id=%(package_source_id)s AND insource_id=%(depending_on_package)s)
 					ON CONFLICT DO NOTHING
-					;''',({'version_package_id':vp_id,'version_str':v_str,'depending_on_package':dop_id,'package_source_id':self.source_id,'semver_str':semver_str} for (vp_id,v_str,dop_id,semver_str) in package_deps_list),
+					;''',({'version_package_id':vp_id,'version_str':v_str,'depending_on_package':str(dop_id),'package_source_id':self.source_id,'semver_str':semver_str} for (vp_id,v_str,dop_id,semver_str) in package_deps_list),
 					page_size=self.page_size)
 
 				for (dep_p,dep_on_p) in self.deps_to_delete:
@@ -429,7 +429,7 @@ got: {}'''.format(headers))
 						(SELECT id FROM packages WHERE source_id=:package_source_id AND insource_id=:depending_on_package),
 						:semver_str
 					--WHERE EXISTS (SELECT id FROM packages WHERE source_id=:package_source_id AND insource_id=:depending_on_package)
-					;''',({'version_package_id':vp_id,'version_str':v_str,'depending_on_package':dop_id,'package_source_id':self.source_id,'semver_str':semver_str} for (vp_id,v_str,dop_id,semver_str) in package_deps_list))
+					;''',({'version_package_id':vp_id,'version_str':v_str,'depending_on_package':str(dop_id),'package_source_id':self.source_id,'semver_str':semver_str} for (vp_id,v_str,dop_id,semver_str) in package_deps_list))
 
 
 				for (dep_p,dep_on_p) in self.deps_to_delete:
@@ -641,7 +641,7 @@ class RepositoriesFiller(fillers.Filler):
 
 		# Removing front elements
 		for start_str in ['http://','https://','http:/','https:/','www.','/',' ','\n','\t','\r','"',"'"]:
-			if repo.startswith(start_str):
+			if repo.lower().startswith(start_str):
 				return self.repo_formatting(repo=repo[len(start_str):],source_urlroot=source_urlroot,output_cleaned_url=output_cleaned_url,raise_error=raise_error)
 
 		# Remove end of url modifiers
@@ -651,22 +651,25 @@ class RepositoriesFiller(fillers.Filler):
 
 		# Removing back elements
 		for end_str in ['.git',' ','/','\n','\t','\r']:
-			if repo.endswith(end_str):
+			if repo.lower().endswith(end_str):
 				return self.repo_formatting(repo=repo[:-len(end_str)],source_urlroot=source_urlroot,output_cleaned_url=output_cleaned_url,raise_error=raise_error)
 
 		# Removing double extension url_root
 		if '.' in source_urlroot:
 			ending = source_urlroot.split('.')[-1]
 			double_ending = '{}.{}'.format(source_urlroot,ending)
-			if repo.startswith(double_ending):
+			if repo.lower().startswith(double_ending.lower()):
 				return self.repo_formatting(repo=source_urlroot+repo[len(double_ending):],source_urlroot=source_urlroot,output_cleaned_url=output_cleaned_url,raise_error=raise_error)
 
 		# Removing double url_root
-		if repo.startswith('{0}{0}'.format(source_urlroot)):
+		if repo.lower().startswith('{0}{0}'.format(source_urlroot.lower())):
 			return self.repo_formatting(repo=repo[len(source_urlroot):],source_urlroot=source_urlroot,output_cleaned_url=output_cleaned_url,raise_error=raise_error)
 
-		if repo.startswith('{0}/{0}'.format(source_urlroot)):
+		if repo.lower().startswith('{0}/{0}'.format(source_urlroot.lower())):
 			return self.repo_formatting(repo=repo[len(source_urlroot)+1:],source_urlroot=source_urlroot,output_cleaned_url=output_cleaned_url,raise_error=raise_error)
+
+		if repo.lower().startswith('gihub.com'):
+			return self.repo_formatting(repo='github.com'+repo[len('gihub.com'):],source_urlroot=source_urlroot,output_cleaned_url=output_cleaned_url,raise_error=raise_error)
 
 		# Typos replacement
 		repo = repo.replace('//','/')
@@ -675,7 +678,7 @@ class RepositoriesFiller(fillers.Filler):
 		# minimum 3 fields
 		# begins with source
 
-		if not repo.startswith(source_urlroot):
+		if not repo.lower().startswith(source_urlroot.lower()):
 			raise RepoSyntaxError('Repo {} has not expected source {}.'.format(repo,source_urlroot))
 		else:
 			r = repo[len(source_urlroot):]
@@ -1294,12 +1297,13 @@ class DLSamplePackages(fillers.Filler):
 		self.logger.info(f'Trimming dataset to retain only {self.nb_packages} most downloaded packages.')
 
 		if self.db.db_type == 'postgres':
-			self.db.cursor.execute('''SELECT COUNT(*) FROM (SELECT * FROM packages LIMIT %(nb_packages)s+1); ''',{'nb_packages':self.nb_packages})
+			self.db.cursor.execute('''SELECT COUNT(*) FROM (SELECT * FROM packages LIMIT %(nb_packages)s+1) AS sq; ''',{'nb_packages':self.nb_packages})
 		else:
-			self.db.cursor.execute('''SELECT COUNT(*) FROM (SELECT * FROM packages LIMIT :nb_packages+1); ''',{'nb_packages':self.nb_packages})
+			self.db.cursor.execute('''SELECT COUNT(*) FROM (SELECT * FROM packages LIMIT :nb_packages+1) AS sq; ''',{'nb_packages':self.nb_packages})
 
 		if self.db.cursor.fetchall()[0][0]>100:
 			self.trim_packages()
+			self.trim_urls()
 
 	def trim_packages(self):
 		if self.db.db_type == 'postgres':
@@ -1325,3 +1329,79 @@ class DLSamplePackages(fillers.Filler):
 					;''',{'nb_packages':self.nb_packages})
 
 		self.db.connection.commit()
+
+	def trim_urls(self):
+		self.db.cursor.execute('''
+					DELETE FROM urls WHERE id NOT IN 
+					 (SELECT DISTINCT url_id FROM packages)
+					;''')
+		self.db.connection.commit()
+
+
+class SourcesAutoFiller(SourcesFiller):
+
+	def __init__(self,max_tries=5,**kwargs):
+		self.max_tries = max_tries
+		self.source = []
+		self.source_urlroot = []
+		fillers.Filler.__init__(self,**kwargs)
+
+	def prepare(self):
+		self.db.cursor.execute('''SELECT 1 FROM full_updates WHERE update_type='sources_autofiller' LIMIT 1; ''')
+		if self.db.cursor.fetchone() is not None and not self.force:
+			self.done = True
+		else:
+			self.identify_missing_sources()
+			self.filter_git_platforms()
+			SourcesFiller.prepare(self)
+
+	def apply(self):
+		SourcesFiller.apply(self)
+		self.db.cursor.execute('''INSERT INTO full_updates(update_type) SELECT 'sources_autofiller'; ''')
+		self.db.connection.commit()
+
+	def identify_missing_sources(self):
+		self.db.cursor.execute('''
+			SELECT url FROM urls WHERE source_root IS NULL
+			;''')
+
+		self.candidates = {}
+		for res_url in self.db.cursor.fetchall():
+			url = res_url[0]
+			source,cleaned_url = self.get_urlroot(url)
+			if source not in self.candidates.keys():
+				self.candidates[source] = []
+			self.candidates[source].append(url)
+		print(sorted(self.candidates.keys()))
+
+
+	def filter_git_platforms(self):
+		for i,item in enumerate(sorted(self.candidates.items())):
+			src,url_list = item
+			for j,u in enumerate(sorted(url_list)[:self.max_tries]):
+				if self.check_git_url(u,additional_info=f' ({j+1+self.max_tries*i}/{self.max_tries*len(self.candidates.keys())})'):
+					self.source.append(src)
+					self.source_urlroot.append(src)
+					self.logger.info(f'Identified valid source {src}')
+					break
+
+	def check_git_url(self,url,additional_info=''):
+		cmd = f'''git ls-remote -h {url} HEAD'''
+		try:
+			self.logger.info(f'Checking if {url} is a git repository'+additional_info)
+			subprocess.check_call(cmd.split(' '), env=os.environ.update(dict(GIT_TERMINAL_PROMPT='0',GIT_SSL_NO_VERIFY='1')))
+			return True
+		except subprocess.CalledProcessError:
+			return False
+
+	def get_urlroot(self,url):
+		prefixes = ['https://','http://','https:/','http:/','/','/','www.']
+		cleaned_url = url
+		for p in prefixes:
+			if cleaned_url.startswith(p):
+				cleaned_url = cleaned_url[len(p):]
+		source = cleaned_url.split('/')[0]
+		if url.startswith('https:'):
+			return source,'https://'+cleaned_url
+		else:
+			return source,'http://'+cleaned_url

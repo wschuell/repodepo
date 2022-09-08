@@ -2793,7 +2793,7 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 							r['issue_comment_gql_id'] = ee['id']
 							r['comment_reactions_pageinfo'] = ee['reactions']['pageInfo']
 							try:
-								r['author_login'] = ee['user']['login']
+								r['author_login'] = ee['author']['login']
 							except:
 								r['author_login'] = None
 
@@ -3300,7 +3300,7 @@ class IssueCommentsGQLFiller(GHGQLFiller):
 							r['issue_comment_gql_id'] = ee['id']
 							r['comment_reactions_pageinfo'] = ee['reactions']['pageInfo']
 							try:
-								r['author_login'] = ee['user']['login']
+								r['author_login'] = ee['author']['login']
 							except:
 								r['author_login'] = None
 
@@ -3765,7 +3765,7 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 							r['pullrequest_comment_gql_id'] = ee['id']
 							r['comment_reactions_pageinfo'] = ee['reactions']['pageInfo']
 							try:
-								r['author_login'] = ee['user']['login']
+								r['author_login'] = ee['author']['login']
 							except:
 								r['author_login'] = None
 
@@ -4277,7 +4277,7 @@ class PRCommentsGQLFiller(GHGQLFiller):
 							r['pullrequest_comment_gql_id'] = ee['id']
 							r['comment_reactions_pageinfo'] = ee['reactions']['pageInfo']
 							try:
-								r['author_login'] = ee['user']['login']
+								r['author_login'] = ee['author']['login']
 							except:
 								r['author_login'] = None
 

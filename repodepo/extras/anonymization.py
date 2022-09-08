@@ -51,7 +51,15 @@ class AnonymizationMetaFiller(fillers.Filler):
 	Combining all the necessary fillers for anonymization
 	'''
 	def __init__(self,salt,keep_email_suffixes=True,**kwargs):
-		self.salt = salt
+		if salt is None:
+			saltfile = os.path.join(os.environ['HOME'],'.repo_tools','salt.txt')
+			if os.path.exists(saltfile):
+				with open(saltfile,'r') as f:
+					self.salt = f.read().replace('\n','')
+			else:
+				self.salt = None 
+		else:
+			self.salt = salt
 		self.keep_email_suffixes = keep_email_suffixes
 		fillers.Filler.__init__(self,**kwargs)
 
