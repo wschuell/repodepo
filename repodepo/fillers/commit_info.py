@@ -222,9 +222,10 @@ class CommitsFiller(fillers.Filler):
 						return {
 							'author_email':commit['author_email'],
 							'author_name':commit['author_name'],
-							#'localtime':commit['commit_time'],
-							'time':commit['time'],#-60*commit.commit_time_offset,
-							'time_offset':commit['time_offset'],
+							#'localtime':commit['time'],
+							'gmt_time':commit['time'],
+							'local_time':commit['time']+60*commit['time_offset'],
+							'time_offset':commit['time_offset']*60,
 							'sha':commit['sha'],
 							'parents':commit['parents'],
 							'repo_id':repo_id,
@@ -237,8 +238,9 @@ class CommitsFiller(fillers.Filler):
 							'author_email':commit.author.email,
 							'author_name':commit.author.name,
 							#'localtime':commit.commit_time,
-							'time':commit.commit_time,#-60*commit.commit_time_offset,
-							'time_offset':commit.commit_time_offset,
+							'gmt_time':commit.commit_time,
+							'local_time':commit.commit_time+60*commit.commit_time_offset,
+							'time_offset':commit.commit_time_offset*60,
 							'sha':commit.hex,
 							'parents':[pid.hex for pid in commit.parent_ids],
 							'repo_id':repo_id,
@@ -262,8 +264,9 @@ class CommitsFiller(fillers.Filler):
 							'author_email':commit.author.email,
 							'author_name':commit.author.name,
 							#'localtime':commit.commit_time,
-							'time':commit.commit_time,#-60*commit.commit_time_offset,
-							'time_offset':commit.commit_time_offset,
+							'gmt_time':commit.commit_time,
+							'local_time':commit.commit_time+60*commit.commit_time_offset,
+							'time_offset':commit.commit_time_offset*60,
 							'sha':commit.hex,
 							'parents':[pid.hex for pid in commit.parent_ids],
 							'insertions':insertions,
@@ -371,7 +374,7 @@ class CommitsFiller(fillers.Filler):
 					c = next(orig_gen)
 					tracked_data['empty'] = False
 					tracked_data['last_commit'] = c
-					tracked_data['latest_commit_time'] = max(tracked_data['latest_commit_time'],c['time'])
+					tracked_data['latest_commit_time'] = max(tracked_data['latest_commit_time'],c['gmt_time'])
 					yield c
 				except StopIteration:
 					return
@@ -488,7 +491,7 @@ class CommitsFiller(fillers.Filler):
 
 		if not tracked_data['empty']:
 			# repo_id = tracked_data['last_commit']['repo_id']
-			latest_commit_time = datetime.datetime.fromtimestamp(tracked_data['latest_commit_time'])
+			latest_commit_time = datetime.datetime.utcfromtimestamp(tracked_data['latest_commit_time'])
 		else:
 			latest_commit_time = None
 
@@ -517,7 +520,7 @@ class CommitsFiller(fillers.Filler):
 					c = next(orig_gen)
 					tracked_data['last_commit'] = c
 					tracked_data['empty'] = False
-					tracked_data['latest_commit_time'] = max(tracked_data['latest_commit_time'],c['time'])
+					tracked_data['latest_commit_time'] = max(tracked_data['latest_commit_time'],c['gmt_time'])
 					yield c
 				except StopIteration:
 					return
@@ -529,42 +532,48 @@ class CommitsFiller(fillers.Filler):
 
 		if self.db.db_type == 'postgres':
 			extras.execute_batch(self.db.cursor,'''
-				INSERT INTO commits(sha,author_id,committer_id,created_at,insertions,deletions,message)
-					VALUES(%s,
+				INSERT INTO commits(sha,author_id,committer_id,created_at,local_created_at,time_offset,insertions,deletions,message)
+					VALUES(%(sha)s,
 							(SELECT i.id FROM identities i
 								INNER JOIN identity_types it
-							 ON i.identity=%s AND it.name='email' AND it.id=i.identity_type_id),
+							 ON i.identity=%(author_email)s AND it.name='email' AND it.id=i.identity_type_id),
 							(SELECT i.id FROM identities i
 								INNER JOIN identity_types it
-							 ON i.identity=%s AND it.name='email' AND it.id=i.identity_type_id),
-							%s,
-							%s,
-							%s,
-							%s
+							 ON i.identity=%(committer_email)s AND it.name='email' AND it.id=i.identity_type_id),
+							%(gmt_timestamp)s,
+							%(local_timestamp)s,
+							%(time_offset)s,
+							%(insertions)s,
+							%(deletions)s,
+							%(message)s
 							)
 				ON CONFLICT DO NOTHING;
-				''',((c['sha'],c['author_email'],c['committer_email'],datetime.datetime.fromtimestamp(c['time']),c['insertions'],c['deletions'],c['message']) for c in tracked_gen(commit_info_list)))
+				''',(dict(local_timestamp=datetime.datetime.utcfromtimestamp(c['local_time']),gmt_timestamp=datetime.datetime.utcfromtimestamp(c['gmt_time']),**c) for c in tracked_gen(commit_info_list)))
+				# ''',((c['sha'],c['author_email'],c['committer_email'],datetime.datetime.utcfromtimestamp(c['time']),c['insertions'],c['deletions'],c['message']) for c in tracked_gen(commit_info_list)))
 
 		else:
 			self.db.cursor.executemany('''
-				INSERT OR IGNORE INTO commits(sha,author_id,committer_id,created_at,insertions,deletions,message)
-					VALUES(?,
+				INSERT OR IGNORE INTO commits(sha,author_id,committer_id,created_at,local_created_at,time_offset,insertions,deletions,message)
+					VALUES(:sha,
 							(SELECT i.id FROM identities i
 								INNER JOIN identity_types it
-							 ON i.identity=? AND it.name='email' AND it.id=i.identity_type_id),
+							 ON i.identity=:author_email AND it.name='email' AND it.id=i.identity_type_id),
 							(SELECT i.id FROM identities i
 								INNER JOIN identity_types it
-							 ON i.identity=? AND it.name='email' AND it.id=i.identity_type_id),
-							?,
-							?,
-							?,
-							?
+							 ON i.identity=:committer_email AND it.name='email' AND it.id=i.identity_type_id),
+							:gmt_timestamp,
+							:local_timestamp,
+							:time_offset,
+							:insertions,
+							:deletions,
+							:message
 							);
-				''',((c['sha'],c['author_email'],c['committer_email'],datetime.datetime.fromtimestamp(c['time']),c['insertions'],c['deletions'],c['message']) for c in tracked_gen(commit_info_list)))
+				''',(dict(local_timestamp=datetime.datetime.utcfromtimestamp(c['local_time']),gmt_timestamp=datetime.datetime.utcfromtimestamp(c['gmt_time']),**c) for c in tracked_gen(commit_info_list)))
+				#''',((c['sha'],c['author_email'],c['committer_email'],datetime.datetime.utcfromtimestamp(c['time']),c['insertions'],c['deletions'],c['message']) for c in tracked_gen(commit_info_list)))
 
 		if not tracked_data['empty']:
 #			repo_id = tracked_data['last_commit']['repo_id']
-			latest_commit_time = datetime.datetime.fromtimestamp(tracked_data['latest_commit_time'])
+			latest_commit_time = datetime.datetime.utcfromtimestamp(tracked_data['latest_commit_time'])
 		else:
 			latest_commit_time = None
 		if self.db.db_type == 'postgres':
@@ -589,7 +598,7 @@ class CommitsFiller(fillers.Filler):
 					c = next(orig_gen)
 					tracked_data['last_commit'] = c
 					tracked_data['empty'] = False
-					tracked_data['latest_commit_time'] = max(tracked_data['latest_commit_time'],c['time'])
+					tracked_data['latest_commit_time'] = max(tracked_data['latest_commit_time'],c['gmt_time'])
 					yield c
 				except StopIteration:
 					return
@@ -621,7 +630,7 @@ class CommitsFiller(fillers.Filler):
 
 		if not tracked_data['empty']:
 			# repo_id = tracked_data['last_commit']['repo_id']
-			latest_commit_time = datetime.datetime.fromtimestamp(tracked_data['latest_commit_time'])
+			latest_commit_time = datetime.datetime.utcfromtimestamp(tracked_data['latest_commit_time'])
 		else:
 			latest_commit_time = None
 		if self.db.db_type == 'postgres':
@@ -644,7 +653,7 @@ class CommitsFiller(fillers.Filler):
 	# 		for c in orig_gen:
 	# 			tracked_data['last_commit'] = c
 	# 			tracked_data['empty'] = False
-	# 			tracked_data['latest_commit_time'] = max(tracked_data['latest_commit_time'],c['time'])
+	# 			tracked_data['latest_commit_time'] = max(tracked_data['latest_commit_time'],c['gmt_time'])
 	# 			yield c
 
 	# 	if self.db.db_type == 'postgres':
@@ -669,7 +678,7 @@ class CommitsFiller(fillers.Filler):
 
 	# 	if not tracked_data['empty']:
 	# 		repo_id = tracked_data['last_commit']['repo_id']
-	# 		latest_commit_time = datetime.datetime.fromtimestamp(tracked_data['latest_commit_time'])
+	# 		latest_commit_time = datetime.datetime.utcfromtimestamp(tracked_data['latest_commit_time'])
 	# 		if self.db.db_type == 'postgres':
 	# 			self.db.cursor.execute('''INSERT INTO table_updates(repo_id,table_name,latest_commit_time) VALUES(%s,'commit_orig_repos',%s) ;''',(repo_id,latest_commit_time))
 	# 		else:
@@ -693,7 +702,7 @@ class CommitsFiller(fillers.Filler):
 					c = next(orig_gen)
 					tracked_data['last_commit'] = c
 					tracked_data['empty'] = False
-					tracked_data['latest_commit_time'] = max(tracked_data['latest_commit_time'],c['time'])
+					tracked_data['latest_commit_time'] = max(tracked_data['latest_commit_time'],c['gmt_time'])
 					c_id = c['sha']
 					for r,p_id in enumerate(c['parents']):
 						yield (c_id,p_id,r)
@@ -726,7 +735,7 @@ class CommitsFiller(fillers.Filler):
 
 		if not tracked_data['empty']:
 			# repo_id = tracked_data['last_commit']['repo_id']
-			latest_commit_time = datetime.datetime.fromtimestamp(tracked_data['latest_commit_time'])
+			latest_commit_time = datetime.datetime.utcfromtimestamp(tracked_data['latest_commit_time'])
 		else:
 			latest_commit_time = None
 		if self.db.db_type == 'postgres':

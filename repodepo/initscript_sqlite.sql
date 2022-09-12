@@ -93,6 +93,8 @@
 				committer_id INTEGER REFERENCES identities(id) ON DELETE CASCADE,
 				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
 				created_at TIMESTAMP,
+				local_created_at TIMESTAMP,
+				time_offset INTEGER,
 				original_created_at TIMESTAMP,
 				insertions INTEGER,
 				deletions INTEGER,

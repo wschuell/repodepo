@@ -714,7 +714,7 @@ class ClonesFiller(fillers.Filler):
 	Tries to clone all repositories present in the DB
 	'''
 	def __init__(self,precheck_cloned=False,force=False,update=True,failed=False,ssh_sources=None,
-				 ssh_key=os.path.join(os.environ[homepath()],'.ssh','id_rsa'),sources=None,rm_first=False,**kwargs):
+				 ssh_key=os.path.join(os.environ[homepath()],'.ssh','id_rsa'),sources=None,rm_first=False,clone_folder=None,**kwargs):
 		'''
 		if sources is None, repositories of all sources are cloned. Otherwise, considered as a whitelist of sources to batch-clone.
 
@@ -727,6 +727,7 @@ class ClonesFiller(fillers.Filler):
 		self.failed = failed
 		self.rm_first = rm_first
 		self.precheck_cloned = precheck_cloned
+		self.clone_folder = clone_folder
 
 		self.ssh_key = ssh_key
 		if ssh_sources is None:

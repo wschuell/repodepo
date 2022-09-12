@@ -93,6 +93,8 @@
 				committer_id BIGINT REFERENCES identities(id) ON DELETE CASCADE,
 				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
 				created_at TIMESTAMP,
+				local_created_at TIMESTAMP,
+				time_offset INT,
 				original_created_at TIMESTAMP,
 				insertions INT,
 				deletions INT,
