@@ -32,6 +32,10 @@ class CratesFiller(generic.PackageFiller):
 			crates_folder=None,
 			force_pastdl=False,
 			fallback_db='postgres',
+			packages_done=False,
+			versions_done=False,
+			downloads_done=False,
+			deps_done=False,
 			deps_to_delete= [], #[('juju','charmhelpers'),
 							#('arraygen','arraygen-docfix'),
 							#('expr-parent','expr-child'),],
@@ -55,6 +59,11 @@ class CratesFiller(generic.PackageFiller):
 		self.fallback_db = fallback_db
 		self.crates_folder = crates_folder
 		self.force_pastdl = force_pastdl
+
+		self.packages_done = packages_done
+		self.versions_done = versions_done
+		self.downloads_done = downloads_done
+		self.deps_done = deps_done
 
 		if deps_to_delete is None:
 			self.deps_to_delete = []
@@ -266,6 +275,7 @@ class CratesFiller(generic.PackageFiller):
 			self.data_folder = self.db.data_folder
 		data_folder = self.data_folder
 
+
 		self.db.cursor.execute('''SELECT COUNT(*) FROM full_updates WHERE update_type='crates';''')
 		crates_fullupdates = self.db.cursor.fetchone()[0]
 		if  crates_fullupdates > 0 and not self.force:
@@ -278,6 +288,66 @@ class CratesFiller(generic.PackageFiller):
 			if date_check:
 				self.done = True
 				return
+		elif not self.force:
+			if self.db.db_type == 'postgres':
+				self.db.cursor.execute('''SELECT 1 FROM packages p 
+										INNER JOIN sources s ON s.id=p.source_id AND s.name=%(source)s 
+										LIMIT 1;''',{'source':self.source})
+			else:
+				self.db.cursor.execute('''SELECT 1 FROM packages p 
+										INNER JOIN sources s ON s.id=p.source_id AND s.name=:source 
+										LIMIT 1;''',{'source':self.source})
+
+			if self.db.cursor.fetchone() is not None:
+				self.packages_done = True
+
+			if self.db.db_type == 'postgres':
+				self.db.cursor.execute('''SELECT 1 FROM sources s 
+											INNER JOIN packages p ON s.id=p.source_id AND s.name=%(source)s 
+											INNER JOIN package_versions pv ON pv.package_id=p.id
+											LIMIT 1;''',{'source':self.source})
+			else:
+				self.db.cursor.execute('''SELECT 1 FROM sources s 
+											INNER JOIN packages p ON s.id=p.source_id AND s.name=:source
+											INNER JOIN package_versions pv ON pv.package_id=p.id
+											LIMIT 1;''',{'source':self.source})
+
+			if self.db.cursor.fetchone() is not None:
+				self.versions_done = True
+
+			if self.db.db_type == 'postgres':
+				self.db.cursor.execute('''SELECT 1 FROM sources s 
+											INNER JOIN packages p ON s.id=p.source_id AND s.name=%(source)s 
+											INNER JOIN package_versions pv ON pv.package_id=p.id
+											INNER JOIN package_version_downloads pvd
+											ON pvd.package_version=pv.id
+											LIMIT 1;''',{'source':self.source})
+			else:
+				self.db.cursor.execute('''SELECT 1 FROM sources s 
+											INNER JOIN packages p ON s.id=p.source_id AND s.name=:source
+											INNER JOIN package_versions pv ON pv.package_id=p.id
+											INNER JOIN package_version_downloads pvd
+											ON pvd.package_version=pv.id
+											LIMIT 1;''',{'source':self.source})
+
+			if self.db.cursor.fetchone() is not None:
+				self.downloads_done = True
+
+			if self.db.db_type == 'postgres':
+				self.db.cursor.execute('''SELECT 1 FROM sources s 
+											INNER JOIN packages p ON s.id=p.source_id AND s.name=%(source)s
+											INNER JOIN package_dependencies pd
+											ON pd.depending_on_package=p.id
+											LIMIT 1;''',{'source':self.source})
+			else:
+				self.db.cursor.execute('''SELECT 1 FROM sources s 
+											INNER JOIN packages p ON s.id=p.source_id AND s.name=:source
+											INNER JOIN package_dependencies pd
+											ON pd.depending_on_package=p.id
+											LIMIT 1;''',{'source':self.source})
+
+			if self.db.cursor.fetchone() is not None:
+				self.deps_done = True
 
 
 		#create folder if needed
@@ -294,7 +364,10 @@ class CratesFiller(generic.PackageFiller):
 		crates_conn = psycopg2.connect(**self.conninfo)
 		try:
 			self.db.connection.commit()
-			self.package_list = list(self.get_packages_from_crates(conn=crates_conn))
+			if self.packages_done:
+				self.package_list = []
+			else:
+				self.package_list = list(self.get_packages_from_crates(conn=crates_conn))
 			self.db.connection.commit()
 			if not self.force:
 				if self.db.db_type == 'postgres':
@@ -318,17 +391,23 @@ class CratesFiller(generic.PackageFiller):
 
 
 			self.db.connection.commit()
-			if not self.only_packages and (self.force or len(self.package_list)>0):
-				self.package_version_list = list(self.get_package_versions_from_crates(conn=crates_conn))
-				self.db.connection.commit()
-				self.package_version_download_list = list(self.get_package_version_downloads_from_crates(conn=crates_conn))
-				self.db.connection.commit()
-				self.package_deps_list = list(self.get_package_deps_from_crates(conn=crates_conn))
-				self.db.connection.commit()
-			else:
-				self.package_version_list = []
-				self.package_version_download_list = []
-				self.package_deps_list = []
+
+			self.package_version_list = []
+			self.package_version_download_list = []
+			self.package_deps_list = []
+			
+			if not self.only_packages: # and (self.force or len(self.package_list)>0):
+				if not self.versions_done:
+					self.package_version_list = list(self.get_package_versions_from_crates(conn=crates_conn))
+					self.db.connection.commit()
+				if not self.downloads_done:
+					self.package_version_download_list = self.get_package_version_downloads_from_crates(conn=crates_conn)
+					# self.package_version_download_list = list(self.get_package_version_downloads_from_crates(conn=crates_conn))
+					self.db.connection.commit()
+				if not self.deps_done:
+					self.package_deps_list = list(self.get_package_deps_from_crates(conn=crates_conn))
+					self.db.connection.commit()
+			
 		finally:
 			crates_conn.close()
 

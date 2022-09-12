@@ -44,6 +44,7 @@ class CommitsFiller(fillers.Filler):
 		if self.data_folder is None:
 			self.data_folder = self.db.data_folder
 		data_folder = self.data_folder
+		self.clone_folder = self.db.clone_folder
 
 		#create folder if needed
 		if not os.path.exists(data_folder):
@@ -343,7 +344,7 @@ class CommitsFiller(fillers.Filler):
 		'''
 		Returns the pygit2 repository object
 		'''
-		repo_folder = os.path.join(self.data_folder,'cloned_repos',source,owner,name)
+		repo_folder = os.path.join(self.clone_folder,source,owner,name)
 		if not os.path.exists(repo_folder):
 			raise ValueError('Repository {}/{}/{} not found in cloned_repos folder'.format(source,owner,name))
 		else:

@@ -32,6 +32,9 @@ class UsageGetter(CombinedGetter):
 	'''
 	Retrieves as a dataframe:
 	repo_id,repo_name,timestamp,stars,downloads,commits,commits_cumulative,forks,total contributors, active contributors
+	to add: committers, mergers, issue authors, issues, closed issues, PRs, merged PRs, comments (PR+issue+commits), 
+	        reactions (commit comments, issue/PR comments, issues/PRs)
+	also could distinguish commit authors and total contributors (authors + committers + mergers + comment writers etc)
 	'''
 
 	def get_result(self):

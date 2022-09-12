@@ -30,7 +30,7 @@ class PackageFiller(fillers.Filler):
 	or
 	name,created_at,repository
 	"""
-	def __init__(self,package_list=None,package_list_file=None,package_version_list=None,package_deps_list=None,package_download_list=None,package_version_download_list=None,force=False,deps_to_delete=None,package_limit=None,page_size=10**4,**kwargs):
+	def __init__(self,package_list=None,package_list_file=None,package_version_list=None,package_deps_list=None,package_download_list=None,package_version_download_list=None,force=False,deps_to_delete=None,package_limit=None,page_size=10**5,**kwargs):
 		self.package_list = package_list
 		self.package_list_file = package_list_file
 		self.package_limit = package_limit
@@ -88,9 +88,13 @@ got: {}'''.format(headers))
 
 	def apply(self):
 		self.fill_packages(force=self.force)
+		del self.package_list
 		self.fill_package_versions(force=self.force)
+		del self.package_version_list
 		self.fill_package_version_downloads(force=self.force)
+		del self.package_version_download_list
 		self.fill_package_dependencies(force=self.force)
+		del self.package_deps_list
 		self.db.connection.commit()
 
 	def fill_packages(self,package_list=None,source=None,force=False,clean_urls=True):
@@ -402,7 +406,7 @@ got: {}'''.format(headers))
 						%(semver_str)s
 					--WHERE EXISTS (SELECT id FROM packages WHERE source_id=%(package_source_id)s AND insource_id=%(depending_on_package)s)
 					ON CONFLICT DO NOTHING
-					;''',({'version_package_id':vp_id,'version_str':v_str,'depending_on_package':str(dop_id),'package_source_id':self.source_id,'semver_str':semver_str} for (vp_id,v_str,dop_id,semver_str) in package_deps_list),
+					;''',({'version_package_id':str(vp_id),'version_str':v_str,'depending_on_package':str(dop_id),'package_source_id':self.source_id,'semver_str':semver_str} for (vp_id,v_str,dop_id,semver_str) in package_deps_list),
 					page_size=self.page_size)
 
 				for (dep_p,dep_on_p) in self.deps_to_delete:
@@ -429,7 +433,7 @@ got: {}'''.format(headers))
 						(SELECT id FROM packages WHERE source_id=:package_source_id AND insource_id=:depending_on_package),
 						:semver_str
 					--WHERE EXISTS (SELECT id FROM packages WHERE source_id=:package_source_id AND insource_id=:depending_on_package)
-					;''',({'version_package_id':vp_id,'version_str':v_str,'depending_on_package':str(dop_id),'package_source_id':self.source_id,'semver_str':semver_str} for (vp_id,v_str,dop_id,semver_str) in package_deps_list))
+					;''',({'version_package_id':str(vp_id),'version_str':v_str,'depending_on_package':str(dop_id),'package_source_id':self.source_id,'semver_str':semver_str} for (vp_id,v_str,dop_id,semver_str) in package_deps_list))
 
 
 				for (dep_p,dep_on_p) in self.deps_to_delete:
@@ -743,10 +747,12 @@ class ClonesFiller(fillers.Filler):
 	def prepare(self):
 		if self.data_folder is None:
 			self.data_folder = self.db.data_folder
-		elif self.data_folder != self.db.data_folder:
-			raise ValueError('Data folder for ClonesFiller should not be different than db.data_folder. This ensures safe clones renaming when detecting change in repo name.')
-		if self.rm_first and os.path.exists(os.path.join(self.data_folder,'cloned_repos')):
-			shutil.rmtree(os.path.join(self.data_folder,'cloned_repos'))
+		if self.clone_folder is None:
+			self.clone_folder = self.db.clone_folder
+		elif self.clone_folder != self.db.clone_folder:
+			raise ValueError('Clone folder for ClonesFiller should not be different than db.clone_folder. This ensures safe clones renaming when detecting change in repo name.')
+		if self.rm_first and os.path.exists(self.clone_folder):
+			shutil.rmtree(self.clone_folder)
 		self.make_folder() # creating folder if not existing
 
 		if self.precheck_cloned:
@@ -760,7 +766,7 @@ class ClonesFiller(fillers.Filler):
 				;''')
 			repo_ids_to_update = []
 			for source_name,repo_owner,repo_name,repo_id in self.db.cursor.fetchall():
-				if not os.path.exists(os.path.join(self.data_folder,'cloned_repos',source_name,repo_owner,repo_name,'.git')):
+				if not os.path.exists(os.path.join(self.clone_folder,source_name,repo_owner,repo_name,'.git')):
 					repo_ids_to_update.append((repo_id,))
 
 			if self.db.db_type == 'postgres':
@@ -781,8 +787,8 @@ class ClonesFiller(fillers.Filler):
 		'''
 		if not os.path.exists(self.data_folder):
 			os.makedirs(self.data_folder)
-		if not os.path.exists(os.path.join(self.data_folder,'cloned_repos')):
-			os.makedirs(os.path.join(self.data_folder,'cloned_repos'))
+		if not os.path.exists(self.clone_folder):
+			os.makedirs(self.clone_folder)
 
 	def apply(self):
 		self.clone_all()
@@ -870,7 +876,7 @@ class ClonesFiller(fillers.Filler):
 		'''
 		if db is None:
 			db = self.db
-		repo_folder = os.path.join(self.data_folder,'cloned_repos',source,owner,name)
+		repo_folder = os.path.join(self.clone_folder,source,owner,name)
 		if os.path.exists(repo_folder):
 			if replace:
 				self.logger.info('Removing folder {}/{}/{}'.format(source,owner,name))
@@ -931,7 +937,7 @@ class ClonesFiller(fillers.Filler):
 		cloning if folder not existing
 		'''
 		self.logger.info('Updating repo {}/{}/{}'.format(source,owner,name))
-		repo_folder = os.path.join(self.data_folder,'cloned_repos',source,owner,name)
+		repo_folder = os.path.join(self.clone_folder,source,owner,name)
 
 		repo_obj = pygit2.Repository(os.path.join(repo_folder,'.git'))
 		try:
@@ -966,7 +972,7 @@ class ClonesFiller(fillers.Filler):
 		'''
 		Returns the pygit2 repository object
 		'''
-		repo_folder = os.path.join(self.data_folder,'cloned_repos',source,owner,name)
+		repo_folder = os.path.join(self.clone_folder,source,owner,name)
 		if not os.path.exists(repo_folder):
 			raise ValueError('Repository {}/{}/{} not found in cloned_repos folder'.format(source,owner,name))
 		else:
@@ -1340,10 +1346,11 @@ class DLSamplePackages(fillers.Filler):
 
 class SourcesAutoFiller(SourcesFiller):
 
-	def __init__(self,max_tries=5,**kwargs):
+	def __init__(self,max_tries=5,force=False,**kwargs):
 		self.max_tries = max_tries
 		self.source = []
 		self.source_urlroot = []
+		self.force = force
 		fillers.Filler.__init__(self,**kwargs)
 
 	def prepare(self):

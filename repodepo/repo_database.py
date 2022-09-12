@@ -106,6 +106,7 @@ class Database(object):
 					port='5432',
 					host='localhost',
 					data_folder='./datafolder',
+					clone_folder=None,
 					password=None,
 					clean_first=False,
 					do_init=False,
@@ -117,6 +118,10 @@ class Database(object):
 		self.db_type = db_type
 		self.logger = logger
 		self.db_name = db_name
+		if clone_folder is None:
+			self.clone_folder = os.path.join(data_folder,'cloned_repos') 
+		else:
+			self.clone_folder = clone_folder
 		if db_type == 'sqlite':
 			if db_name.startswith(':memory:'):
 				self.connection = sqlite3.connect(db_name, detect_types=sqlite3.PARSE_DECLTYPES)
@@ -179,8 +184,10 @@ class Database(object):
 			self.init_db()
 		self.fillers = []
 		self.data_folder = data_folder
-		if not os.path.exists(self.data_folder):
+		try:
 			os.makedirs(self.data_folder)
+		except FileExistsError:
+			pass
 
 		if computation_db_name.startswith(':') or os.path.isabs(computation_db_name):
 			self.computation_db_name = computation_db_name
@@ -2003,14 +2010,14 @@ class Database(object):
 						;''',(url_id,old_url_id,))
 
 				# Moving cloned repo if exists. But clones should be filled after forks or stars, to avoid failed cloning.
-				if os.path.exists(os.path.join(self.data_folder,'cloned_repos',obsolete_source_name,obsolete_owner,obsolete_name)):
-					if not os.path.exists(os.path.join(self.data_folder,'cloned_repos',new_source_name,new_owner,new_name)):
-						if not os.path.exists(os.path.join(self.data_folder,'cloned_repos',new_source_name,new_owner)):
-							os.makedirs(os.path.join(self.data_folder,'cloned_repos',new_source_name,new_owner))
-						shutil.move(os.path.join(self.data_folder,'cloned_repos',obsolete_source_name,obsolete_owner,obsolete_name),os.path.join(self.data_folder,'cloned_repos',new_source_name,new_owner,new_name))
-						# if not os.listdir(os.path.join(self.data_folder,'cloned_repos',new_source_name,new_owner)):
-						# 	shutil.rmtree(os.path.join(self.data_folder,'cloned_repos',new_source_name,new_owner))
-						os.symlink(os.path.abspath(os.path.join(self.data_folder,'cloned_repos',new_source_name,new_owner,new_name)),os.path.abspath(os.path.join(self.data_folder,'cloned_repos',obsolete_source_name,obsolete_owner,obsolete_name)))
+				if os.path.exists(os.path.join(self.clone_folder,obsolete_source_name,obsolete_owner,obsolete_name)):
+					if not os.path.exists(os.path.join(self.clone_folder,new_source_name,new_owner,new_name)):
+						if not os.path.exists(os.path.join(self.clone_folder,new_source_name,new_owner)):
+							os.makedirs(os.path.join(self.clone_folder,new_source_name,new_owner))
+						shutil.move(os.path.join(self.clone_folder,obsolete_source_name,obsolete_owner,obsolete_name),os.path.join(self.clone_folder,new_source_name,new_owner,new_name))
+						# if not os.listdir(os.path.join(self.clone_folder,new_source_name,new_owner)):
+						# 	shutil.rmtree(os.path.join(self.clone_folder,new_source_name,new_owner))
+						os.symlink(os.path.abspath(os.path.join(self.clone_folder,new_source_name,new_owner,new_name)),os.path.abspath(os.path.join(self.clone_folder,obsolete_source_name,obsolete_owner,obsolete_name)))
 			else:
 				if self.db_type == 'postgres':
 
