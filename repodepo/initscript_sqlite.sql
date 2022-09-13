@@ -501,3 +501,24 @@
 					);
 				CREATE INDEX IF NOT EXISTS reverse_fdpe ON filtered_deps_packageedges(package_dest_id,package_source_id);
 
+
+				CREATE TABLE IF NOT EXISTS organizations(
+					id INTEGER PRIMARY KEY,
+					source INTEGER NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+					name TEXT,
+					login TEXT,
+					description TEXT,
+					created_at TIMESTAMP,
+					UNIQUE(source,login)
+					);
+				
+				CREATE TABLE IF NOT EXISTS org_memberships(
+					id INTEGER PRIMARY KEY,
+					org_id INTEGER REFERENCES organizations(id),
+					member INTEGER REFERENCES identities(id),
+					joined_at TIMESTAMP,
+					left_at TIMESTAMP,
+					UNIQUE(org_id,member,joined_at)
+					);
+
+				CREATE UNIQUE INDEX IF NOT EXISTS nulljoinedat_idx ON org_memberships(org_id,member) WHERE joined_at IS NULL;

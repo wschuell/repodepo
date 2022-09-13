@@ -38,13 +38,14 @@ class Requester(object):
 	Class implementing the Request
 	Caching rate limit information, updating at each query, or requerying after <refresh_time in sec> without update
 	'''
-	def __init__(self,api_key,refresh_time=120,schema=None,fetch_schema=False,url="https://api.github.com/graphql",auth_header_prefix='token ',retries=50):
+	def __init__(self,api_key,refresh_time=120,schema=None,fetch_schema=False,url="https://api.github.com/graphql",auth_header_prefix='token ',retries=50,secondary_limit_wait=300):
 		self.logger = logger
 		self.retries = retries
 		self.api_key = api_key
 		self.remaining = 0
 		self.reset_at = datetime.datetime.now() # Like on the API, reset time is last reset time, not future reset time
 		self.refresh_time = refresh_time
+		self.secondary_limit_wait = secondary_limit_wait
 		self.refreshed_at = None
 		self.url = url
 		self.auth_header_prefix = auth_header_prefix
@@ -103,6 +104,18 @@ class Requester(object):
 			while not result_found:
 				try:
 					result = self.client.execute(gql(gql_query))
+					sec_limit_detected = False
+					while 'data' not in result.keys() and 'message' in result.keys() and result['message'] ==  "You have exceeded a secondary rate limit. Please wait a few minutes before you try again.":
+						if retries_left <= 0:
+							raise asyncio.TimeoutError('Secondary rate limit exceeded too many times')
+						self.logger.info(f'Secondary rate limit exceeded, waiting {self.secondary_limit_wait}s')
+						time.sleep(self.secondary_limit_wait)
+						result = self.client.execute(gql(gql_query))
+						if sec_limit_detected:
+							self.secondary_limit_wait += 60
+						sec_limit_detected = True
+						retries_left -= 1
+
 					result_found = True
 				except asyncio.TimeoutError as e:
 					if retries_left>0:
@@ -270,8 +283,8 @@ class GHGQLFiller(github_rest.GithubFiller):
 			g = self.Requester(api_key=ak,schema=schema,fetch_schema=fetch_schema)
 			try:
 				g.get_rate_limit()
-			except:
-				self.logger.info('API key starting with "{}" and of length {} not valid'.format(ak[:5],len(ak)))
+			except Exception as e:
+				self.logger.info('API key starting with "{}" and of length {} not valid: {}:{}'.format(ak[:5],len(ak),e.__class__,e))
 			else:
 				requesters.append(g)
 			schema = g.client.schema
@@ -2084,6 +2097,7 @@ class CommitCommentReactionsGQLFiller(GHGQLFiller):
 											createdAt
 											user {{ login }}
 											content
+											id
 											}}
       								}}
     							
@@ -2128,7 +2142,8 @@ class CommitCommentReactionsGQLFiller(GHGQLFiller):
 							try:
 								r['author_login'] = ee['user']['login']
 							except:
-								r['author_login'] = None
+								# r['author_login'] = None
+								r['author_login'] = 'nullauthor_'+ee['id']
 						except (KeyError,TypeError) as err:
 							self.logger.info('Result triggering error: {} \nError when parsing commit_comment_reactions for {}/{}: {}'.format(e,repo_owner,repo_name,err))
 							continue
@@ -2195,6 +2210,7 @@ class CommitCommentsGQLFiller(GHGQLFiller):
 											createdAt
 											user {{ login }}
 											content
+											id
 											}}
 										}}
       								}}
@@ -2245,7 +2261,8 @@ class CommitCommentsGQLFiller(GHGQLFiller):
 							try:
 								r['author_login'] = ee['user']['login']
 							except:
-								r['author_login'] = None
+								# r['author_login'] = None
+								r['author_login'] = 'nullauthor_'+ee['id']
 						except (KeyError,TypeError) as err:
 							self.logger.info('Result triggering error: {} \nError when parsing commit_comment_reactions for {}/{}: {}'.format(e,repo_owner,repo_name,err))
 							continue
@@ -2263,10 +2280,12 @@ class CommitCommentsGQLFiller(GHGQLFiller):
 			db = self.db
 		if db.db_type == 'postgres':
 			extras.execute_batch(db.cursor,'''
+				WITH com_id AS (SELECT id FROM commits WHERE sha=%(commit_sha)s),
+					ins_com_id AS (INSERT INTO commits(sha,repo_id) SELECT %(commit_sha)s,%(repo_id)s WHERE NOT EXISTS (SELECT id FROM commits WHERE %(commit_sha)s=sha) RETURNING id)
 				INSERT INTO commit_comments(created_at,repo_id,commit_id,comment_id,comment_text,author_login,author_id,identity_type_id)
 				VALUES(%(created_at)s,
 						%(repo_id)s,
-						(SELECT id FROM commits WHERE sha=%(commit_sha)s),
+						(SELECT COALESCE((SELECT id FROM com_id),(SELECT id FROM ins_com_id))),--COALESCE((SELECT id FROM commits WHERE sha=%(commit_sha)s),(INSERT INTO commits(sha,repo_id) SELECT %(commit_sha)s,%(repo_id)s RETURNING id)),
 						%(commit_comment_id)s,
 						%(comment_text)s,
 						%(author_login)s,
@@ -2279,10 +2298,12 @@ class CommitCommentsGQLFiller(GHGQLFiller):
 				# ;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title'],s['issue_text'],s['author_login'],s['author_login'],self.target_identity_type,self.target_identity_type) for s in items_list))
 		else:
 			db.cursor.executemany('''
+				WITH com_id AS (SELECT id FROM commits WHERE sha=:commit_sha),
+					ins_com_id AS (INSERT INTO commits(sha,repo_id) SELECT :commit_sha,:repo_id WHERE NOT EXISTS (SELECT id FROM commits WHERE :commit_sha=sha) RETURNING id)
 					INSERT OR IGNORE INTO commit_comments(created_at,repo_id,commit_id,comment_id,comment_text,author_login,author_id,identity_type_id)
 				VALUES(:created_at,
 						:repo_id,
-						(SELECT id FROM commits WHERE sha=:commit_sha),
+						(SELECT COALESCE((SELECT id FROM com_id),(SELECT id FROM ins_com_id))),
 						:commit_comment_id,
 						:comment_text,
 						:author_login,
@@ -2678,6 +2699,7 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 													user {{ login }}
 													createdAt
 													content
+													id
 													}}
 												}}
 											}}
@@ -2705,6 +2727,7 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 											user {{ login }}
 											createdAt
 											content
+											id
 											}}
 										}}
       								}}
@@ -2774,7 +2797,8 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 							try:
 								r['author_login'] = ee['user']['login']
 							except:
-								r['author_login'] = None
+								# r['author_login'] = None
+								r['author_login'] = 'nullauthor_'+ee['id']
 						except (KeyError,TypeError) as err:
 							self.logger.info('Result triggering error: {} \nError when parsing issue_reactions for {}/{}: {}'.format(e,repo_owner,repo_name,err))
 							continue
@@ -2817,7 +2841,8 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 									try:
 										r['author_login'] = eee['user']['login']
 									except:
-										r['author_login'] = None
+										# r['author_login'] = None
+										r['author_login'] = 'nullauthor_'+eee['id']
 								except (KeyError,TypeError) as err:
 									self.logger.info('Result triggering error: {} \nError when parsing issue_comment_reactions for {}/{}: {}'.format(e,repo_owner,repo_name,err))
 									continue
@@ -3138,6 +3163,7 @@ class IssueReactionsGQLFiller(GHGQLFiller):
 											createdAt
 											user {{ login }}
 											content
+											id
 											}}
       								}}
     							
@@ -3178,7 +3204,8 @@ class IssueReactionsGQLFiller(GHGQLFiller):
 							try:
 								r['author_login'] = ee['user']['login']
 							except:
-								r['author_login'] = None
+								# r['author_login'] = None
+								r['author_login'] = 'nullauthor_'+ee['id']
 						except (KeyError,TypeError) as err:
 							self.logger.info('Result triggering error: {} \nError when parsing issue_reactions for {}/{}: {}'.format(e,repo_owner,repo_name,err))
 							continue
@@ -3258,6 +3285,7 @@ class IssueCommentsGQLFiller(GHGQLFiller):
 													user {{ login }}
 													createdAt
 													content
+													id
 													}}
 												}}
 											}}
@@ -3324,7 +3352,8 @@ class IssueCommentsGQLFiller(GHGQLFiller):
 									try:
 										r['author_login'] = eee['user']['login']
 									except:
-										r['author_login'] = None
+										# r['author_login'] = None
+										r['author_login'] = 'nullauthor_'+eee['id']
 								except (KeyError,TypeError) as err:
 									self.logger.info('Result triggering error: {} \nError when parsing issue_comment_reactions for {}/{}: {}'.format(e,repo_owner,repo_name,err))
 									continue
@@ -3410,6 +3439,7 @@ class IssueCommentReactionsGQLFiller(GHGQLFiller):
 											createdAt
 											user {{ login }}
 											content
+											id
 											}}
       								}}
     							
@@ -3454,7 +3484,8 @@ class IssueCommentReactionsGQLFiller(GHGQLFiller):
 							try:
 								r['author_login'] = ee['user']['login']
 							except:
-								r['author_login'] = None
+								# r['author_login'] = None
+								r['author_login'] = 'nullauthor_'+ee['id']
 						except (KeyError,TypeError) as err:
 							self.logger.info('Result triggering error: {} \nError when parsing issue_comment_reactions for {}/{}: {}'.format(e,repo_owner,repo_name,err))
 							continue
@@ -3646,6 +3677,7 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 													user {{ login }}
 													createdAt
 													content
+													id
 													}}
 												}}
 											}}
@@ -3673,6 +3705,7 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 											user {{ login }}
 											createdAt
 											content
+											id
 											}}
 										}}
       								}}
@@ -3746,7 +3779,8 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 							try:
 								r['author_login'] = ee['user']['login']
 							except:
-								r['author_login'] = None
+								# r['author_login'] = None
+								r['author_login'] = 'nullauthor_'+ee['id']
 						except (KeyError,TypeError) as err:
 							self.logger.info('Result triggering error: {} \nError when parsing pullrequest_reactions for {}/{}: {}'.format(e,repo_owner,repo_name,err))
 							continue
@@ -3788,7 +3822,8 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 									try:
 										r['author_login'] = eee['user']['login']
 									except:
-										r['author_login'] = None
+										# r['author_login'] = None
+										r['author_login'] = 'nullauthor_'+eee['id']
 								except (KeyError,TypeError) as err:
 									self.logger.info('Result triggering error: {} \nError when parsing pullrequest_comment_reactions for {}/{}: {}'.format(e,repo_owner,repo_name,err))
 									continue
@@ -4115,6 +4150,7 @@ class PRReactionsGQLFiller(GHGQLFiller):
 											createdAt
 											user {{ login }}
 											content
+											id
 											}}
       								}}
     							
@@ -4155,7 +4191,8 @@ class PRReactionsGQLFiller(GHGQLFiller):
 							try:
 								r['author_login'] = ee['user']['login']
 							except:
-								r['author_login'] = None
+								# r['author_login'] = None
+								r['author_login'] = 'nullauthor_'+ee['id']
 						except (KeyError,TypeError) as err:
 							self.logger.info('Result triggering error: {} \nError when parsing pullrequest_reactions for {}/{}: {}'.format(e,repo_owner,repo_name,err))
 							continue
@@ -4235,6 +4272,7 @@ class PRCommentsGQLFiller(GHGQLFiller):
 													user {{ login }}
 													createdAt
 													content
+													id
 													}}
 												}}
 											}}
@@ -4301,7 +4339,8 @@ class PRCommentsGQLFiller(GHGQLFiller):
 									try:
 										r['author_login'] = eee['user']['login']
 									except:
-										r['author_login'] = None
+										# r['author_login'] = None
+										r['author_login'] = 'nullauthor_'+eee['id']
 								except (KeyError,TypeError) as err:
 									self.logger.info('Result triggering error: {} \nError when parsing pullrequest_comment_reactions for {}/{}: {}'.format(e,repo_owner,repo_name,err))
 									continue
@@ -4387,6 +4426,7 @@ class PRCommentReactionsGQLFiller(GHGQLFiller):
 											createdAt
 											user {{ login }}
 											content
+											id
 											}}
       								}}
     							
@@ -4431,7 +4471,8 @@ class PRCommentReactionsGQLFiller(GHGQLFiller):
 							try:
 								r['author_login'] = ee['user']['login']
 							except:
-								r['author_login'] = None
+								# r['author_login'] = None
+								r['author_login'] = 'nullauthor_'+ee['id']
 						except (KeyError,TypeError) as err:
 							self.logger.info('Result triggering error: {} \nError when parsing pullrequest_comment_reactions for {}/{}: {}'.format(e,repo_owner,repo_name,err))
 							continue
@@ -5118,6 +5159,102 @@ class UserCreatedAtGQLFiller(GHGQLFiller):
 		output: nb_items or None if not relevant
 		'''
 		return 1
+
+
+class UserOrgsGQLFiller(GHGQLFiller):
+	'''
+	Querying organizations through the GraphQL API
+	'''
+	def __init__(self,**kwargs):
+		self.items_name = 'user_orgs'
+		self.queried_obj = 'user'
+		self.pageinfo_path = ('user','organizations','pageInfo')
+		GHGQLFiller.__init__(self,**kwargs)
+
+	def query_string(self,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: python-formatable string representing the graphql query
+		'''
+		return '''query {{
+					user(login:"{user_login}") {{
+						login
+						organizations(first:{page_size} {after_end_cursor}) {{
+							pageInfo {{ endCursor hasNextPage }}
+							totalCount
+							edges {{
+								node {{ 
+									login
+									name
+									description
+									id
+									createdAt }}
+								}}
+						}}
+					}}
+				}}'''
+
+	def parse_query_result(self,query_result,identity_id,identity_type_id,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: [ {'repo_id':r_id,'repo_owner':r_ow,'repo_name':r_na,'starrer_login':s_lo,'starred_at':st_at} , ...]
+		'''
+		ans = []
+		user_login = query_result['user']['login']
+		d = {'identity_id':identity_id,'user_login':user_login,'identity_type_id':identity_type_id,'source':self.source_name}
+		for e in query_result['user']['organizations']['edges']:
+			try:
+				d['created_at'] = e['node']['createdAt']
+				d['name'] = e['node']['name']
+				d['login'] = e['node']['login']
+				d['description'] = e['node']['description']
+			except (KeyError,TypeError) as err:
+				self.logger.info('KeyError when parsing organizations for {}: {}'.format(user_login,err))
+			else:
+				ans.append(d)
+		return ans
+
+
+	def insert_items(self,items_list,commit=True,db=None):
+		'''
+		In subclasses this has to be implemented
+		inserts results in the DB
+		'''
+		if db is None:
+			db = self.db
+		if db.db_type == 'postgres':
+			extras.execute_batch(db.cursor,'''
+				INSERT INTO organizations(name,login,description,created_at,source)
+				SELECT %(name)s,%(login)s,%(description)s,%(created_at)s,(SELECT id FROM sources WHERE name=%(source)s) 
+				WHERE NOT EXISTS (SELECT o.id FROM organizations o INNER JOIN sources s ON s.name=%(source)s AND s.id=o.source AND o.login=%(login)s)
+				;''',(s for s in items_list))
+			extras.execute_batch(db.cursor,'''
+				INSERT INTO org_memberships(member,org_id)
+				SELECT %(identity_id)s,o.id
+				FROM organizations o INNER JOIN sources s ON s.name=%(source)s AND s.id=o.source AND o.login=%(login)s
+				ON CONFLICT DO NOTHING
+				;''',(s for s in items_list))
+		else:
+			db.cursor.executemany('''
+				INSERT INTO organizations(name,login,description,created_at,source)
+				SELECT :name,:login,:description,:created_at,(SELECT id FROM sources WHERE name=:source)
+				WHERE NOT EXISTS (SELECT o.id FROM organizations o INNER JOIN sources s ON s.name=:source AND s.id=o.source AND o.login=:login)
+				;''',(s for s in items_list))
+			db.cursor.executemany('''
+				INSERT OR IGNORE INTO org_memberships(member,org_id)
+				SELECT :identity_id,o.id
+				FROM organizations o INNER JOIN sources s ON s.name=:source AND s.id=o.source AND o.login=:login
+				;''',(s for s in items_list))
+
+		if commit:
+			db.connection.commit()
+
+	def get_nb_items(self,query_result):
+		'''
+		In subclasses this has to be implemented
+		output: nb_items or None if not relevant
+		'''
+		return query_result['user']['organizations']['totalCount']
 
 class SingleQueryUserLanguagesGQLFiller(GHGQLFiller):
 	'''

@@ -48,7 +48,6 @@ def test_github_gql(testdb):
 	testdb.add_filler(github_gql.ReleasesGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.FollowersGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.RepoLanguagesGQLFiller(fail_on_wait=True,workers=workers))
-	# testdb.add_filler(github_gql.UserLanguagesGQLFiller(fail_on_wait=True,workers=workers,start=datetime.datetime(2015,1,1),end=datetime.datetime.now()))
 	testdb.add_filler(github_gql.UserLanguagesGQLFiller(fail_on_wait=True,workers=workers,start=None,end=datetime.datetime.now()))
 	testdb.add_filler(github_gql.SponsorsUserFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.CommitCommentsGQLFiller(fail_on_wait=True,workers=workers,secondary_page_size=1))
@@ -57,6 +56,7 @@ def test_github_gql(testdb):
 	testdb.add_filler(github_gql.BackwardsSponsorsUserFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.RepoCreatedAtGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.UserCreatedAtGQLFiller(fail_on_wait=True,workers=workers))
+	testdb.add_filler(github_gql.UserOrgsGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(generic.RepoCommitOwnershipFiller()) # Clones after forks to have up-to-date repo URLS (detect redirects)
 
 

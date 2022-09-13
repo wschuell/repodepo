@@ -506,3 +506,24 @@
 					PRIMARY KEY(package_source_id,package_dest_id)
 					);
 				CREATE INDEX IF NOT EXISTS reverse_fdpe ON filtered_deps_packageedges(package_dest_id,package_source_id);
+
+				CREATE TABLE IF NOT EXISTS organizations(
+					id BIGSERIAL PRIMARY KEY,
+					source BIGINT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+					login TEXT,
+					name TEXT,
+					description TEXT,
+					created_at TIMESTAMP,
+					UNIQUE(source,login)
+					);
+
+				CREATE TABLE IF NOT EXISTS org_memberships(
+					id BIGSERIAL PRIMARY KEY,
+					org_id BIGINT REFERENCES organizations(id),
+					member BIGINT REFERENCES identities(id),
+					joined_at TIMESTAMP,
+					left_at TIMESTAMP,
+					UNIQUE(org_id,member,joined_at)
+					);
+
+				CREATE UNIQUE INDEX IF NOT EXISTS nulljoinedat_idx ON org_memberships(org_id,member) WHERE joined_at IS NULL;
