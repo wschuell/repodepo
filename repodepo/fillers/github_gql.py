@@ -101,29 +101,40 @@ class Requester(object):
 		try:
 			retries_left = retries
 			result_found = False
+			sec_limit_detected = False
 			while not result_found:
 				try:
 					result = self.client.execute(gql(gql_query))
-					sec_limit_detected = False
-					while 'data' not in result.keys() and 'message' in result.keys() and result['message'] ==  "You have exceeded a secondary rate limit. Please wait a few minutes before you try again.":
-						if retries_left <= 0:
-							raise asyncio.TimeoutError('Secondary rate limit exceeded too many times')
-						self.logger.info(f'Secondary rate limit exceeded, waiting {self.secondary_limit_wait}s')
-						time.sleep(self.secondary_limit_wait)
-						result = self.client.execute(gql(gql_query))
-						if sec_limit_detected:
-							self.secondary_limit_wait += 60
-						sec_limit_detected = True
-						retries_left -= 1
-
 					result_found = True
-				except asyncio.TimeoutError as e:
-					if retries_left>0:
-						time.sleep(0.1*(retries-retries_left)*random.random())
-						retries_left -= 1
-					else:
-						raise e.__class__('''TimeoutError happened more times than the set retries: {}. Rerun, maybe with higher value.
+				except Exception as e:
+					if e.__class__ == asyncio.TimeoutError:
+						if retries_left>0:
+							time.sleep(0.1*(retries-retries_left)*random.random())
+							retries_left -= 1
+						else:
+							raise e.__class__('''TimeoutError happened more times than the set retries: {}. Rerun, maybe with higher value.
 Original error message: {}'''.format(retries,e))
+					if hasattr(e,'errors') and e.errors[0]['message'] ==  "You have exceeded a secondary rate limit. Please wait a few minutes before you try again.":
+						if retries_left > 0:
+							self.logger.info(f'Secondary rate limit exceeded, waiting {self.secondary_limit_wait}s')
+							time.sleep(self.secondary_limit_wait)
+							if sec_limit_detected:
+								self.secondary_limit_wait += 60
+							sec_limit_detected = True
+							retries_left -= 1
+						else:
+							raise e.__class__('''Secondary rate limit error happened more times than the set retries: {}. Rerun, maybe with higher value.
+Original error message: {}'''.format(retries,e))
+					elif hasattr(e,'errors') and e.errors[0]['type'] == 'RATE_LIMITED':
+						self.get_rate_limit()
+						reset_time = int(self.reset_at - time.time())
+						if reset_time <= 0:
+							reset_time += 3600
+						self.logger.info(f'RATE_LIMITED error detected, sleeping until reset: {reset_time+1}s')
+						time.sleep(reset_time+1)
+					else:
+						raise
+
 		except Exception as e:
 			if hasattr(e,'data'):
 				result = e.data
@@ -2298,18 +2309,20 @@ class CommitCommentsGQLFiller(GHGQLFiller):
 				# ;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title'],s['issue_text'],s['author_login'],s['author_login'],self.target_identity_type,self.target_identity_type) for s in items_list))
 		else:
 			db.cursor.executemany('''
-				WITH com_id AS (SELECT id FROM commits WHERE sha=:commit_sha),
-					ins_com_id AS (INSERT INTO commits(sha,repo_id) SELECT :commit_sha,:repo_id WHERE NOT EXISTS (SELECT id FROM commits WHERE :commit_sha=sha) RETURNING id)
-					INSERT OR IGNORE INTO commit_comments(created_at,repo_id,commit_id,comment_id,comment_text,author_login,author_id,identity_type_id)
-				VALUES(:created_at,
+				INSERT INTO commits(sha,repo_id) SELECT :commit_sha,:repo_id WHERE NOT EXISTS (SELECT id FROM commits WHERE :commit_sha=sha)
+				;''',(i for i in items_list if i['element_type']=='commit_comment'))
+			db.cursor.executemany('''
+				INSERT OR IGNORE INTO commit_comments(created_at,repo_id,commit_id,comment_id,comment_text,author_login,author_id,identity_type_id)
+				SELECT :created_at,
 						:repo_id,
-						(SELECT COALESCE((SELECT id FROM com_id),(SELECT id FROM ins_com_id))),
+						c.id,
 						:commit_comment_id,
 						:comment_text,
 						:author_login,
 						(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
 						(SELECT id FROM identity_types WHERE name=:target_identity_type)
-						)
+					FROM commits c
+					WHERE sha=:commit_sha
 				;''',(i for i in items_list if i['element_type']=='commit_comment'))
 				# ;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title'],s['issue_text'],s['author_login'],s['author_login'],self.target_identity_type,self.target_identity_type) for s in items_list))
 
