@@ -19,7 +19,7 @@ from ..fillers import generic
 from ..fillers import github_rest,github_gql
 
 import gql
-from gql import gql, Client
+from gql import Client
 from gql.transport.aiohttp import AIOHTTPTransport
 
 logger = logging.getLogger(__name__)
@@ -36,11 +36,16 @@ class RequesterGitlab(github_gql.Requester):
 	Class implementing the Request
 	Caching rate limit information, updating at each query, or requerying after <refresh_time in sec> without update
 	'''
+
+
 	def __init__(self,url_root='gitlab.com',auth_header_prefix='Bearer ',**kwargs):
 		url = 'https://{}/api/graphql'.format(url_root)
 		github_gql.Requester.__init__(self,url=url,auth_header_prefix=auth_header_prefix,**kwargs)
 
 
+
+	def check_scope(self,scope):
+		return True
 
 	def get_rate_limit(self,refresh=False):
 		# if refresh or self.refreshed_at is None or self.refreshed_at + datetime.timedelta(seconds=self.refresh_time)<= datetime.datetime.now():
@@ -77,7 +82,7 @@ class RequesterGitlab(github_gql.Requester):
 			result_found = False
 			while not result_found:
 				try:
-					result = self.client.execute(gql(gql_query))
+					result = self.client.execute(gql.gql(gql_query))
 					result_found = True
 				except asyncio.TimeoutError as e:
 					if retries_left>0:
@@ -110,6 +115,8 @@ class GitlabGQLFiller(github_gql.GHGQLFiller):
 	"""
 	class to be inherited from, contains credentials management
 	"""
+
+	scopes = tuple()
 
 	def __init__(self,env_apikey='GITLAB_API_KEY',source_name='Gitlab',target_identity_type='gitlab_login',api_keys_file='gitlab_api_keys.txt',**kwargs):
 		github_gql.GHGQLFiller.__init__(self,requester_class=RequesterGitlab,source_name=source_name,env_apikey=env_apikey,target_identity_type=target_identity_type,api_keys_file=api_keys_file,**kwargs)
@@ -333,6 +340,7 @@ class CompleteIssuesGQLFiller(github_gql.CompleteIssuesGQLFiller):
 	Querying issues through the GraphQL API
 	Adding comments, labels and reactions (first 100 per issue), and first 40 reactions to comments.
 	'''
+	scopes = tuple()
 
 	def __init__(self,**kwargs):
 		new_kwargs = dict(requester_class=RequesterGitlab,env_apikey='GITLAB_API_KEY',source_name='Gitlab',target_identity_type='gitlab_login',api_keys_file='gitlab_api_keys.txt')
@@ -498,6 +506,9 @@ class CompleteIssuesGQLFiller(github_gql.CompleteIssuesGQLFiller):
 
 
 class IssueLabelsGQLFiller(github_gql.IssueLabelsGQLFiller):
+
+	scopes = tuple()
+
 	def __init__(self,**kwargs):
 		new_kwargs = dict(requester_class=RequesterGitlab,env_apikey='GITLAB_API_KEY',source_name='Gitlab',target_identity_type='gitlab_login',api_keys_file='gitlab_api_keys.txt')
 		new_kwargs.update(kwargs)
@@ -582,6 +593,9 @@ class IssueLabelsGQLFiller(github_gql.IssueLabelsGQLFiller):
 
 
 class IssueCommentsGQLFiller(github_gql.IssueCommentsGQLFiller):
+
+	scopes = tuple()
+
 	def __init__(self,**kwargs):
 		new_kwargs = dict(requester_class=RequesterGitlab,env_apikey='GITLAB_API_KEY',source_name='Gitlab',target_identity_type='gitlab_login',api_keys_file='gitlab_api_keys.txt')
 		new_kwargs.update(kwargs)
@@ -700,6 +714,8 @@ class CompletePullRequestsGQLFiller(github_gql.CompletePullRequestsGQLFiller):
 	Querying PullRequests through the GraphQL API
 	Adding comments, labels and reactions (first 100 per PullRequest), and first 40 reactions to comments.
 	'''
+
+	scopes = tuple()
 
 	def __init__(self,**kwargs):
 		new_kwargs = dict(requester_class=RequesterGitlab,env_apikey='GITLAB_API_KEY',source_name='Gitlab',target_identity_type='gitlab_login',api_keys_file='gitlab_api_keys.txt')
@@ -869,6 +885,8 @@ class CompletePullRequestsGQLFiller(github_gql.CompletePullRequestsGQLFiller):
 
 
 class PullRequestLabelsGQLFiller(github_gql.PRLabelsGQLFiller):
+
+	scopes = tuple()
 	def __init__(self,**kwargs):
 		new_kwargs = dict(requester_class=RequesterGitlab,env_apikey='GITLAB_API_KEY',source_name='Gitlab',target_identity_type='gitlab_login',api_keys_file='gitlab_api_keys.txt')
 		new_kwargs.update(kwargs)
@@ -952,6 +970,8 @@ class PullRequestLabelsGQLFiller(github_gql.PRLabelsGQLFiller):
 
 
 class PullRequestCommentsGQLFiller(github_gql.PRCommentsGQLFiller):
+	
+	scopes = tuple()
 	def __init__(self,**kwargs):
 		new_kwargs = dict(requester_class=RequesterGitlab,env_apikey='GITLAB_API_KEY',source_name='Gitlab',target_identity_type='gitlab_login',api_keys_file='gitlab_api_keys.txt')
 		new_kwargs.update(kwargs)

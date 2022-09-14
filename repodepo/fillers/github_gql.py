@@ -21,8 +21,9 @@ from ..fillers import generic
 from ..fillers import github_rest
 
 import gql
-from gql import gql, Client
+from gql import Client
 from gql.transport.aiohttp import AIOHTTPTransport
+from gql.transport.exceptions import TransportProtocolError
 
 logger = logging.getLogger(__name__)
 ch = logging.StreamHandler()
@@ -60,6 +61,11 @@ class Requester(object):
 		else:
 			self.client = Client(transport=self.transport, fetch_schema_from_transport=False)
 			self.schema = schema
+
+	def check_scope(self,scope):
+		if 'X-OAuth-Scopes' not in self.client.transport.response_headers.keys():
+			self.get_rate_limit() 
+		return scope in self.client.transport.response_headers['X-OAuth-Scopes'].split(', ')
 
 	def clone(self):
 		out_obj = self.__class__(api_key=self.api_key,refresh_time=self.refresh_time,fetch_schema=False,schema=self.schema)
@@ -104,7 +110,7 @@ class Requester(object):
 			sec_limit_detected = False
 			while not result_found:
 				try:
-					result = self.client.execute(gql(gql_query))
+					result = self.client.execute(gql.gql(gql_query))
 					result_found = True
 				except Exception as e:
 					if e.__class__ == asyncio.TimeoutError:
@@ -114,7 +120,8 @@ class Requester(object):
 						else:
 							raise e.__class__('''TimeoutError happened more times than the set retries: {}. Rerun, maybe with higher value.
 Original error message: {}'''.format(retries,e))
-					if hasattr(e,'errors') and e.errors[0]['message'] ==  "You have exceeded a secondary rate limit. Please wait a few minutes before you try again.":
+					# if hasattr(e,'errors') and e.errors[0]['message'] ==  "You have exceeded a secondary rate limit. Please wait a few minutes before you try again.":
+					if e.__class__ == TransportProtocolError and "You have exceeded a secondary rate limit. Please wait a few minutes before you try again." in str(e):
 						if retries_left > 0:
 							self.logger.info(f'Secondary rate limit exceeded, waiting {self.secondary_limit_wait}s')
 							time.sleep(self.secondary_limit_wait)
@@ -195,6 +202,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 	"""
 	class to be inherited from, contains github credentials management
 	"""
+	scopes = ('read:user',)
 
 	def __init__(self,
 			requester_class=None,
@@ -297,7 +305,15 @@ class GHGQLFiller(github_rest.GithubFiller):
 			except Exception as e:
 				self.logger.info('API key starting with "{}" and of length {} not valid: {}:{}'.format(ak[:5],len(ak),e.__class__,e))
 			else:
-				requesters.append(g)
+				missing_scopes = []
+				for s in self.scopes:
+					if not self.check_scope(scope=s):
+						missing_scopes.append(s)
+				if len(missing_scopes) > 0:
+					self.logger.info('API key starting with "{}" missing scopes: {}'.format(ak[:5],missing_scopes))
+				else:
+					requesters.append(g)
+
 			schema = g.client.schema
 		if len(requesters) == 0:
 			raise ValueError('No valid API key provided')
@@ -5178,6 +5194,9 @@ class UserOrgsGQLFiller(GHGQLFiller):
 	'''
 	Querying organizations through the GraphQL API
 	'''
+
+	scopes = ('read:user','read:org',)
+
 	def __init__(self,**kwargs):
 		self.items_name = 'user_orgs'
 		self.queried_obj = 'user'
