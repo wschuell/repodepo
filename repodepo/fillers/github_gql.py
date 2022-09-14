@@ -307,7 +307,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 			else:
 				missing_scopes = []
 				for s in self.scopes:
-					if not self.check_scope(scope=s):
+					if not g.check_scope(scope=s):
 						missing_scopes.append(s)
 				if len(missing_scopes) > 0:
 					self.logger.info('API key starting with "{}" missing scopes: {}'.format(ak[:5],missing_scopes))
