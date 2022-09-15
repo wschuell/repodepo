@@ -223,9 +223,12 @@ class CommitsFiller(fillers.Filler):
 							'author_email':commit['author_email'],
 							'author_name':commit['author_name'],
 							#'localtime':commit['time'],
-							'gmt_time':commit['time'],
-							'local_time':commit['time']+60*commit['time_offset'],
-							'time_offset':commit['time_offset']*60,
+							'gmt_time':commit['author_time'],
+							'local_time':commit['author_time']+60*commit['author_offset'],
+							'time_offset':commit['author_offset']*60,
+							'commit_gmt_time':commit['time'],
+							'commit_local_time':commit['time']+60*commit['time_offset'],
+							'commit_time_offset':commit['time_offset']*60,
 							'sha':commit['sha'],
 							'parents':commit['parents'],
 							'repo_id':repo_id,
@@ -238,9 +241,12 @@ class CommitsFiller(fillers.Filler):
 							'author_email':commit.author.email,
 							'author_name':commit.author.name,
 							#'localtime':commit.commit_time,
-							'gmt_time':commit.commit_time,
-							'local_time':commit.commit_time+60*commit.commit_time_offset,
-							'time_offset':commit.commit_time_offset*60,
+							'gmt_time':commit.author.time,
+							'local_time':commit.author.time+60*commit.author.offset,
+							'time_offset':commit.author.offset*60,
+							'commit_gmt_time':commit.commit_time,
+							'commit_local_time':commit.commit_time+60*commit.commit_time_offset,
+							'commit_time_offset':commit.commit_time_offset*60,
 							'sha':commit.hex,
 							'parents':[pid.hex for pid in commit.parent_ids],
 							'repo_id':repo_id,
@@ -264,9 +270,12 @@ class CommitsFiller(fillers.Filler):
 							'author_email':commit.author.email,
 							'author_name':commit.author.name,
 							#'localtime':commit.commit_time,
-							'gmt_time':commit.commit_time,
-							'local_time':commit.commit_time+60*commit.commit_time_offset,
-							'time_offset':commit.commit_time_offset*60,
+							'gmt_time':commit.author.time,
+							'local_time':commit.author.time+60*commit.author.offset,
+							'time_offset':commit.author.offset*60,
+							'commit_gmt_time':commit.commit_time,
+							'commit_local_time':commit.commit_time+60*commit.commit_time_offset,
+							'commit_time_offset':commit.commit_time_offset*60,
 							'sha':commit.hex,
 							'parents':[pid.hex for pid in commit.parent_ids],
 							'insertions':insertions,
@@ -532,7 +541,7 @@ class CommitsFiller(fillers.Filler):
 
 		if self.db.db_type == 'postgres':
 			extras.execute_batch(self.db.cursor,'''
-				INSERT INTO commits(sha,author_id,committer_id,created_at,local_created_at,time_offset,insertions,deletions,message)
+				INSERT INTO commits(sha,author_id,committer_id,created_at,local_created_at,time_offset,committed_at,local_committed_at,time_offset_committed,insertions,deletions,message)
 					VALUES(%(sha)s,
 							(SELECT i.id FROM identities i
 								INNER JOIN identity_types it
@@ -543,17 +552,24 @@ class CommitsFiller(fillers.Filler):
 							%(gmt_timestamp)s,
 							%(local_timestamp)s,
 							%(time_offset)s,
+							%(commit_gmt_timestamp)s,
+							%(commit_local_timestamp)s,
+							%(commit_time_offset)s,
 							%(insertions)s,
 							%(deletions)s,
 							%(message)s
 							)
 				ON CONFLICT DO NOTHING;
-				''',(dict(local_timestamp=datetime.datetime.utcfromtimestamp(c['local_time']),gmt_timestamp=datetime.datetime.utcfromtimestamp(c['gmt_time']),**c) for c in tracked_gen(commit_info_list)))
+				''',(dict(local_timestamp=datetime.datetime.utcfromtimestamp(c['local_time']),
+							gmt_timestamp=datetime.datetime.utcfromtimestamp(c['gmt_time']),
+							commit_local_timestamp=datetime.datetime.utcfromtimestamp(c['commit_local_time']),
+							commit_gmt_timestamp=datetime.datetime.utcfromtimestamp(c['commit_gmt_time'])
+							,**c) for c in tracked_gen(commit_info_list)))
 				# ''',((c['sha'],c['author_email'],c['committer_email'],datetime.datetime.utcfromtimestamp(c['time']),c['insertions'],c['deletions'],c['message']) for c in tracked_gen(commit_info_list)))
 
 		else:
 			self.db.cursor.executemany('''
-				INSERT OR IGNORE INTO commits(sha,author_id,committer_id,created_at,local_created_at,time_offset,insertions,deletions,message)
+				INSERT OR IGNORE INTO commits(sha,author_id,committer_id,created_at,local_created_at,time_offset,committed_at,local_committed_at,time_offset_committed,insertions,deletions,message)
 					VALUES(:sha,
 							(SELECT i.id FROM identities i
 								INNER JOIN identity_types it
@@ -564,11 +580,18 @@ class CommitsFiller(fillers.Filler):
 							:gmt_timestamp,
 							:local_timestamp,
 							:time_offset,
+							:commit_gmt_timestamp,
+							:commit_local_timestamp,
+							:commit_time_offset,
 							:insertions,
 							:deletions,
 							:message
 							);
-				''',(dict(local_timestamp=datetime.datetime.utcfromtimestamp(c['local_time']),gmt_timestamp=datetime.datetime.utcfromtimestamp(c['gmt_time']),**c) for c in tracked_gen(commit_info_list)))
+				''',(dict(local_timestamp=datetime.datetime.utcfromtimestamp(c['local_time']),
+							gmt_timestamp=datetime.datetime.utcfromtimestamp(c['gmt_time']),
+							commit_local_timestamp=datetime.datetime.utcfromtimestamp(c['commit_local_time']),
+							commit_gmt_timestamp=datetime.datetime.utcfromtimestamp(c['commit_gmt_time']),
+							**c) for c in tracked_gen(commit_info_list)))
 				#''',((c['sha'],c['author_email'],c['committer_email'],datetime.datetime.utcfromtimestamp(c['time']),c['insertions'],c['deletions'],c['message']) for c in tracked_gen(commit_info_list)))
 
 		if not tracked_data['empty']:
