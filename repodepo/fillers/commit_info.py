@@ -217,27 +217,12 @@ class CommitsFiller(fillers.Filler):
 				walker = repo_obj.walk(repo_obj.head.target, pygit2.GIT_SORT_TIME)
 
 			def process_commit(commit):
+				if isinstance(commit,dict):
+						commit = repo_obj.get(commit['sha'])
+
 				if basic_info_only:
-					if isinstance(commit,dict):
-						return {
-							'author_email':commit['author_email'],
-							'author_name':commit['author_name'],
-							#'localtime':commit['time'],
-							'gmt_time':commit['author_time'],
-							'local_time':commit['author_time']+60*commit['author_offset'],
-							'time_offset':commit['author_offset']*60,
-							'commit_gmt_time':commit['time'],
-							'commit_local_time':commit['time']+60*commit['time_offset'],
-							'commit_time_offset':commit['time_offset']*60,
-							'sha':commit['sha'],
-							'parents':commit['parents'],
-							'repo_id':repo_id,
-							'message':commit['message'],
-							'committer_email':commit['committer_email'],
-							'committer_name':commit['committer_name'],
-							}
-					else:
-						return {
+					
+					return {
 							'author_email':commit.author.email,
 							'author_name':commit.author.name,
 							#'localtime':commit.commit_time,
@@ -255,8 +240,8 @@ class CommitsFiller(fillers.Filler):
 							'committer_name':commit.committer.name,
 							}
 				else:
-					if isinstance(commit,dict):
-						commit = repo_obj.get(commit['sha'])
+					# if isinstance(commit,dict):
+					# 	commit = repo_obj.get(commit['sha'])
 					if commit.parents:
 						diff_obj = repo_obj.diff(commit.parents[0],commit)# Inverted order wrt the expected one, to have expected values for insertions and deletions
 						insertions = diff_obj.stats.insertions

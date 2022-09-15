@@ -1211,7 +1211,7 @@ class WatchersGQLFiller(GHGQLFiller):
 				;''',items_list)
 		else:
 			db.cursor.executemany('''
-					INSERT OR IGNORE INTO stars(starred_at,login,repo_id,identity_type_id,identity_id)
+					INSERT OR IGNORE INTO stars(login,repo_id,identity_type_id,identity_id)
 					VALUES(:watcher_login,
 							:repo_id,
 							(SELECT id FROM identity_types WHERE name=:identity_type),
