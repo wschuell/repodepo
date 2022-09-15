@@ -45,6 +45,7 @@ def test_github_gql(testdb):
 
 	testdb.add_filler(github_gql.RandomCommitLoginsGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.StarsGQLFiller(fail_on_wait=True,workers=workers))
+	testdb.add_filler(github_gql.WatchersGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.ReleasesGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.FollowersGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.RepoLanguagesGQLFiller(fail_on_wait=True,workers=workers))

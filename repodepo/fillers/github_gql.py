@@ -1139,6 +1139,94 @@ class StarsGQLFiller(GHGQLFiller):
 		'''
 		return query_result['repository']['stargazers']['totalCount']
 
+class WatchersGQLFiller(GHGQLFiller):
+	'''
+	Querying watchers through the GraphQL API
+	'''
+	def __init__(self,**kwargs):
+		self.items_name = 'watchers'
+		self.queried_obj = 'repo'
+		self.pageinfo_path = ['repository','watchers','pageInfo']
+		GHGQLFiller.__init__(self,**kwargs)
+
+	def query_string(self,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: python-formatable string representing the graphql query
+		'''
+		return '''query {{
+					repository(owner:"{repo_owner}", name:"{repo_name}") {{
+						nameWithOwner
+						watchers (first:{page_size} {after_end_cursor} ){{
+						 totalCount
+						 pageInfo {{
+							endCursor
+							hasNextPage
+						 }}
+						 edges {{
+							node {{
+								login
+							}}
+						 }}
+						}}
+					}}
+				}}'''
+
+	def parse_query_result(self,query_result,repo_id,identity_id,repo_owner=None,repo_name=None,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: [ {'repo_id':r_id,'repo_owner':r_ow,'repo_name':r_na,'starrer_login':s_lo,'starred_at':st_at} , ...]
+		'''
+		ans = []
+		if repo_owner is None:
+			repo_owner,repo_name = query_result['repository']['nameWithOwner'].split('/')
+		for e in query_result['repository']['watchers']['edges']:
+			d = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'identity_type':self.target_identity_type}
+			try:
+				d['watcher_login'] = e['node']['login']
+			except (KeyError,TypeError) as err:
+				self.logger.info('Result triggering error: {} \nError when parsing watchers for {}/{}: {}'.format(e,repo_owner,repo_name,err))
+				continue
+			else:
+				ans.append(d)
+		return ans
+
+
+	def insert_items(self,items_list,commit=True,db=None):
+		'''
+		In subclasses this has to be implemented
+		inserts results in the DB
+		'''
+		if db is None:
+			db = self.db
+		if db.db_type == 'postgres':
+			extras.execute_batch(db.cursor,'''
+				INSERT INTO watchers(login,repo_id,identity_type_id,identity_id)
+				VALUES(%(watcher_login)s,
+						%(repo_id)s,
+						(SELECT id FROM identity_types WHERE name=%(identity_type)s),
+						(SELECT id FROM identities WHERE identity=%(watcher_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(identity_type)s))
+					)
+				ON CONFLICT DO NOTHING
+				;''',items_list)
+		else:
+			db.cursor.executemany('''
+					INSERT OR IGNORE INTO stars(starred_at,login,repo_id,identity_type_id,identity_id)
+					VALUES(:watcher_login,
+							:repo_id,
+							(SELECT id FROM identity_types WHERE name=:identity_type),
+							(SELECT id FROM identities WHERE identity=:watcher_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:identity_type))
+						);''',items_list)
+		if commit:
+			db.connection.commit()
+
+	def get_nb_items(self,query_result):
+		'''
+		In subclasses this has to be implemented
+		output: nb_items or None if not relevant
+		'''
+		return query_result['repository']['watchers']['totalCount']
+
 class ForksGQLFiller(GHGQLFiller):
 	'''
 	Querying forks through the GraphQL API

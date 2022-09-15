@@ -210,6 +210,14 @@
 				CREATE INDEX IF NOT EXISTS stars_idx2 ON stars(repo_id,created_at);
 				CREATE INDEX IF NOT EXISTS stars_idx3 ON stars(identity_id,starred_at);
 
+				CREATE TABLE IF NOT EXISTS watchers(
+				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
+				identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
+				login TEXT NOT NULL,
+				identity_id INTEGER REFERENCES identities(id) ON DELETE SET NULL,
+				PRIMARY KEY(repo_id,login,identity_type_id)
+				);
+
 				CREATE TABLE IF NOT EXISTS packages(
 				id INTEGER PRIMARY KEY,
 				source_id INTEGER REFERENCES sources(id) ON DELETE CASCADE,

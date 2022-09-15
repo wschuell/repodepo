@@ -357,6 +357,7 @@ class Database(object):
 			self.cursor.execute('DROP TABLE IF EXISTS sources CASCADE;')
 			self.cursor.execute('DROP TABLE IF EXISTS organizations CASCADE;')
 			self.cursor.execute('DROP TABLE IF EXISTS org_memberships CASCADE;')
+			self.cursor.execute('DROP TABLE IF EXISTS watchers CASCADE;')
 			self.connection.commit()
 
 
