@@ -679,3 +679,69 @@ def export_bots(db,folder=None):
 		f.write('identity_type,identity\n')
 		for s,p in db.cursor.fetchall():
 			f.write('"{}","{}"\n'.format(s,p))
+
+
+def generate_tables_file(filepath,db):
+	'''
+	generates a yml file with the list of tables and their columns
+	parses the file if it exists already, especially the commented lines, to only add missing columns and tables, and keep commented lines commented.
+	If a table is commented, its new columns will be commented as well
+	Comments are combinatiosn of an arbitrary number of '#' or ' ' at the beginning of the line. Resulting empty lines discarded
+	'''
+	tables_info = get_tables_info(db=db,as_yml=False)
+
+	if os.path.exists(filepath):
+		with open(filepath,'r') as f:
+			previous_content = f.read()
+		filtered_previous = yaml.load(previous_content,Loader=yaml.SafeLoader)
+	else:
+		previous_content = ''
+		filtered_previous = OrderedDict()
+
+	def clean_line(l):
+		while len(l)>0 and l[0] in ('#',' '):
+			l = l[1:]
+		return l
+
+	uncommented_previous_content = '\n'.join([clean_line(l) for l in previous_content.split('\n') if clean_line(l)!=''])
+	unfiltered_previous = yaml.load(uncommented_previous_content,Loader=yaml.SafeLoader)
+	if unfiltered_previous is None:
+		unfiltered_previous = OrderedDict()
+	elif isinstance(unfiltered_previous,str):
+		raise SyntaxError(f'Error when parsing yaml file: {unfiltered_previous}')
+
+	def all_columns(t):
+		ans = []
+		for d in [tables_info,unfiltered_previous]:
+			if t in d.keys():
+				for c in d[t]:
+					if c not in ans:
+						ans.append(c)
+		return sorted(ans)
+
+	total_dict = {t:all_columns(t) for t in sorted(list(set(list(tables_info.keys()) + list(unfiltered_previous.keys()))))}
+
+	tables_mask = set()
+	columns_mask = set()
+	for t in total_dict.keys():
+		if t not in filtered_previous.keys() and t in unfiltered_previous.keys():
+			tables_mask.add(t)
+		else:
+			for c in total_dict[t]:
+				if t in unfiltered_previous.keys() and c in unfiltered_previous[t] and (t not in filtered_previous.keys() or c not in filtered_previous[t]):
+					columns_mask.add((t,c))
+
+	with open(filepath,'w') as f:
+		for t,c_l in total_dict.items():
+			if t in tables_mask:
+				f.write(f'# {t}:\n')
+				for c in c_l:
+					f.write(f'# - {c}\n')
+			else:
+				f.write(f'{t}:\n')
+				for c in c_l:
+					if (t,c) in columns_mask:
+						f.write(f'# - {c}\n')
+					else:
+						f.write(f' - {c}\n')
+				
