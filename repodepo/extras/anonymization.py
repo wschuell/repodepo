@@ -84,6 +84,16 @@ class AnonymizationMetaFiller(fillers.Filler):
 							('sponsors_user','sponsor_login'),
 							('sponsors_user','external_id'),
 							('sponsors_listings','login'),
+							('watchers','login'),
+							('commit_comments','author_login'),
+							('commit_comment_reactions','author_login'),
+							('issue_comments','author_login'),
+							('issue_comment_reactions','author_login'),
+							('pullrequest_comments','author_login'),
+							('pullrequest_comment_reactions','author_login'),
+							('issues','author_login'),
+							('pullrequests','author_login'),
+							('pullrequests','merger_login'),
 							]:
 			self.db.add_filler(AnonymizationFiller(table=table,field=field,leave_bots=False,filter_identity_type=False,salt=self.salt))
 
