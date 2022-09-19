@@ -2437,7 +2437,8 @@ class CommitCommentsGQLFiller(GHGQLFiller):
 		self.insert_reactions(items_list=items_list,commit=False,db=db)
 		self.insert_reaction_updates(items_list=items_list,commit=commit,db=db)
 
-		db.cursor.execute('''INSERT INTO full_updates(update_type) SELECT 'commit_comments' ;''')
+		if len(items_list):
+			db.cursor.execute('''INSERT INTO full_updates(update_type) SELECT 'commit_comments' ;''')
 
 	def insert_reactions(self,items_list,commit=True,db=None):
 		if db is None:
@@ -3023,7 +3024,8 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 		self.insert_comment_reaction_updates(items_list=items_list,commit=commit,db=db)
 
 
-		db.cursor.execute('''INSERT INTO full_updates(update_type) SELECT 'complete_issues' ;''')
+		if len(items_list):
+			db.cursor.execute('''INSERT INTO full_updates(update_type) SELECT 'complete_issues' ;''')
 
 		if commit:
 			db.connection.commit()
@@ -3487,7 +3489,8 @@ class IssueCommentsGQLFiller(GHGQLFiller):
 		CompleteIssuesGQLFiller.insert_comment_reactions(self,db=db,**kwargs)
 		CompleteIssuesGQLFiller.insert_comment_reaction_updates(self,db=db,**kwargs)
 
-		db.cursor.execute('''INSERT INTO full_updates(update_type) SELECT 'issue_comments' ;''')
+		if len(kwargs['items_list']):
+			db.cursor.execute('''INSERT INTO full_updates(update_type) SELECT 'issue_comments' ;''')
 
 	def get_nb_items(self,query_result):
 		'''
@@ -4009,7 +4012,8 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 		self.insert_comment_reaction_updates(items_list=items_list,commit=commit,db=db)
 
 
-		db.cursor.execute('''INSERT INTO full_updates(update_type) SELECT 'complete_pullrequests' ;''')
+		if len(items_list):
+			db.cursor.execute('''INSERT INTO full_updates(update_type) SELECT 'complete_pullrequests' ;''')
 
 		if commit:
 			db.connection.commit()
@@ -4474,7 +4478,8 @@ class PRCommentsGQLFiller(GHGQLFiller):
 		CompletePullRequestsGQLFiller.insert_comment_reactions(self,db=db,**kwargs)
 		CompletePullRequestsGQLFiller.insert_comment_reaction_updates(self,db=db,**kwargs)
 
-		db.cursor.execute('''INSERT INTO full_updates(update_type) SELECT 'pullrequest_comments' ;''')
+		if len(kwargs['items_list']):
+			db.cursor.execute('''INSERT INTO full_updates(update_type) SELECT 'pullrequest_comments' ;''')
 
 	def get_nb_items(self,query_result):
 		'''

@@ -594,6 +594,7 @@ class RepositoriesFiller(fillers.Filler):
 		Lists URLS that can be cleaned with available url roots, and fills in the urls table accordingly
 		'''
 		self.db.register_urls(source=self.source,url_list=self.urls)
+		self.db.cursor.execute('UPDATE urls SET cleaned_url=urls.id WHERE urls.cleaned_url IS NULL AND urls.source_root IS NOT NULL;')
 
 	def fill_repositories(self):
 		'''
@@ -641,7 +642,7 @@ class RepositoriesFiller(fillers.Filler):
 
 		# checking
 		if source_urlroot not in r:
-			raise RepoSyntaxError('Repo {} has not expected source {}.'.format(repo,source_urlroot))
+			raise RepoSyntaxError('Repo {} has not expected source {}.'.format(repo,source_urlroot))
 
 		# Removing front elements
 		for start_str in ['http://','https://','http:/','https:/','www.','/',' ','\n','\t','\r','"',"'"]:

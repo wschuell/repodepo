@@ -801,7 +801,8 @@ class DepsStats(DBStats):
 
 		results['packagespace_filtered'] = OrderedDict()
 		results['packagespace_filtered']['nb_links'] = len(self.network_p_filtered.edges)
-		results['packagespace_filtered']['nb_links_filtered'] = len(self.network_p.edges)-len(self.network_p_filtered.edges)
+		if not self.only_filtered:
+			results['packagespace_filtered']['nb_links_filtered'] = len(self.network_p.edges)-len(self.network_p_filtered.edges)
 		results['packagespace_filtered']['cycles'] = self.get_cycles(space='p',filtered=True,detailed=self.detailed,network=self.network_p_filtered)
 
 		if not self.only_filtered:
@@ -812,7 +813,8 @@ class DepsStats(DBStats):
 
 		results['packagespace_timestamp_filtered'] = OrderedDict()
 		results['packagespace_timestamp_filtered']['nb_links'] = len(self.network_p_filtered_timestamp.edges)
-		results['packagespace_timestamp_filtered']['nb_links_filtered'] = len(self.network_p_timestamp.edges) - len(self.network_p_filtered_timestamp.edges)
+		if not self.only_filtered:
+			results['packagespace_timestamp_filtered']['nb_links_filtered'] = len(self.network_p_timestamp.edges) - len(self.network_p_filtered_timestamp.edges)
 		results['packagespace_timestamp_filtered']['cycles'] = self.get_cycles(space='p',filtered=True,detailed=self.detailed,network=self.network_p_filtered_timestamp)
 
 		if not self.only_filtered:
@@ -823,7 +825,8 @@ class DepsStats(DBStats):
 
 		results['repospace_filtered'] = OrderedDict()
 		results['repospace_filtered']['nb_links'] = len(self.network_r_filtered.edges)
-		results['repospace_filtered']['nb_links_filtered'] = len(self.network_r.edges) - len(self.network_r_filtered.edges)
+		if not self.only_filtered:
+			results['repospace_filtered']['nb_links_filtered'] = len(self.network_r.edges) - len(self.network_r_filtered.edges)
 		results['repospace_filtered']['cycles'] = self.get_cycles(space='r',filtered=True,detailed=self.detailed,network=self.network_r_filtered)
 
 		if not self.only_filtered:
@@ -834,7 +837,8 @@ class DepsStats(DBStats):
 
 		results['repospace_timestamp_filtered'] = OrderedDict()
 		results['repospace_timestamp_filtered']['nb_links'] = len(self.network_r_filtered_timestamp.edges)
-		results['repospace_timestamp_filtered']['nb_links_filtered'] = len(self.network_r_timestamp.edges) - len(self.network_r_filtered_timestamp.edges)
+		if not self.only_filtered:
+			results['repospace_timestamp_filtered']['nb_links_filtered'] = len(self.network_r_timestamp.edges) - len(self.network_r_filtered_timestamp.edges)
 		results['repospace_timestamp_filtered']['cycles'] = self.get_cycles(space='r',filtered=True,detailed=self.detailed,network=self.network_r_filtered_timestamp)
 
 

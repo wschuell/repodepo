@@ -624,7 +624,8 @@ class IssueCommentsGQLFiller(github_gql.IssueCommentsGQLFiller):
 		#CompleteIssuesGQLFiller.insert_comment_reactions(self,db=db,**kwargs)
 		#CompleteIssuesGQLFiller.insert_comment_reaction_updates(self,db=db,**kwargs)
 
-		db.cursor.execute('''INSERT INTO full_updates(update_type) SELECT 'issue_comments' ;''')
+		if len(kwargs['items_list']):
+			db.cursor.execute('''INSERT INTO full_updates(update_type) SELECT 'issue_comments' ;''')
 
 
 	def get_nb_items(self,query_result):
@@ -999,7 +1000,8 @@ class PullRequestCommentsGQLFiller(github_gql.PRCommentsGQLFiller):
 		#CompletePullRequestsGQLFiller.insert_comment_reactions(self,db=db,**kwargs)
 		#CompletePullRequestsGQLFiller.insert_comment_reaction_updates(self,db=db,**kwargs)
 
-		db.cursor.execute('''INSERT INTO full_updates(update_type) SELECT 'pullrequest_comments' ;''')
+		if len(kwargs['items_list']):
+			db.cursor.execute('''INSERT INTO full_updates(update_type) SELECT 'pullrequest_comments' ;''')
 
 
 	def get_nb_items(self,query_result):

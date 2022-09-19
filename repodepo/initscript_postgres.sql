@@ -547,7 +547,7 @@
 					identity_type_id BIGINT REFERENCES identity_types(id) ON DELETE CASCADE,
 					identity_type TEXT,
 					is_bot BOOLEAN,
-					is_invalid BOOLEAN,
+					-- is_invalid BOOLEAN,
 					note TEXT,
 					additional_info JSONB
 					);

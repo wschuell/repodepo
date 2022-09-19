@@ -206,6 +206,11 @@ class BotsManualChecksFiller(fillers.Filler):
 		self.to_check = [{'user_id':row['user_id'],'identity_type':row['login'].split('/')[0],'identity':row['login'].split('/')[1]} for idx,row in df.iterrows()]
 
 	def apply(self):
+		self.checks(silent=True)
+		self.prepare() # In case checks uncover new 
+		self.checks()
+
+	def checks(self,silent=False):
 
 		#### Filling in table _bots_manual_checks
 		if self.db.db_type == 'postgres':
@@ -217,7 +222,7 @@ class BotsManualChecksFiller(fillers.Filler):
 												identity_type)
 				VALUES (
 					(SELECT i.id FROM identities i INNER JOIN identity_types it 
-						ON it.name=%(identity_type)s AND it.id=i.identity_type AND i.identity=%(identity)s),
+						ON it.name=%(identity_type)s AND it.id=i.identity_type_id AND i.identity=%(identity)s),
 					%(identity)s,
 					(SELECT id FROM identity_types it 
 						WHERE it.name=%(identity_type)s ),
@@ -234,7 +239,7 @@ class BotsManualChecksFiller(fillers.Filler):
 												identity_type)
 				VALUES (
 					(SELECT i.id FROM identities i INNER JOIN identity_types it 
-						ON it.name=:identity_type AND it.id=i.identity_type AND i.identity=:identity),
+						ON it.name=:identity_type AND it.id=i.identity_type_id AND i.identity=:identity),
 					:identity,
 					(SELECT id FROM identity_types it 
 						WHERE it.name=:identity_type ),
@@ -265,6 +270,6 @@ class BotsManualChecksFiller(fillers.Filler):
 			ans = self.db.cursor.fetchone()
 			if ans[0] != 0:
 				raise ValueError('Pending manual checks for bots/invalid identities in _bots_manual_checks table')
-			else:
+			elif not silent:
 				self.logger.info('Passed bot checks, no further identities to be checked manually')
 

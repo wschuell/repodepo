@@ -11,6 +11,7 @@ import subprocess
 from psycopg2 import extras
 
 from .. import fillers
+from ..extras import stats
 
 
 class PackageDepsFilter(fillers.Filler):
@@ -36,17 +37,21 @@ class PackageDepsFilter(fillers.Filler):
 			self.input_list = self.input_list
 		elif self.input_file is not None:
 			filepath = os.path.join(self.data_folder,self.input_file)
+			if os.path.exists(filepath):
+				with open(filepath,"rb") as f:
+					filehash = hashlib.sha256(f.read()).hexdigest()
+					self.source = '{}_{}'.format(self.input_file,filehash)
+					self.db.register_source(source=self.source)
 
-			with open(filepath,"rb") as f:
-				filehash = hashlib.sha256(f.read()).hexdigest()
-				self.source = '{}_{}'.format(self.input_file,filehash)
-				self.db.register_source(source=self.source)
-
-			with open(filepath,'r') as f:
-				reader = csv.reader(f)
-				if self.header:
-					next(reader)
-				self.input_list = list(reader)
+				with open(filepath,'r') as f:
+					reader = csv.reader(f)
+					if self.header:
+						next(reader)
+					self.input_list = list(reader)
+			else:
+				self.logger.info(f'''No such file: {filepath}, skipping {self.__class__}''')
+				self.done = True
+				self.input_list = []
 		else:
 			raise ValueError('input_list and input_file cannot both be None')
 		self.input_list = [self.parse_element(e) for e in self.input_list]
@@ -367,17 +372,27 @@ class FiltersLibFolderFiller(FiltersFolderFiller):
 
 
 class DepsManualChecksFiller(fillers.Filler):
-	def __init__(self,filename='deps_manualchecks.yml',**kwargs):
+	def __init__(self,filename='deps_manualchecks.yml',cycle_limit=100,only_timestamp=True,**kwargs):
 		fillers.Filler.__init__(self,**kwargs)
 		self.filename = filename
+		self.cycle_limit = cycle_limit
+		self.only_timestamp = only_timestamp
 
 	def apply(self):
-		filepath = os.path.join(self.data_folder,self.filepath)
-		s_obj = stats.DepsStats(db=db,only_filtered=True)
-		s = s.get_result()
-		for n in ('packagespace','packagespace_timestamp','repospace','repospace_timestamp'):
-			if len(s[n+'_filtered']['cycles']):
+		filepath = os.path.join(self.data_folder,self.filename)
+		s_obj = stats.DepsStats(db=self.db,only_filtered=True,limit=self.cycle_limit,detailed=True)
+		s_obj.get_result()
+		s = s_obj.results 
+		
+		spaces_list = ('packagespace','repospace')
+		if self.only_timestamp:
+			net_list = [s+'_timestamp' for s in spaces_list]
+		else:
+			net_list = [s+'_timestamp' for s in spaces_list] + spaces_list
+
+		for n in net_list:
+			if s[n+'_filtered']['cycles']['nb_cycles']>0:
 				s_obj.save(filepath=filepath)
-				raise ValueError(f'Pending manual checks for dependencies, see output file: {filepath}')
+				raise ValueError(f'''Pending manual checks for dependencies for network {s[n+'_filtered']}, see output file: {filepath}''')
 			else:
-				self.logger.info(f'Passed dependency network checks, no cycles found')
+				self.logger.info(f'''Passed dependency network checks for network {s[n+'_filtered']}, no cycles found''')
