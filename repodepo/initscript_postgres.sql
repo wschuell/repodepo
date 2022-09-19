@@ -539,3 +539,15 @@
 					);
 
 				CREATE UNIQUE INDEX IF NOT EXISTS nulljoinedat_idx ON org_memberships(org_id,member) WHERE joined_at IS NULL;
+
+
+				CREATE TABLE IF NOT EXISTS _bots_manual_check(
+					identity_id BIGINT PRIMARY KEY REFERENCES identities(id) ON DELETE CASCADE,
+					identity TEXT,
+					identity_type_id BIGINT REFERENCES identity_types(id) ON DELETE CASCADE,
+					identity_type TEXT,
+					is_bot BOOLEAN,
+					is_invalid BOOLEAN,
+					note TEXT,
+					additional_info JSONB
+					);

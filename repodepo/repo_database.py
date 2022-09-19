@@ -312,6 +312,7 @@ class Database(object):
 		else:
 			self.cursor.execute('DROP TABLE IF EXISTS _dbinfo CASCADE;')
 			self.cursor.execute('DROP TABLE IF EXISTS _error_logs CASCADE;')
+			self.cursor.execute('DROP TABLE IF EXISTS _bots_manual_check CASCADE;')
 			self.cursor.execute('DROP TABLE IF EXISTS sponsors_listings CASCADE;')
 			self.cursor.execute('DROP TABLE IF EXISTS releases CASCADE;')
 			self.cursor.execute('DROP TABLE IF EXISTS issues_comment_reactions CASCADE;')

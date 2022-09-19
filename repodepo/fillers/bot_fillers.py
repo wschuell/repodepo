@@ -11,6 +11,7 @@ import subprocess
 from psycopg2 import extras
 
 from .. import fillers
+from ..getters import bot_checks
 
 
 class BotFiller(fillers.Filler):
@@ -191,4 +192,79 @@ class MGBotFiller(BotFileFiller):
 		sorted_bots = sorted(set(bots))
 		with open(destination,'w') as f:
 			f.write('\n'.join(sorted_bots))
+
+
+
+class BotsManualChecksFiller(fillers.Filler):
+
+	def __init__(self,blocking=True,**kwargs):
+		fillers.Filler.__init__(self,**kwargs)
+		self.blocking = blocking
+
+	def prepare(self):
+		df = bot_checks.BotChecks(db=self.db).get_result()
+		self.to_check = [{'user_id':row['user_id'],'identity_type':row['login'].split('/')[0],'identity':row['login'].split('/')[1]} for idx,row in df.iterrows()]
+
+	def apply(self):
+
+		#### Filling in table _bots_manual_checks
+		if self.db.db_type == 'postgres':
+			extras.execute_batch(self.db.cursor,
+				'''
+				INSERT INTO _bots_manual_check(identity_id,
+												identity
+												identity_type_id
+												identity_type)
+				VALUES (
+					(SELECT i.id FROM identities i INNER JOIN identity_types it 
+						ON it.name=%(identity_type)s AND it.id=i.identity_type AND i.identity=%(identity)s),
+					%(identity)s,
+					(SELECT id FROM identity_types it 
+						WHERE it.name=%(identity_type)s ),
+					%(identity_type)s
+					)
+				ON CONFLICT DO NOTHING
+				;''',self.to_check)
+		else:
+			self.db.cursor.executemany(
+				'''
+				INSERT OR IGNORE INTO _bots_manual_check(identity_id,
+												identity
+												identity_type_id
+												identity_type)
+				VALUES (
+					(SELECT i.id FROM identities i INNER JOIN identity_types it 
+						ON it.name=:identity_type AND it.id=i.identity_type AND i.identity=:identity),
+					:identity,
+					(SELECT id FROM identity_types it 
+						WHERE it.name=:identity_type ),
+					:identity_type
+					)
+				;''',self.to_check)
+
+
+		#### Filling bots info in identities and users tables
+		self.db.cursor.execute('''
+			UPDATE identities SET is_bot=true
+			WHERE id IN (SELECT identity_id FROM _bots_manual_check bmc WHERE bmc.is_bot)
+			;''')
+		BotUserFiller.fill_bots(self) # Propagating to user level		
+
+		#### Checking bots potentially already declared from another source
+		self.db.cursor.execute('''
+			UPDATE _bots_manual_check SET is_bot=true
+			WHERE identity_id IN (SELECT id FROM identities i WHERE i.is_bot)
+			;''')
+
+		### Committing before potential block
+		self.db.connection.commit()
+
+		### Blocking if checks remaining
+		if self.blocking:
+			self.db.cursor.execute('SELECT COUNT(*) FROM _bots_manual_check WHERE is_bot IS NULL;')
+			ans = self.db.cursor.fetchone()
+			if ans[0] != 0:
+				raise ValueError('Pending manual checks for bots/invalid identities in _bots_manual_checks table')
+			else:
+				self.logger.info('Passed bot checks, no further identities to be checked manually')
 

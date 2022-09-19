@@ -778,49 +778,59 @@ class DepsStats(DBStats):
 	'''
 	dependencies stats
 	'''
-	def __init__(self,detailed=False,limit=10**4,**kwargs):
+	def __init__(self,detailed=False,limit=10**4,only_filtered=False,**kwargs):
 		DBStats.__init__(self,**kwargs)
 		self.limit = limit
 		self.detailed = detailed
+		self.only_filtered = only_filtered
 
 	def get(self,db,**kwargs):
-		self.set_network()
+		if not self.only_filtered:
+			self.set_network()
 		self.set_network_filtered()
-		self.set_network_timestamp()
+		if not self.only_filtered:
+			self.set_network_timestamp()
 		self.set_network_filtered_timestamp()
 
 		results = OrderedDict()
-		results['packagespace'] = OrderedDict()
-		results['packagespace']['nb_links'] = len(self.network_p.edges)
-		results['packagespace']['cycles'] = self.get_cycles(space='p',filtered=False,detailed=self.detailed,network=self.network_p)
+		if not self.only_filtered:
+		
+			results['packagespace'] = OrderedDict()
+			results['packagespace']['nb_links'] = len(self.network_p.edges)
+			results['packagespace']['cycles'] = self.get_cycles(space='p',filtered=False,detailed=self.detailed,network=self.network_p)
 
 		results['packagespace_filtered'] = OrderedDict()
 		results['packagespace_filtered']['nb_links'] = len(self.network_p_filtered.edges)
 		results['packagespace_filtered']['nb_links_filtered'] = len(self.network_p.edges)-len(self.network_p_filtered.edges)
 		results['packagespace_filtered']['cycles'] = self.get_cycles(space='p',filtered=True,detailed=self.detailed,network=self.network_p_filtered)
 
-		results['packagespace_timestamp'] = OrderedDict()
-		results['packagespace_timestamp']['nb_links'] = len(self.network_p_timestamp.edges)
-		results['packagespace_timestamp']['cycles'] = self.get_cycles(space='p',filtered=False,detailed=self.detailed,network=self.network_p_timestamp)
+		if not self.only_filtered:
+
+			results['packagespace_timestamp'] = OrderedDict()
+			results['packagespace_timestamp']['nb_links'] = len(self.network_p_timestamp.edges)
+			results['packagespace_timestamp']['cycles'] = self.get_cycles(space='p',filtered=False,detailed=self.detailed,network=self.network_p_timestamp)
 
 		results['packagespace_timestamp_filtered'] = OrderedDict()
 		results['packagespace_timestamp_filtered']['nb_links'] = len(self.network_p_filtered_timestamp.edges)
 		results['packagespace_timestamp_filtered']['nb_links_filtered'] = len(self.network_p_timestamp.edges) - len(self.network_p_filtered_timestamp.edges)
 		results['packagespace_timestamp_filtered']['cycles'] = self.get_cycles(space='p',filtered=True,detailed=self.detailed,network=self.network_p_filtered_timestamp)
 
-		results['repospace'] = OrderedDict()
-		results['repospace']['nb_links'] = len(self.network_r.edges)
-		results['repospace']['cycles'] = self.get_cycles(space='r',filtered=False,detailed=self.detailed,network=self.network_r)
+		if not self.only_filtered:
+
+			results['repospace'] = OrderedDict()
+			results['repospace']['nb_links'] = len(self.network_r.edges)
+			results['repospace']['cycles'] = self.get_cycles(space='r',filtered=False,detailed=self.detailed,network=self.network_r)
 
 		results['repospace_filtered'] = OrderedDict()
 		results['repospace_filtered']['nb_links'] = len(self.network_r_filtered.edges)
 		results['repospace_filtered']['nb_links_filtered'] = len(self.network_r.edges) - len(self.network_r_filtered.edges)
 		results['repospace_filtered']['cycles'] = self.get_cycles(space='r',filtered=True,detailed=self.detailed,network=self.network_r_filtered)
 
+		if not self.only_filtered:
 
-		results['repospace_timestamp'] = OrderedDict()
-		results['repospace_timestamp']['nb_links'] = len(self.network_r_timestamp.edges)
-		results['repospace_timestamp']['cycles'] = self.get_cycles(space='r',filtered=False,detailed=self.detailed,network=self.network_r_timestamp)
+			results['repospace_timestamp'] = OrderedDict()
+			results['repospace_timestamp']['nb_links'] = len(self.network_r_timestamp.edges)
+			results['repospace_timestamp']['cycles'] = self.get_cycles(space='r',filtered=False,detailed=self.detailed,network=self.network_r_timestamp)
 
 		results['repospace_timestamp_filtered'] = OrderedDict()
 		results['repospace_timestamp_filtered']['nb_links'] = len(self.network_r_filtered_timestamp.edges)

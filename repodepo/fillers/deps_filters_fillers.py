@@ -364,3 +364,20 @@ class FiltersFolderFiller(fillers.Filler):
 class FiltersLibFolderFiller(FiltersFolderFiller):
 	def __init__(self,**kwargs):
 		FiltersFolderFiller.__init__(self,input_folder=os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(fillers.__file__)),'data','filters')))
+
+
+class DepsManualChecksFiller(fillers.Filler):
+	def __init__(self,filename='deps_manualchecks.yml',**kwargs):
+		fillers.Filler.__init__(self,**kwargs)
+		self.filename = filename
+
+	def apply(self):
+		filepath = os.path.join(self.data_folder,self.filepath)
+		s_obj = stats.DepsStats(db=db,only_filtered=True)
+		s = s.get_result()
+		for n in ('packagespace','packagespace_timestamp','repospace','repospace_timestamp'):
+			if len(s[n+'_filtered']['cycles']):
+				s_obj.save(filepath=filepath)
+				raise ValueError(f'Pending manual checks for dependencies, see output file: {filepath}')
+			else:
+				self.logger.info(f'Passed dependency network checks, no cycles found')
