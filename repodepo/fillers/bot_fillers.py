@@ -212,8 +212,8 @@ class BotsManualChecksFiller(fillers.Filler):
 			extras.execute_batch(self.db.cursor,
 				'''
 				INSERT INTO _bots_manual_check(identity_id,
-												identity
-												identity_type_id
+												identity,
+												identity_type_id,
 												identity_type)
 				VALUES (
 					(SELECT i.id FROM identities i INNER JOIN identity_types it 
@@ -229,8 +229,8 @@ class BotsManualChecksFiller(fillers.Filler):
 			self.db.cursor.executemany(
 				'''
 				INSERT OR IGNORE INTO _bots_manual_check(identity_id,
-												identity
-												identity_type_id
+												identity,
+												identity_type_id,
 												identity_type)
 				VALUES (
 					(SELECT i.id FROM identities i INNER JOIN identity_types it 
