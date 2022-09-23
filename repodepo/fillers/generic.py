@@ -638,10 +638,16 @@ class RepositoriesFiller(fillers.Filler):
 		Formatting repositories so that they match the expected syntax 'user/project'
 		'''
 
+
 		r = copy.copy(repo)
 
+		github_typos = ('gihub.com','githb.com','gitbhub.com','githbub.com','github.org')
+		github_typos_corrected = r.lower()
+		for gt in github_typos:
+			github_typos_corrected = github_typos_corrected.replace(gt,'github.com')
+			
 		# checking
-		if source_urlroot not in r:
+		if source_urlroot.lower() not in github_typos_corrected:
 			raise RepoSyntaxError('Repo {} has not expected source {}.'.format(repo,source_urlroot))
 
 		# Removing front elements
@@ -673,8 +679,9 @@ class RepositoriesFiller(fillers.Filler):
 		if repo.lower().startswith('{0}/{0}'.format(source_urlroot.lower())):
 			return self.repo_formatting(repo=repo[len(source_urlroot)+1:],source_urlroot=source_urlroot,output_cleaned_url=output_cleaned_url,raise_error=raise_error)
 
-		if repo.lower().startswith('gihub.com'):
-			return self.repo_formatting(repo='github.com'+repo[len('gihub.com'):],source_urlroot=source_urlroot,output_cleaned_url=output_cleaned_url,raise_error=raise_error)
+		for typo_github in github_typos:
+			if repo.lower().startswith(typo_github):
+				return self.repo_formatting(repo='github.com'+repo[len(typo_github):],source_urlroot=source_urlroot,output_cleaned_url=output_cleaned_url,raise_error=raise_error)
 
 		# Typos replacement
 		repo = repo.replace('//','/')
@@ -684,14 +691,14 @@ class RepositoriesFiller(fillers.Filler):
 		# begins with source
 
 		if not repo.lower().startswith(source_urlroot.lower()):
-			raise RepoSyntaxError('Repo {} has not expected source {}.'.format(repo,source_urlroot))
+			raise RepoSyntaxError('Repo {} has not expected source {}.'.format(repo,source_urlroot))
 		else:
 			r = repo[len(source_urlroot):]
 			if r.startswith('/'):
 				r = r[1:]
 
 		if source_urlroot in r:
-			msg = 'Repo {} has not expected syntax for source {}.'.format(repo,source_urlroot)
+			msg = 'Repo {} has not expected syntax for source {}.'.format(repo,source_urlroot)
 			self.logger.info(msg)
 			raise RepoSyntaxError(msg)
 
@@ -1409,7 +1416,7 @@ class SourcesAutoFiller(SourcesFiller):
 		for p in prefixes:
 			if cleaned_url.startswith(p):
 				cleaned_url = cleaned_url[len(p):]
-		source = cleaned_url.split('/')[0]
+		source = cleaned_url.split('/')[0].lower()
 		if url.startswith('https:'):
 			return source,'https://'+cleaned_url
 		else:

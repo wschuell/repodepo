@@ -132,7 +132,7 @@ Original error message: {}'''.format(retries,e))
 						else:
 							raise e.__class__('''Secondary rate limit error happened more times than the set retries: {}. Rerun, maybe with higher value.
 Original error message: {}'''.format(retries,e))
-					elif hasattr(e,'errors') and e.errors[0]['type'] == 'RATE_LIMITED':
+					elif hasattr(e,'errors') and len(e.errors) and 'type' in e.errors[0].keys() and e.errors[0]['type'] == 'RATE_LIMITED':
 						self.get_rate_limit()
 						reset_time = int(self.reset_at - time.time())
 						if reset_time <= 0:
