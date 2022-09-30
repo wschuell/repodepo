@@ -2394,27 +2394,81 @@ class CommitCommentsGQLFiller(GHGQLFiller):
 		if db is None:
 			db = self.db
 		if db.db_type == 'postgres':
+			db.cursor.execute(f'''
+				CREATE TEMPORARY TABLE IF NOT EXISTS temp_commits (commit_sha TEXT PRIMARY KEY,repo_id BIGINT)
+				;''',)
 			extras.execute_batch(db.cursor,'''
-				WITH com_id AS (SELECT id FROM commits WHERE sha=%(commit_sha)s),
-					ins_com_id AS (INSERT INTO commits(sha,repo_id) SELECT %(commit_sha)s,%(repo_id)s WHERE NOT EXISTS (SELECT id FROM commits WHERE %(commit_sha)s=sha) RETURNING id)
+				INSERT INTO temp_commits(commit_sha,repo_id) SELECT %(commit_sha)s,%(repo_id)s WHERE NOT EXISTS (SELECT id FROM commits WHERE %(commit_sha)s=sha)
+				ON CONFLICT DO NOTHING
+				;''',(i for i in items_list if i['element_type']=='commit_comment'))
+			db.cursor.execute('''
+				INSERT INTO commits(sha,repo_id) SELECT commit_sha,repo_id FROM temp_commits
+				ON CONFLICT DO NOTHING
+				;''')
+			db.cursor.execute('''
+				INSERT INTO commit_repos(commit_id,repo_id) SELECT c.id,tc.repo_id FROM temp_commits tc
+				INNER JOIN commits c
+				ON c.sha=tc.commit_sha
+				ON CONFLICT DO NOTHING
+				;''')
+			extras.execute_batch(db.cursor,'''
+				WITH com_id AS (SELECT id FROM commits WHERE sha=%(commit_sha)s)
 				INSERT INTO commit_comments(created_at,repo_id,commit_id,comment_id,comment_text,author_login,author_id,identity_type_id)
 				VALUES(%(created_at)s,
 						%(repo_id)s,
-						(SELECT COALESCE((SELECT id FROM com_id),(SELECT id FROM ins_com_id))),--COALESCE((SELECT id FROM commits WHERE sha=%(commit_sha)s),(INSERT INTO commits(sha,repo_id) SELECT %(commit_sha)s,%(repo_id)s RETURNING id)),
+						(SELECT id FROM com_id),--COALESCE((SELECT id FROM commits WHERE sha=%(commit_sha)s),(INSERT INTO commits(sha,repo_id) SELECT %(commit_sha)s,%(repo_id)s RETURNING id)),
 						%(commit_comment_id)s,
 						%(comment_text)s,
 						%(author_login)s,
 						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
 						(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
 						)
-
 				ON CONFLICT DO NOTHING
 				;''',(i for i in items_list if i['element_type']=='commit_comment'))
-				# ;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title'],s['issue_text'],s['author_login'],s['author_login'],self.target_identity_type,self.target_identity_type) for s in items_list))
+			# extras.execute_batch(db.cursor,'''
+			# 	CREATE OR REPLACE FUNCTION insert_commit_repo(sha TEXT,repo_id BIGINT) RETURNS BIGINT
+			# 	LANGUAGE plpgsql
+			# 	AS $$
+			# 	DECLARE cid BIGINT;
+			# 	BEGIN
+			# 	INSERT INTO commits(sha,repo_id) SELECT sha,repo_id ON CONFLICT Do NOTHING RETURNING id INTO cid;
+			# 	INSERT INTO commit_repos(commit_id,repo_id) SELECT cid,repo_id  ON CONFLICT Do NOTHING ;
+			# 	RETURN cid;
+			# 	END;
+			# 	$$;
+			# 	WITH com_id AS (SELECT id FROM commits WHERE sha=%(commit_sha)s),
+			# 		ins_com_id AS ( SELECT insert_commit_repo(%(commit_sha)s,%(repo_id)s) AS cid )
+			# 	INSERT INTO commit_comments(created_at,repo_id,commit_id,comment_id,comment_text,author_login,author_id,identity_type_id)
+			# 	VALUES(%(created_at)s,
+			# 			%(repo_id)s,
+			# 			(SELECT COALESCE((SELECT id FROM com_id),(SELECT cid FROM ins_com_id))),--COALESCE((SELECT id FROM commits WHERE sha=%(commit_sha)s),(INSERT INTO commits(sha,repo_id) SELECT %(commit_sha)s,%(repo_id)s RETURNING id)),
+			# 			%(commit_comment_id)s,
+			# 			%(comment_text)s,
+			# 			%(author_login)s,
+			# 			(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
+			# 			(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
+			# 			)
+
+			# 	ON CONFLICT DO NOTHING
+			# 	;''',(i for i in items_list if i['element_type']=='commit_comment'))
 		else:
+			db.cursor.execute(f'''
+				CREATE TEMPORARY TABLE IF NOT EXISTS temp_commits (commit_sha TEXT PRIMARY KEY,repo_id INTEGER)
+				;''',)
 			db.cursor.executemany('''
-				INSERT INTO commits(sha,repo_id) SELECT :commit_sha,:repo_id WHERE NOT EXISTS (SELECT id FROM commits WHERE :commit_sha=sha)
+				INSERT INTO temp_commits(commit_sha,repo_id) SELECT :commit_sha,:repo_id WHERE NOT EXISTS (SELECT id FROM commits WHERE :commit_sha=sha)
 				;''',(i for i in items_list if i['element_type']=='commit_comment'))
+			# db.cursor.executemany('''
+			# 	INSERT INTO commits(sha,repo_id) SELECT :commit_sha,:repo_id WHERE NOT EXISTS (SELECT id FROM commits WHERE :commit_sha=sha)
+			# 	;''',(i for i in items_list if i['element_type']=='commit_comment'))
+			db.cursor.execute('''
+				INSERT OR IGNORE INTO commits(sha,repo_id) SELECT commit_sha,repo_id FROM temp_commits
+				;''')
+			db.cursor.execute('''
+				INSERT OR IGNORE INTO commit_repos(commit_id,repo_id) SELECT c.id,tc.repo_id FROM temp_commits tc
+				INNER JOIN commits c
+				ON c.sha=tc.commit_sha
+				;''')
 			db.cursor.executemany('''
 				INSERT OR IGNORE INTO commit_comments(created_at,repo_id,commit_id,comment_id,comment_text,author_login,author_id,identity_type_id)
 				SELECT :created_at,
