@@ -319,18 +319,18 @@ class CommitsFiller(fillers.Filler):
 					input_q = mp.Queue(maxsize=self.workers * 2)
 					output_q = mp.Queue(maxsize=self.workers * 2)
 
-					gen_pool = mp.Pool(1, initializer=gen_to_queue, initargs=(subgen,input_q))
-					pool = mp.Pool(self.workers, initializer=process, initargs=(input_q, output_q))
+					with mp.Pool(1, initializer=gen_to_queue, initargs=(subgen,input_q)) as gen_pool:
+						with mp.Pool(self.workers, initializer=process, initargs=(input_q, output_q)) as pool:
 
-					finished_workers = 0
-					while True:
-						cmt_data = output_q.get()
-						if cmt_data is None:
-							finished_workers += 1
-							if finished_workers == self.workers:
-								break
-						else:
-							yield cmt_data
+							finished_workers = 0
+							while True:
+								cmt_data = output_q.get()
+								if cmt_data is None:
+									finished_workers += 1
+									if finished_workers == self.workers:
+										break
+								else:
+									yield cmt_data
 
 
 				wrapper_gen = mp_generator(subgenerator(commit_sha_list))
@@ -623,22 +623,18 @@ class CommitsFiller(fillers.Filler):
 		if self.db.db_type == 'postgres':
 			extras.execute_batch(self.db.cursor,'''
 				INSERT INTO commit_repos(commit_id,repo_id)
-					VALUES(
-							(SELECT id FROM commits WHERE sha=%s),
-							%s
-							)
+					SELECT id,%(repo_id)s FROM commits WHERE sha=%(sha)s
+
 				ON CONFLICT DO NOTHING;
 				COMMIT;
-				''',((c['sha'],c['repo_id'],) for c in tracked_gen(commit_info_list)))
+				''',tracked_gen(commit_info_list))
 
 		else:
 			self.db.cursor.executemany('''
 				INSERT OR IGNORE INTO commit_repos(commit_id,repo_id)
-					VALUES(
-							(SELECT id FROM commits WHERE sha=?),
-							?
-							);
-				''',((c['sha'],c['repo_id'],) for c in tracked_gen(commit_info_list)))
+					SELECT id,:repo_id FROM commits WHERE sha=:sha
+							;
+				''',tracked_gen(commit_info_list))
 
 
 		if not tracked_data['empty']:
