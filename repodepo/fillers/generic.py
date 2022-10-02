@@ -81,6 +81,8 @@ or
 name,created_at,repository
 
 got: {}'''.format(headers))
+		else:
+			self.source = 'manual input from list'
 
 		if self.package_limit is not None:
 			self.package_list = self.package_list[:self.package_limit]
@@ -949,16 +951,18 @@ class ClonesFiller(fillers.Filler):
 		repo_folder = os.path.join(self.clone_folder,source,owner,name)
 
 		repo_obj = pygit2.Repository(os.path.join(repo_folder,'.git'))
+		sub_env = copy.deepcopy(os.environ)
+		sub_env.update(dict(GIT_TERMINAL_PROMPT='0'))
 		try:
 			try:
 				callbacks = self.callbacks[source]
 			except KeyError:
 				callbacks = None
 			cmd = 'git fetch --force --all'
-			cmd_output = subprocess.check_output(cmd.split(' '),cwd=repo_folder, env=os.environ.update(dict(GIT_TERMINAL_PROMPT='0')))
+			cmd_output = subprocess.check_output(cmd.split(' '),cwd=repo_folder, env=sub_env)
 			try:
 				cmd2 = 'git pull --force --all'
-				cmd_output2 = subprocess.check_output(cmd2.split(' '),cwd=repo_folder, env=os.environ.update(dict(GIT_TERMINAL_PROMPT='0')))
+				cmd_output2 = subprocess.check_output(cmd2.split(' '),cwd=repo_folder, env=sub_env)
 			except subprocess.CalledProcessError as e:
 				err_txt = 'Git pull Error (fetch worked) for repo {}/{}/{}: {}, {}'.format(source,owner,name,e,e.output)
 				self.logger.info(err_txt)
@@ -1405,7 +1409,9 @@ class SourcesAutoFiller(SourcesFiller):
 		cmd = f'''git ls-remote -h {url} HEAD'''
 		try:
 			self.logger.info(f'Checking if {url} is a git repository'+additional_info)
-			subprocess.check_call(cmd.split(' '), env=os.environ.update(dict(GIT_TERMINAL_PROMPT='0',GIT_SSL_NO_VERIFY='1')))
+			sub_env = copy.deepcopy(os.environ)
+			sub_env.update(dict(GIT_TERMINAL_PROMPT='0',GIT_SSL_NO_VERIFY='1'))
+			subprocess.check_call(cmd.split(' '), env=sub_env)
 			return True
 		except subprocess.CalledProcessError:
 			return False

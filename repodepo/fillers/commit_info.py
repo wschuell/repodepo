@@ -7,6 +7,7 @@ import json
 import git
 import itertools
 import psutil
+import subprocess
 
 from .. import fillers
 from ..fillers import generic
@@ -26,7 +27,7 @@ class CommitsFiller(fillers.Filler):
 			allbranches=True,
 			created_at_batchsize=1000,
 			fix_created_at=False,
-			workers=1, # It does not seem that more workers speed up the process, IO seems to be the bottleneck.
+			workers=None,
 					**kwargs):
 		self.force = force
 		self.allbranches = allbranches
@@ -201,24 +202,23 @@ class CommitsFiller(fillers.Filler):
 		tracked_args = mp.Manager().dict()
 
 		if not repo_obj.is_empty:
+			cmd = 'git log --format=%H'
 			if allbranches:
-				# gitpython_repo = self.get_repo(source=source,name=name,owner=owner,engine='gitpython')
-				# walker = gitpython_repo.iter_commits('--all')
-				walker = itertools.chain()
-				for b in (repo_obj.branches.remote if remote_branches_only else repo_obj.branches):   # remote branches only ensures that when a git pull results in a merge commit the newly made commit wont be considered
-					branch = repo_obj.lookup_branch(b)
-					if branch is None:
-						branch = repo_obj.lookup_branch(b,2) # parameter 2 is necessary for remotes; main interest in 'allbranches' case
-					if not str(branch.target).startswith('refs/'): # The remote branch set on HEAD is behaving differently and instead of commit sha returns a branch name
-						walker = itertools.chain(walker,repo_obj.walk(branch.target)) # This is suboptimal: common parts of branches are traversed several times
-						# Using gitpython could give the walk among all branches directly; but then the commit object parsing is different and insertions/deletions seem more complicated to compute
+				cmd += ' --all'
 
-			else:
-				walker = repo_obj.walk(repo_obj.head.target, pygit2.GIT_SORT_TIME)
+			cmd_l = cmd.split(' ')
+			repo_folder = repo_obj.path
+			for ending in ('/.git','/.git/'):
+				if repo_folder.endswith(ending):
+					repo_folder = repo_folder[:-len(ending)]
+
+			cmd_output = subprocess.check_output(cmd_l,cwd=repo_folder).decode('utf-8')
+			commit_sha_list = [s for s in cmd_output.split('\n') if s != '']
 
 			def process_commit(commit):
 				if isinstance(commit,dict):
-						commit = repo_obj.get(commit['sha'])
+					commit = repo_obj.get(commit['sha'])
+
 
 				if basic_info_only:
 					
@@ -274,7 +274,9 @@ class CommitsFiller(fillers.Filler):
 
 			# Wrapping the walker generator into another one to be able to deal with multiprocessing
 			def subgenerator(walker_gen):
-				for commit in walker_gen:
+				for commit_sha in walker_gen:
+					commit = repo_obj.get(commit_sha)
+
 					if after_time is not None and (not allbranches) and commit.commit_time<after_time:
 						break
 					if group_by == 'authors':
@@ -283,19 +285,18 @@ class CommitsFiller(fillers.Filler):
 						else:
 							tracked_args[commit.author.email] = True
 							tracked_args[commit.committer.email] = True
-					elif group_by == 'sha':
-						if commit.hex in tracked_args.keys():
-							continue
-						else:
-							tracked_args[commit.hex] = True
-					elif group_by is None:
+						# update_dict = {commit.author.email:True,
+						# 				commit.committer.email:True}
+						# tracked_args.update(update_dict)
+
+					elif group_by is None or group_by == 'sha':
 						pass
 					else:
 						raise ValueError('Unrecognized group_by value: {}'.format(group_by))
 					yield process_commit(commit)
 
 			if self.workers == 1:
-				wrapper_gen = subgenerator(walker)
+				wrapper_gen = subgenerator(commit_sha_list)
 			else:
 				def mp_generator(subgen):
 					# inspired by https://stackoverflow.com/questions/43078980/python-multiprocessing-with-generator
@@ -332,7 +333,7 @@ class CommitsFiller(fillers.Filler):
 							yield cmt_data
 
 
-				wrapper_gen = mp_generator(subgenerator(walker))
+				wrapper_gen = mp_generator(subgenerator(commit_sha_list))
 
 			while True:
 				yield next(wrapper_gen)
@@ -425,6 +426,7 @@ class CommitsFiller(fillers.Filler):
 						INNER JOIN identity_types it
 						ON it.name='email' AND u.creation_identity=%(committer_email)s AND u.creation_identity_type_id=it.id
 				ON CONFLICT DO NOTHING;
+				COMMIT;
 				''',({'info':json.dumps({'name':c['author_name']}),'email':c['author_email'],'committer_email':c['committer_email'],'committer_info':json.dumps({'name':c['committer_name']}),} for c in tr_gen))
 			self.db.connection.commit()
 
@@ -479,6 +481,7 @@ class CommitsFiller(fillers.Filler):
 							ON it.name='email' AND u.creation_identity=:committer_email AND u.creation_identity_type_id=it.id
 					;
 					''',info_dict )
+				self.db.connection.commit()
 			self.db.connection.commit()
 
 		# self.complete_id_users()
@@ -545,6 +548,7 @@ class CommitsFiller(fillers.Filler):
 							%(message)s
 							)
 				ON CONFLICT DO NOTHING;
+				COMMIT;
 				''',(dict(local_timestamp=datetime.datetime.utcfromtimestamp(c['local_time']),
 							gmt_timestamp=datetime.datetime.utcfromtimestamp(c['gmt_time']),
 							commit_local_timestamp=datetime.datetime.utcfromtimestamp(c['commit_local_time']),
@@ -624,6 +628,7 @@ class CommitsFiller(fillers.Filler):
 							%s
 							)
 				ON CONFLICT DO NOTHING;
+				COMMIT;
 				''',((c['sha'],c['repo_id'],) for c in tracked_gen(commit_info_list)))
 
 		else:
@@ -730,6 +735,7 @@ class CommitsFiller(fillers.Filler):
 							(SELECT id FROM commits WHERE sha=%s),
 							%s)
 				ON CONFLICT DO NOTHING;
+				COMMIT;
 				''',transformed_list(commit_info_list))
 
 		else:
