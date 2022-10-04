@@ -128,7 +128,8 @@ class LoginsFiller(GitlabGQLFiller):
 	'''
 	Querying logins through the GraphQL API using commits
 	'''
-	def __init__(self,**kwargs):
+	def __init__(self,actor='author',**kwargs):
+		self.actor = actor
 		self.items_name = 'login'
 		self.queried_obj = 'email'
 		self.pageinfo_path = None

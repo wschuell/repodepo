@@ -28,6 +28,7 @@ class CommitsFiller(fillers.Filler):
 			created_at_batchsize=1000,
 			fix_created_at=False,
 			workers=None,
+			workers_commit_threshold=500,
 					**kwargs):
 		self.force = force
 		self.allbranches = allbranches
@@ -39,6 +40,7 @@ class CommitsFiller(fillers.Filler):
 			self.workers = len(psutil.Process().cpu_affinity())
 		else:
 			self.workers = workers
+		self.workers_commit_threshold = workers_commit_threshold
 		fillers.Filler.__init__(self,**kwargs)
 
 	def prepare(self):
@@ -295,7 +297,7 @@ class CommitsFiller(fillers.Filler):
 						raise ValueError('Unrecognized group_by value: {}'.format(group_by))
 					yield process_commit(commit)
 
-			if self.workers == 1:
+			if basic_info_only or self.workers == 1 or len(commit_sha_list) <= self.workers_commit_threshold:
 				wrapper_gen = subgenerator(commit_sha_list)
 			else:
 				def mp_generator(subgen):
@@ -714,7 +716,7 @@ class CommitsFiller(fillers.Filler):
 					tracked_data['latest_commit_time'] = max(tracked_data['latest_commit_time'],c['gmt_time'])
 					c_id = c['sha']
 					for r,p_id in enumerate(c['parents']):
-						yield (c_id,p_id,r)
+						yield {'child_id':c_id,'parent_id':p_id,'rank':r}
 				except StopIteration:
 					return
 				except RuntimeError as e:
@@ -726,10 +728,10 @@ class CommitsFiller(fillers.Filler):
 		if self.db.db_type == 'postgres':
 			extras.execute_batch(self.db.cursor,'''
 				INSERT INTO commit_parents(child_id,parent_id,rank)
-					VALUES(
-							(SELECT id FROM commits WHERE sha=%s),
-							(SELECT id FROM commits WHERE sha=%s),
-							%s)
+					SELECT cc.id,cp.id,%(rank)s FROM commits cc
+					INNER JOIN commits cp
+					ON cc.sha=%(child_id)s
+					AND cp.sha=%(parent_id)s
 				ON CONFLICT DO NOTHING;
 				COMMIT;
 				''',transformed_list(commit_info_list))
@@ -737,10 +739,11 @@ class CommitsFiller(fillers.Filler):
 		else:
 			self.db.cursor.executemany('''
 				INSERT OR IGNORE INTO commit_parents(child_id,parent_id,rank)
-					VALUES(
-							(SELECT id FROM commits WHERE sha=?),
-							(SELECT id FROM commits WHERE sha=?),
-							?);
+
+					SELECT cc.id,cp.id,:rank FROM commits cc
+					INNER JOIN commits cp
+					ON cc.sha=:child_id
+					AND cp.sha=:parent_id;
 				''',transformed_list(commit_info_list))
 
 		if not tracked_data['empty']:

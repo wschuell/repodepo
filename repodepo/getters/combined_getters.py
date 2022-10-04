@@ -46,6 +46,10 @@ class UsageGetter(CombinedGetter):
 		devs = project_getters.Developers(db=self.db).get_result(time_window=self.time_window,start_date=self.start_date,end_date=self.end_date,aggregated=False)
 		active_devs = project_getters.ActiveDevelopers(db=self.db).get_result(time_window=self.time_window,start_date=self.start_date,end_date=self.end_date,aggregated=False,cumulative=False)
 		downloads = project_getters.Downloads(db=self.db).get_result(time_window=self.time_window,start_date=self.start_date,end_date=self.end_date,aggregated=False)
+		issues = project_getters.Issues(db=self.db).get_result(time_window=self.time_window,start_date=self.start_date,end_date=self.end_date,aggregated=False)
+		issues_closed = project_getters.ClosedIssues(db=self.db).get_result(time_window=self.time_window,start_date=self.start_date,end_date=self.end_date,aggregated=False)
+		pullrequests = project_getters.PullRequests(db=self.db).get_result(time_window=self.time_window,start_date=self.start_date,end_date=self.end_date,aggregated=False)
+		pullrequests_merged = project_getters.MergedPullRequests(db=self.db).get_result(time_window=self.time_window,start_date=self.start_date,end_date=self.end_date,aggregated=False)
 
 		df = pd.DataFrame(columns=['project_id','timestamp'])
 		# df = commits_cumul
@@ -56,6 +60,10 @@ class UsageGetter(CombinedGetter):
 		df = pd.merge(df, devs,  how='outer', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
 		df = pd.merge(df, active_devs,  how='outer', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
 		df = pd.merge(df, downloads,  how='outer', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
+		df = pd.merge(df, issues,  how='outer', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
+		df = pd.merge(df, issues_closed,  how='outer', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
+		df = pd.merge(df, pullrequests,  how='outer', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
+		df = pd.merge(df, pullrequests_merged,  how='outer', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
 
 		creation_dates = generic_getters.RepoCreatedAt(db=self.db).get_result()
 		creation_dates.set_index('project_id',inplace=True)
@@ -86,6 +94,10 @@ class UsageGetter(CombinedGetter):
 				'developers',
 				'active_developers',
 				'downloads',
+				'issues',
+				'issues_closed',
+				'pullrequests',
+				'pullrequests_merged',
 					]
 		if not self.with_reponame:
 			order.remove('repo_name')
@@ -163,6 +175,7 @@ class ContributionsGetter(CombinedGetter):
 			deps_df = deps_df.convert_dtypes()
 			deps_df['timestamp'] = t
 			deps_df.set_index(['timestamp','repo_id','user_id'],inplace=True)
+			deps_df.sort_values(['timestamp','repo_id','user_id'],inplace=True)
 			ans_df = pd.concat([ans_df,deps_df])
 
 		if self.with_reponame:

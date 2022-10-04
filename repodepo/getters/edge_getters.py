@@ -20,7 +20,7 @@ class DevToRepo(Getter):
 					user_q.user_rank,
 					main_q.repo_id,
 					repo_q.repo_rank,
-					(main_q.cnt::DOUBLE PRECISION /COALESCE(SUM(main_q.cnt) OVER (PARTITION BY main_q.repo_id),1.))::DOUBLE PRECISION AS norm_value,
+					(main_q.cnt::DOUBLE PRECISION /COALESCE(SUM(main_q.cnt::DOUBLE PRECISION) OVER (PARTITION BY main_q.repo_id),1.::DOUBLE PRECISION))::DOUBLE PRECISION AS norm_value,
 					main_q.cnt::DOUBLE PRECISION AS abs_value
 				FROM
 					(SELECT i.user_id,c.repo_id,count(*) AS cnt FROM commits c

@@ -1794,12 +1794,21 @@ class LoginsGQLFiller(GHGQLFiller):
 	'''
 	Querying logins through the GraphQL API using commits
 	'''
-	def __init__(self,target_identity_type='github_login',source_name='GitHub',**kwargs):
+	def __init__(self,target_identity_type='github_login',source_name='GitHub',actor='author',**kwargs):
+		self.actor = actor
 		self.items_name = 'login'
 		self.queried_obj = 'email'
 		self.pageinfo_path = None
 		self.target_identity_type = target_identity_type
 		GHGQLFiller.__init__(self,source_name=source_name,**kwargs)
+
+	def additional_query_attributes(self):
+		'''
+		Possibility to add specific parameters for the query formatting
+		'''
+		ans = GHGQLFiller.additional_query_attributes(self)
+		ans.update({'actor':self.actor})
+		return ans
 
 	def query_string(self,**kwargs):
 		'''
@@ -1814,7 +1823,7 @@ class LoginsGQLFiller(GHGQLFiller):
     							... on Commit{{
 
     								oid
-    								author {{
+    								actor:{actor} {{
     									user {{
     									login
     									createdAt
@@ -1847,15 +1856,15 @@ class LoginsGQLFiller(GHGQLFiller):
 		else:
 			ans['repo_owner'] = query_result['repository']['nameWithOwner'].split('/')[1]
 			ans['repo_name'] = query_result['repository']['nameWithOwner'].split('/')[0]
-			if query_result['repository']['object']['author'] is None:
+			if query_result['repository']['object']['actor'] is None:
 				ans['login'] = None
 				ans['created_at'] = None
-			elif query_result['repository']['object']['author']['user'] is None:
+			elif query_result['repository']['object']['actor']['user'] is None:
 				ans['login'] = None
 				ans['created_at'] = None
 			else:
-				ans['login'] = query_result['repository']['object']['author']['user']['login']
-				ans['created_at'] = query_result['repository']['object']['author']['user']['createdAt']
+				ans['login'] = query_result['repository']['object']['actor']['user']['login']
+				ans['created_at'] = query_result['repository']['object']['actor']['user']['createdAt']
 			ans['commit_sha'] = query_result['repository']['object']['oid']
 
 		return [ans]
@@ -1951,17 +1960,17 @@ class LoginsGQLFiller(GHGQLFiller):
 								INNER JOIN identities i3
 								ON i3.user_id = i2.user_id
 								INNER JOIN identity_types it2
-								ON it2.id=i3.identity_type_id AND it2.name=%s)
+								ON it2.id=i3.identity_type_id AND it2.name=%(target_identity_type)s)
 							) AS i
 				 	JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
-				 		WHERE cc.author_id=i.id ORDER BY cc.created_at DESC LIMIT 1) AS c
+				 		WHERE (CASE %(actor)s WHEN 'committer' THEN cc.committer_id ELSE cc.author_id END) = i.id ORDER BY cc.created_at DESC LIMIT 1) AS c
 				 	ON true
 				 	INNER JOIN repositories r
 				 	ON c.repo_id=r.id
 				 	INNER JOIN sources s
-					ON s.id=r.source AND s.name=%s
+					ON s.id=r.source AND s.name=%(source_name)s
 					ORDER BY i.identity
-					;''',(self.target_identity_type,self.source_name))
+					;''',{'target_identity_type':self.target_identity_type,'source_name':self.source_name,'actor':self.actor})
 			else:
 				self.db.cursor.execute('''
 					SELECT s.id,r.owner,r.name,c.repo_id,c.sha,i.identity,i.id,i.identity_type_id
@@ -1971,17 +1980,17 @@ class LoginsGQLFiller(GHGQLFiller):
 								INNER JOIN identities i3
 								ON i3.user_id = i2.user_id
 								INNER JOIN identity_types it2
-								ON it2.id=i3.identity_type_id AND it2.name=?
+								ON it2.id=i3.identity_type_id AND it2.name=:target_identity_type
 							) AS i
 				 	JOIN commits c
 				 	ON c.id IN (SELECT cc.id FROM commits cc
-				 		WHERE cc.author_id=i.id ORDER BY cc.created_at DESC LIMIT 1)
+				 		WHERE (CASE :actor WHEN 'committer' THEN cc.committer_id ELSE cc.author_id END) = i.id ORDER BY cc.created_at DESC LIMIT 1)
 				 	INNER JOIN repositories r
 				 	ON c.repo_id=r.id
 				 	INNER JOIN sources s
-					ON s.id=r.source AND s.name=?
+					ON s.id=r.source AND s.name=:source_name
 					ORDER BY i.identity
-					;''',(self.target_identity_type,self.source_name))
+					;''',{'target_identity_type':self.target_identity_type,'source_name':self.source_name,'actor':self.actor})
 		else:
 			if self.db.db_type == 'postgres':
 				self.db.cursor.execute('''
@@ -1991,21 +2000,21 @@ class LoginsGQLFiller(GHGQLFiller):
 					 		(SELECT iii.id,iii.identity,iii.identity_type_id FROM identities iii
 							WHERE (SELECT iiii.id FROM identities iiii
 								INNER JOIN identity_types iiiit
-								ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name=%s) IS NULL) AS ii
+								ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name=%(target_identity_type)s) IS NULL) AS ii
 							LEFT JOIN table_updates tu
 							ON tu.identity_id=ii.id AND tu.table_name='login'
 							GROUP BY ii.id,ii.identity,ii.identity_type_id,tu.identity_id
 							HAVING tu.identity_id IS NULL
 						) AS i
 					JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
-						WHERE cc.author_id=i.id ORDER BY cc.created_at DESC LIMIT 1) AS c
+						WHERE (CASE %(actor)s WHEN 'committer' THEN cc.committer_id ELSE cc.author_id END) = i.id ORDER BY cc.created_at DESC LIMIT 1) AS c
 					ON true
 					INNER JOIN repositories r
 					ON r.id=c.repo_id
 				 	INNER JOIN sources s
-					ON s.id=r.source AND s.name=%s
+					ON s.id=r.source AND s.name=%(source_name)s
 					ORDER BY i.id
-					;''',(self.target_identity_type,self.source_name))
+					;''',{'target_identity_type':self.target_identity_type,'source_name':self.source_name,'actor':self.actor})
 			else:
 				self.db.cursor.execute('''
 					SELECT s.id,r.owner,r.name,c.repo_id,c.sha,i.identity,i.id,i.identity_type_id
@@ -2014,7 +2023,7 @@ class LoginsGQLFiller(GHGQLFiller):
 					 		(SELECT iii.id,iii.identity,iii.identity_type_id FROM identities iii
 							WHERE (SELECT iiii.id FROM identities iiii
 								INNER JOIN identity_types iiiit
-								ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name=?) IS NULL) AS ii
+								ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name=:target_identity_type) IS NULL) AS ii
 							LEFT JOIN table_updates tu
 							ON tu.identity_id=ii.id AND tu.table_name='login'
 							GROUP BY ii.id,ii.identity,ii.identity_type_id,tu.identity_id
@@ -2023,13 +2032,13 @@ class LoginsGQLFiller(GHGQLFiller):
 					JOIN commits c
 						ON
 						c.id IN (SELECT cc.id FROM commits cc
-							WHERE cc.author_id=i.id ORDER BY cc.created_at DESC LIMIT 1)
+							WHERE (CASE :actor WHEN 'committer' THEN cc.committer_id ELSE cc.author_id END) = i.id ORDER BY cc.created_at DESC LIMIT 1)
 					INNER JOIN repositories r
 					ON r.id=c.repo_id
 					INNER JOIN sources s
-					ON s.id=r.source AND s.name=?
+					ON s.id=r.source AND s.name=:source_name
 					ORDER BY i.id
-					;''',(self.target_identity_type,self.source_name))
+					;''',{'target_identity_type':self.target_identity_type,'source_name':self.source_name,'actor':self.actor})
 
 		self.elt_list = list(self.db.cursor.fetchall())
 		self.logger.info(self.force)
@@ -2062,7 +2071,7 @@ class RandomCommitLoginsGQLFiller(LoginsGQLFiller):
 							) AS i
 				 	JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
 									INNER JOIN repositories r2
-									ON cc.author_id=i.id
+									ON (CASE %(actor)s WHEN 'committer' THEN cc.committer_id ELSE cc.author_id END) = i.id
 									AND r2.id=cc.repo_id
 									INNER JOIN sources s2
 									ON s2.id=r2.source AND s2.name=%(s_name)s
@@ -2073,7 +2082,7 @@ class RandomCommitLoginsGQLFiller(LoginsGQLFiller):
 				 	INNER JOIN sources s
 					ON s.id=r.source AND s.name=%(s_name)s
 					ORDER BY i.identity
-					;''',{'id_type':self.target_identity_type,'s_name':self.source_name})
+					;''',{'id_type':self.target_identity_type,'s_name':self.source_name,'actor':self.actor})
 			else:
 				self.db.cursor.execute('''
 					SELECT s.id,r.owner,r.name,c.repo_id,c.sha,i.identity,i.id,i.identity_type_id
@@ -2088,7 +2097,7 @@ class RandomCommitLoginsGQLFiller(LoginsGQLFiller):
 				 	JOIN commits c
 				 	ON c.id IN (SELECT cc.id FROM commits cc
 									INNER JOIN repositories r2
-									ON cc.author_id=i.id
+									ON (CASE :actor WHEN 'committer' THEN cc.committer_id ELSE cc.author_id END) = i.id
 									AND r2.id=cc.repo_id
 									INNER JOIN sources s2
 									ON s2.id=r2.source AND s2.name=:s_name
@@ -2098,7 +2107,7 @@ class RandomCommitLoginsGQLFiller(LoginsGQLFiller):
 				 	INNER JOIN sources s
 					ON s.id=r.source AND s.name=:s_name
 					ORDER BY i.identity
-					;''',{'id_type':self.target_identity_type,'s_name':self.source_name})
+					;''',{'id_type':self.target_identity_type,'s_name':self.source_name,'actor':self.actor})
 		else:
 			if self.db.db_type == 'postgres':
 				self.db.cursor.execute('''
@@ -2116,7 +2125,7 @@ class RandomCommitLoginsGQLFiller(LoginsGQLFiller):
 						) AS i
 					JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
 									INNER JOIN repositories r2
-									ON cc.author_id=i.id
+									ON (CASE %(actor)s WHEN 'committer' THEN cc.committer_id ELSE cc.author_id END) = i.id
 									AND r2.id=cc.repo_id
 									INNER JOIN sources s2
 									ON s2.id=r2.source AND s2.name=%(s_name)s
@@ -2127,7 +2136,7 @@ class RandomCommitLoginsGQLFiller(LoginsGQLFiller):
 				 	INNER JOIN sources s
 					ON s.id=r.source AND s.name=%(s_name)s
 					ORDER BY i.id
-					;''',{'id_type':self.target_identity_type,'s_name':self.source_name})
+					;''',{'id_type':self.target_identity_type,'s_name':self.source_name,'actor':self.actor})
 			else:
 				self.db.cursor.execute('''
 					SELECT s.id,r.owner,r.name,c.repo_id,c.sha,i.identity,i.id,i.identity_type_id
@@ -2146,7 +2155,7 @@ class RandomCommitLoginsGQLFiller(LoginsGQLFiller):
 						ON
 						c.id IN (SELECT cc.id FROM commits cc
 									INNER JOIN repositories r2
-									ON cc.author_id=i.id
+									ON (CASE :actor WHEN 'committer' THEN cc.committer_id ELSE cc.author_id END) = i.id
 									AND r2.id=cc.repo_id
 									INNER JOIN sources s2
 									ON s2.id=r2.source AND s2.name=:s_name
@@ -2156,10 +2165,23 @@ class RandomCommitLoginsGQLFiller(LoginsGQLFiller):
 					INNER JOIN sources s
 					ON s.id=r.source AND s.name=:s_name
 					ORDER BY i.id
-					;''',{'id_type':self.target_identity_type,'s_name':self.source_name})
+					;''',{'id_type':self.target_identity_type,'s_name':self.source_name,'actor':self.actor})
 
 		self.elt_list = list(self.db.cursor.fetchall())
 		self.logger.info(self.force)
+
+
+class CommitterLoginsGQLFiller(LoginsGQLFiller):
+	'''
+	Querying logins through the GraphQL API using commits
+	'''
+	def __init__(self,**kwargs):
+		LoginsGQLFiller.__init__(self,actor='committer',**kwargs)
+
+class CommitterRandomCommitLoginsGQLFiller(RandomCommitLoginsGQLFiller):
+	
+	def __init__(self,**kwargs):
+		RandomCommitLoginsGQLFiller.__init__(self,actor='committer',**kwargs)
 
 class CommitCommentReactionsGQLFiller(GHGQLFiller):
 	def __init__(self,**kwargs):
