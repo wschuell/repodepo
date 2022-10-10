@@ -885,6 +885,7 @@ class ClonesFiller(fillers.Filler):
 		Executing update_repo if repo already exists and update is True
 
 		'''
+		os.environ['GIT_SSL_NO_VERIFY'] = '1'
 		if db is None:
 			db = self.db
 		repo_folder = os.path.join(self.clone_folder,source,owner,name)
@@ -952,7 +953,7 @@ class ClonesFiller(fillers.Filler):
 
 		repo_obj = pygit2.Repository(os.path.join(repo_folder,'.git'))
 		sub_env = copy.deepcopy(os.environ)
-		sub_env.update(dict(GIT_TERMINAL_PROMPT='0'))
+		sub_env.update(dict(GIT_TERMINAL_PROMPT='0',GIT_SSL_NO_VERIFY='1'))
 		try:
 			try:
 				callbacks = self.callbacks[source]

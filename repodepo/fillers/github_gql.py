@@ -23,7 +23,7 @@ from ..fillers import github_rest
 import gql
 from gql import Client
 from gql.transport.aiohttp import AIOHTTPTransport
-from gql.transport.exceptions import TransportProtocolError
+from gql.transport.exceptions import TransportProtocolError,TransportServerError
 
 logger = logging.getLogger(__name__)
 ch = logging.StreamHandler()
@@ -88,9 +88,7 @@ class Requester(object):
 				''')
 		return self.remaining
 
-	def query(self,gql_query,params=None,retries=None):
-		if retries is None:
-			retries = self.retries
+	def format_query(self,gql_query,params):
 		if params is not None:
 			gql_query = gql_query.format(**params)
 		RL_query = '''
@@ -103,25 +101,36 @@ class Requester(object):
 		if 'rateLimit' not in gql_query:
 			splitted_string = gql_query.split('}')
 			gql_query = '}'.join(splitted_string[:-1])+RL_query+'}'+splitted_string[-1]
+		return gql_query
 
+	def query(self,gql_query,params=None,retries=None,cp_params=True):
+		if cp_params:
+			params = copy.deepcopy(params)
+		if retries is None:
+			retries = self.retries
 		try:
 			retries_left = retries
 			result_found = False
 			sec_limit_detected = False
 			while not result_found:
 				try:
-					result = self.client.execute(gql.gql(gql_query))
+					result = self.client.execute(gql.gql(self.format_query(gql_query=gql_query,params=params)))
 					result_found = True
 				except Exception as e:
-					if e.__class__ == asyncio.TimeoutError:
+					if e.__class__ in (asyncio.TimeoutError,concurrent.futures._base.TimeoutError) or 'TimeoutError' in str(e) or 'TimeoutError' in str(e.__class__):
 						if retries_left>0:
 							time.sleep(0.1*(retries-retries_left)*random.random())
 							retries_left -= 1
+							for k in ['page_size','max_page_size']:
+								if params is not None and k in params.keys():
+									params[k] = max(1,int(0.9*params[k]))
+									self.logger.info(f'Setting {k} to {params[k]}')
+							self.logger.info(f'Retries left: {retries_left}')
 						else:
 							raise e.__class__('''TimeoutError happened more times than the set retries: {}. Rerun, maybe with higher value.
 Original error message: {}'''.format(retries,e))
 					# if hasattr(e,'errors') and e.errors[0]['message'] ==  "You have exceeded a secondary rate limit. Please wait a few minutes before you try again.":
-					if e.__class__ == TransportProtocolError and "You have exceeded a secondary rate limit. Please wait a few minutes before you try again." in str(e):
+					elif e.__class__ in (TransportProtocolError,TransportServerError) and "You have exceeded a secondary rate limit. Please wait a few minutes before you try again." in str(e):
 						if retries_left > 0:
 							self.logger.info(f'Secondary rate limit exceeded, waiting {self.secondary_limit_wait}s')
 							time.sleep(self.secondary_limit_wait)
@@ -135,8 +144,8 @@ Original error message: {}'''.format(retries,e))
 					elif hasattr(e,'errors') and len(e.errors) and 'type' in e.errors[0].keys() and e.errors[0]['type'] == 'RATE_LIMITED':
 						self.get_rate_limit()
 						reset_time = int(self.reset_at - time.time())
-						if reset_time <= 0:
-							reset_time += 3600
+						while reset_time <= 0:
+							reset_time += 3600  # Hack to correct for negative times, may be due to timezone
 						self.logger.info(f'RATE_LIMITED error detected, sleeping until reset: {reset_time+1}s')
 						time.sleep(reset_time+1)
 					else:
@@ -171,7 +180,7 @@ Original error message: {}'''.format(retries,e))
 			params[EC_var] = ', after:"{}"'.format(params[EC_var])
 		has_next_page = True
 		while has_next_page:
-			result = self.query(gql_query=gql_query,params=params,retries=retries)
+			result = self.query(gql_query=gql_query,params=params,retries=retries,cp_params=False)
 			if pageinfo_path is None:
 				page_info = {'hasNextPage':False,'endCursor':None}
 				has_next_page = False
@@ -192,6 +201,8 @@ Original error message: {}'''.format(retries,e))
 			else:
 				params[EC_var] = ', after:"{}"'.format(end_cursor)
 			yield copy.deepcopy(result),copy.deepcopy(page_info) # copying so that any usage of results fields in the generator cannot be corrupted between 2 yields
+			if 'max_page_size' in params.keys():
+				params['page_size'] = params['max_page_size']
 
 
 
@@ -213,6 +224,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 			max_page_size=100,
 			secondary_page_size=None,
 			other_update_names = None,
+			max_reexec=3,
 			**kwargs):
 		if requester_class is None:
 			self.Requester = Requester
@@ -234,7 +246,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 			self.other_update_names = copy.deepcopy(other_update_names)
 		if not hasattr(self,'sub_queried_obj'):
 			self.sub_queried_obj = self.queried_obj
-		github_rest.GithubFiller.__init__(self,identity_type=target_identity_type,**kwargs)
+		github_rest.GithubFiller.__init__(self,identity_type=target_identity_type,max_reexec=max_reexec,**kwargs)
 
 	def get_generic_kwargs(self):
 		return dict(
@@ -259,6 +271,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 				start_offset=self.start_offset,
 				retry=self.retry,
 				force=self.force,
+				max_reexec=self.max_reexec,
 				incremental_update=self.incremental_update,
 				)
 
@@ -276,13 +289,6 @@ class GHGQLFiller(github_rest.GithubFiller):
 
 	def get_reset_at(self,requester):
 		return requester.reset_at
-
-	def get_page_size(self):
-		self.page_counts += 1
-		if self.page_counts == 1:
-			return self.init_page_size
-		else:
-			return self.max_page_size
 
 	def insert_update(self,db=None,**kwargs):
 		if db is None:
@@ -428,7 +434,7 @@ class GHGQLFiller(github_rest.GithubFiller):
 						end_cursor = pageinfo['endCursor']
 					requester = next(requester_gen)
 
-					params = {'repo_owner':owner,'repo_name':repo_name,'user_login':login,'commit_sha':commit_sha,'after_end_cursor':end_cursor,'page_size':self.get_page_size(),'secondary_page_size':self.secondary_page_size}
+					params = {'repo_owner':owner,'repo_name':repo_name,'user_login':login,'commit_sha':commit_sha,'after_end_cursor':end_cursor,'page_size':self.init_page_size,'max_page_size':self.max_page_size,'secondary_page_size':self.secondary_page_size}
 					params.update(self.additional_query_attributes())
 					params.update(local_additional_query_attributes)
 					# first request (with endcursor)
@@ -2737,6 +2743,7 @@ class PullRequestsGQLFiller(GHGQLFiller):
 									bodyText
 									createdAt
 									mergedAt
+									closedAt
 									mergedBy {{ login }}
       								}}
     							}}
@@ -2756,6 +2763,7 @@ class PullRequestsGQLFiller(GHGQLFiller):
 			try:
 				d['created_at'] = e['createdAt']
 				d['merged_at'] = e['mergedAt']
+				d['closed_at'] = e['closedAt']
 				d['pullrequest_number'] = e['number']
 				d['pullrequest_title'] = e['title']
 				d['pullrequest_text'] = e['bodyText']
@@ -2784,8 +2792,9 @@ class PullRequestsGQLFiller(GHGQLFiller):
 			db = self.db
 		if db.db_type == 'postgres':
 			extras.execute_batch(db.cursor,'''
-				INSERT INTO pullrequests(created_at,merged_at,repo_id,pullrequest_number,pullrequest_title,pullrequest_text,author_login,author_id,merger_login,merger_id,identity_type_id)
+				INSERT INTO pullrequests(created_at,closed_at,merged_at,repo_id,pullrequest_number,pullrequest_title,pullrequest_text,author_login,author_id,merger_login,merger_id,identity_type_id)
 				VALUES(%(created_at)s,
+						%(closed_at)s,
 						%(merged_at)s,
 						%(repo_id)s,
 						%(pullrequest_number)s,
@@ -2803,8 +2812,9 @@ class PullRequestsGQLFiller(GHGQLFiller):
 				# ;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title'],s['issue_text'],s['author_login'],s['author_login'],self.target_identity_type,self.target_identity_type) for s in items_list))
 		else:
 			db.cursor.executemany('''
-					INSERT OR IGNORE INTO pullrequests(created_at,merged_at,repo_id,pullrequest_number,pullrequest_title,pullrequest_text,author_login,author_id,merger_login,merger_id,identity_type_id)
+					INSERT OR IGNORE INTO pullrequests(created_at,closed_at,merged_at,repo_id,pullrequest_number,pullrequest_title,pullrequest_text,author_login,author_id,merger_login,merger_id,identity_type_id)
 				VALUES(:created_at,
+						:closed_at,
 						:merged_at,
 						:repo_id,
 						:pullrequest_number,
@@ -2835,7 +2845,7 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 	Adding comments, labels and reactions (first 100 per issue), and first 40 reactions to comments.
 	'''
 
-	def __init__(self,init_page_size=6,secondary_page_size=4,complete_info=True,**kwargs):
+	def __init__(self,init_page_size=6,secondary_page_size=6,complete_info=True,**kwargs):
 		IssuesGQLFiller.__init__(self,init_page_size=init_page_size,secondary_page_size=secondary_page_size,other_update_names=['issues'],**kwargs)
 		self.items_name = 'complete_issues'
 		self.complete_info = complete_info
@@ -3594,7 +3604,7 @@ class IssueCommentReactionsGQLFiller(GHGQLFiller):
 			''')
 		ans = list(self.db.cursor.fetchall())
 		if len(ans) == 0:
-			self.logger.info('missing complete_issues filler, necessary prior to issue_reactions')
+			self.logger.info('missing complete_issues filler, necessary prior to issue_comment_reactions')
 			return False
 
 		self.db.cursor.execute('''
@@ -3606,7 +3616,7 @@ class IssueCommentReactionsGQLFiller(GHGQLFiller):
 			''')
 		ans = list(self.db.cursor.fetchall())
 		if len(ans) == 0:
-			self.logger.info('missing issue_comments filler, necessary prior to issue_reactions')
+			self.logger.info('missing issue_comments filler, necessary prior to issue_comment_reactions')
 			return False
 		else:
 			return True
@@ -3814,7 +3824,7 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 	Adding comments, labels and reactions (first 100 per issue), and first 40 reactions to comments.
 	'''
 
-	def __init__(self,init_page_size=6,secondary_page_size=4,complete_info=True,**kwargs):
+	def __init__(self,init_page_size=6,secondary_page_size=6,complete_info=True,**kwargs):
 		PullRequestsGQLFiller.__init__(self,init_page_size=init_page_size,secondary_page_size=secondary_page_size,other_update_names=['pullrequests'],**kwargs)
 		self.items_name = 'complete_pullrequests'
 		self.complete_info = complete_info
@@ -3849,6 +3859,7 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 									bodyText
 									createdAt
 									mergedAt
+									closedAt
 									mergedBy {{ login }}
 									comments(first:{secondary_page_size}) {{
 										totalCount
@@ -3923,6 +3934,7 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 			try:
 				d['created_at'] = e['createdAt']
 				d['merged_at'] = e['mergedAt']
+				d['closed_at'] = e['closedAt']
 				d['pullrequest_number'] = e['number']
 				d['pullrequest_title'] = e['title']
 				d['pullrequest_gql_id'] = e['id']
@@ -4037,8 +4049,9 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 			db = self.db
 		if db.db_type == 'postgres':
 			extras.execute_batch(db.cursor,'''
-				INSERT INTO pullrequests(created_at,merged_at,repo_id,pullrequest_number,pullrequest_title,pullrequest_text,author_login,author_id,merger_login,merger_id,identity_type_id)
+				INSERT INTO pullrequests(created_at,closed_at,merged_at,repo_id,pullrequest_number,pullrequest_title,pullrequest_text,author_login,author_id,merger_login,merger_id,identity_type_id)
 				VALUES(%(created_at)s,
+						%(closed_at)s,
 						%(merged_at)s,
 						%(repo_id)s,
 						%(pullrequest_number)s,
@@ -4056,8 +4069,9 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
 				# ;''',((s['created_at'],s['closed_at'],s['repo_id'],s['pullrequest_number'],s['pullrequest_title'],s['pullrequest_text'],s['author_login'],s['author_login'],self.target_identity_type,self.target_identity_type) for s in items_list))
 		else:
 			db.cursor.executemany('''
-					INSERT OR IGNORE INTO pullrequests(created_at,merged_at,repo_id,pullrequest_number,pullrequest_title,pullrequest_text,author_login,author_id,merger_login,merger_id,identity_type_id)
+					INSERT OR IGNORE INTO pullrequests(created_at,closed_at,merged_at,repo_id,pullrequest_number,pullrequest_title,pullrequest_text,author_login,author_id,merger_login,merger_id,identity_type_id)
 				VALUES(:created_at,
+						:closed_at,
 						:merged_at,
 						:repo_id,
 						:pullrequest_number,
@@ -4583,7 +4597,7 @@ class PRCommentReactionsGQLFiller(GHGQLFiller):
 			''')
 		ans = list(self.db.cursor.fetchall())
 		if len(ans) == 0:
-			self.logger.info('missing complete_pullrequests filler, necessary prior to pullrequest_reactions')
+			self.logger.info('missing complete_pullrequests filler, necessary prior to pullrequest_comment_reactions')
 			return False
 
 		self.db.cursor.execute('''
@@ -4595,7 +4609,7 @@ class PRCommentReactionsGQLFiller(GHGQLFiller):
 			''')
 		ans = list(self.db.cursor.fetchall())
 		if len(ans) == 0:
-			self.logger.info('missing pullrequest_comments filler, necessary prior to pullrequest_reactions')
+			self.logger.info('missing pullrequest_comments filler, necessary prior to pullrequest_comment_reactions')
 			return False
 		else:
 			return True
@@ -5016,7 +5030,7 @@ class SponsorablesGQLFiller(GHGQLFiller):
 				self.logger.info('Filling {}'.format(self.items_name))
 				requester = next(requester_gen)
 
-				params = {'after_end_cursor':end_cursor,'page_size':self.get_page_size(),'secondary_page_size':self.secondary_page_size}
+				params = {'after_end_cursor':end_cursor,'page_size':self.init_page_size,'secondary_page_size':self.secondary_page_size,'max_page_size':self.max_page_size}
 				params.update(self.additional_query_attributes())
 				paginated_query = requester.paginated_query(gql_query=self.query_string(),params=params,pageinfo_path=self.pageinfo_path)
 				try:

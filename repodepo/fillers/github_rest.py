@@ -145,7 +145,7 @@ class GithubFiller(fillers.Filler):
 					earliest_reset = min([self.get_reset_at(rq) for rq in requesters])
 					time_to_reset =  earliest_reset - calendar.timegm(time.gmtime())
 					while time_to_reset <= 0:
-						time_to_reset += 3600 # hack to consider shifted reset_at time between REST and GQL APIs
+						time_to_reset += 3600 # hack to consider shifted reset_at time between REST and GQL APIs. Maybe due to timezone?
 						earliest_reset +=3600
 					date_reset = datetime.datetime.fromtimestamp(earliest_reset)
 
@@ -167,7 +167,7 @@ class GithubFiller(fillers.Filler):
 					earliest_reset = min([self.get_reset_at(rq) for rq in requesters])
 					time_to_reset =  earliest_reset - calendar.timegm(time.gmtime())
 					while time_to_reset <= 0:
-						time_to_reset += 3600 # hack to consider shifted reset_at time between REST and GQL APIs
+						time_to_reset += 3600 # hack to consider shifted reset_at time between REST and GQL APIs. Maybe due to timezone?
 						earliest_reset +=3600
 					date_reset = datetime.datetime.fromtimestamp(earliest_reset)
 

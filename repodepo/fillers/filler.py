@@ -30,7 +30,7 @@ class Filler(object):
 	This class is just an abstract 'mother' class
 	"""
 
-	def __init__(self,db=None,name=None,data_folder=None,unique_name=False):#,file_info=None):
+	def __init__(self,db=None,name=None,data_folder=None,unique_name=False,max_reexec=0):#,file_info=None):
 		self.done = False
 		if name is None:
 			name = self.__class__.__name__
@@ -42,6 +42,8 @@ class Filler(object):
 		self.logger.addHandler(ch)
 		self.logger.setLevel(logging.INFO)
 		self.unique_name = unique_name
+		self.reexec = 0
+		self.max_reexec = max_reexec
 
 		# if file_info is not None:
 		# 	self.set_file_info(file_info)

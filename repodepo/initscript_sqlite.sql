@@ -364,7 +364,7 @@
 					author_id INTEGER REFERENCES identities(id) ON DELETE SET NULL,
 					identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
 					created_at TIMESTAMP,
-					PRIMARY KEY(repo_id,issue_number,author_login,reaction),
+					PRIMARY KEY(repo_id,issue_number,comment_id,author_login,reaction),
 					FOREIGN KEY (repo_id,issue_number,comment_id) REFERENCES issue_comments(repo_id,issue_number,comment_id) ON DELETE CASCADE
 				);
 
@@ -375,6 +375,7 @@
 				pullrequest_text TEXT,
 				created_at TIMESTAMP DEFAULT NULL,
 				merged_at TIMESTAMP DEFAULT NULL,
+				closed_at TIMESTAMP DEFAULT NULL,
 				author_login TEXT,
 				author_id INTEGER REFERENCES identities(id) ON DELETE SET NULL,
 				merger_login TEXT,
@@ -385,6 +386,8 @@
 				);
 
 				CREATE INDEX IF NOT EXISTS pullrequests_idx_dates ON pullrequests(repo_id,created_at,merged_at);
+				CREATE INDEX IF NOT EXISTS pullrequests_idx_dates_closed ON pullrequests(repo_id,created_at,closed_at);
+				CREATE INDEX IF NOT EXISTS pullrequests_idx_dates_onlyclosed ON pullrequests(repo_id,created_at,closed_at) WHERE merged_at IS NULL;
 
 				CREATE TABLE IF NOT EXISTS pullrequest_comments(
 					repo_id INTEGER,
@@ -428,7 +431,7 @@
 					author_id INTEGER REFERENCES identities(id) ON DELETE SET NULL,
 					identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
 					created_at TIMESTAMP,
-					PRIMARY KEY(repo_id,pullrequest_number,author_login,reaction),
+					PRIMARY KEY(repo_id,pullrequest_number,comment_id,author_login,reaction),
 					FOREIGN KEY (repo_id,pullrequest_number,comment_id) REFERENCES pullrequest_comments(repo_id,pullrequest_number,comment_id) ON DELETE CASCADE
 				);
 

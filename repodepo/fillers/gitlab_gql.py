@@ -61,7 +61,9 @@ class RequesterGitlab(github_gql.Requester):
 		self.remaining = 2000
 		return self.remaining
 
-	def query(self,gql_query,params=None,retries=None):
+	def query(self,gql_query,params=None,retries=None,cp_params=True):
+		if cp_params:
+			params = copy.deepcopy(params)
 		if retries is None:
 			retries = self.retries
 		if params is not None:
@@ -358,7 +360,8 @@ class CompleteIssuesGQLFiller(github_gql.CompleteIssuesGQLFiller):
 			try:
 				d['created_at'] = e['createdAt']
 				d['closed_at'] = e['closedAt']
-				d['issue_number'] = e['relativePosition']
+				# d['issue_number'] = e['relativePosition']
+				d['issue_number'] = e['iid']
 				d['issue_title'] = e['title']
 				d['issue_gql_id'] = e['id']
 				d['issue_text'] = e['description']
@@ -493,7 +496,8 @@ class IssueLabelsGQLFiller(github_gql.IssueLabelsGQLFiller):
 			d = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'issue'}
 			try:
 				d['issue_gql_id'] = e['id']
-				d['issue_number'] = e['relativePosition']
+				d['issue_number'] = e['iid']
+				#d['issue_number'] = e['relativePosition']
 				d['issue_id'] = e['iid']
 				
 			except (KeyError,TypeError) as err:
@@ -583,7 +587,8 @@ class IssueCommentsGQLFiller(github_gql.IssueCommentsGQLFiller):
 			d = {'repo_id':repo_id,'repo_owner':repo_owner,'repo_name':repo_name,'target_identity_type':self.target_identity_type,'element_type':'issue'}
 			try:
 				d['issue_gql_id'] = e['id']
-				d['issue_number'] = e['relativePosition']
+				d['issue_number'] = e['iid']
+				#d['issue_number'] = e['relativePosition']
 				d['issue_id'] = e['iid']
 				
 			except (KeyError,TypeError) as err:
@@ -682,6 +687,8 @@ class CompletePullRequestsGQLFiller(github_gql.CompletePullRequestsGQLFiller):
 									description
 									createdAt
 									mergedAt
+									updatedAt
+									state
 									mergeUser {{ username }}
 									notes(first:{secondary_page_size}) {{
 										# totalCount:count
@@ -734,6 +741,14 @@ class CompletePullRequestsGQLFiller(github_gql.CompletePullRequestsGQLFiller):
 			try:
 				d['created_at'] = e['createdAt']
 				d['merged_at'] = e['mergedAt']
+				if e['state'] == 'closed':
+					d['closed_at'] = e['updatedAt']
+				elif e['state'] == 'merged':
+					d['closed_at'] = e['mergedAt']
+				elif e['state'] == 'opened':
+					d['closed_at'] = None
+				else:
+					raise ValueError(f'''Unknown state for gitlab mergeRequest: {e['state']} , should be "opened", "merged" or "closed"''')
 				d['pullrequest_number'] = e['iid']
 				d['pullrequest_title'] = e['title']
 				d['pullrequest_gql_id'] = e['id']

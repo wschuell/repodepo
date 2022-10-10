@@ -366,15 +366,35 @@ class Database(object):
 		self.connection.commit()
 		for f in self.fillers:
 			if not f.done:
-				f.prepare()
-				self.logger.info('Prepared filler {}'.format(f.name))
-				if not f.done:
-					if not f.check_requirements():
-						raise Exception(f'Requirements not fulfilled for filler: {f.name}')
-					else:
-						f.apply()
-						f.done = True
-						self.logger.info('Filled with filler {}'.format(f.name))
+				while not f.done: # condition on f.reexec not needed, present in error handling
+					if f.reexec > 0:
+						self.logger.info('Reexecution of filler {}: {}'.format(f.name,f.reexec))
+					f.prepare()
+					self.logger.info('Prepared filler {}'.format(f.name))
+					if not f.done:
+						try:
+							req = f.check_requirements()
+						except psycopg2.errors.AdminShutdown:
+							# Unexpected behavior blocking these specific queries (no lock, session marked as active, may be specific to the server used)
+							# They have to be shut down manually, but then the whole pipeline has to be restarted.
+							# Quick fix: allow one shutdown
+							self.logger.info('AdminShutdown detected for query, redoing query')
+							req = f.check_requirements()
+						if not req:
+							raise Exception(f'Requirements not fulfilled for filler: {f.name}')
+						else:
+							try:
+								f.apply()
+								f.done = True
+								self.logger.info('Filled with filler {}'.format(f.name))
+							except KeyboardInterrupt:
+								raise
+							except Exception as e:
+								if f.reexec >= f.max_reexec:
+									raise
+								else:
+									self.logger.info(f'Error during execution of filler {f.name}, triggering reexecution. {e.__class__}: {e}')
+									f.reexec += 1
 			else:
 				self.logger.info('Already filled with filler {}, skipping'.format(f.name))
 		self.connection.commit()
