@@ -1459,7 +1459,7 @@ class ClosedIssues(Issues):
 		if db.db_type == 'postgres':
 			db.cursor.execute('''
 				SELECT COUNT(*),date_trunc(%(time_window)s, closed_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM issues c
-				WHERE %(start_date)s <= closed_at AND close_at < %(end_date)s
+				WHERE %(start_date)s <= closed_at AND closed_at < %(end_date)s
 				AND repo_id=%(project_id)s
 				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
 				GROUP BY time_stamp
