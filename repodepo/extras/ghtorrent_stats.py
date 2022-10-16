@@ -2,6 +2,7 @@ import psycopg2
 import psycopg2.extras
 import itertools
 from collections import OrderedDict
+import oyaml as yaml
 
 from .stats import DBStats
 
@@ -624,6 +625,7 @@ class GHTorrentGlobalStats(GHTorrentStats):
 			s = cl(db=self.db,ght_cur=self.ght_cur,ght_conn=self.ght_conn,limit=None)
 			s.get_result()
 			results[name] = s.results
+			print(yaml.dump(results))
 
 		return results
 

@@ -1554,7 +1554,7 @@ class PullRequests(Issues):
 				SELECT COUNT(*),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM pullrequests c
 				WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
 				AND repo_id=%(project_id)s
-				AND ((NOT %(closed_only)s) OR (merged_at IS NOT NULL))
+				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
 				GROUP BY time_stamp
 				''',{'closed_only':self.closed_only,'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
@@ -1562,7 +1562,7 @@ class PullRequests(Issues):
 				SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM pullrequests c
 				WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
 				AND repo_id=:project_id
-				AND ((NOT :closed_only) OR (merged_at IS NOT NULL))
+				AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
 				GROUP BY time_stamp
 				''',{'closed_only':self.closed_only,'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 
@@ -1578,14 +1578,14 @@ class PullRequests(Issues):
 			db.cursor.execute('''
 				SELECT COUNT(*),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM pullrequests c
 				WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
-				AND ((NOT %(closed_only)s) OR (merged_at IS NOT NULL))
+				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
 				GROUP BY time_stamp
 				''',{'closed_only':self.closed_only,'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
 				SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM pullrequests c
 				WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
-				AND ((NOT :closed_only) OR (merged_at IS NOT NULL))
+				AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
 				GROUP BY time_stamp
 				''',{'closed_only':self.closed_only,'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		query_result = list(db.cursor.fetchall())
@@ -1599,14 +1599,14 @@ class PullRequests(Issues):
 			db.cursor.execute('''
 				SELECT COUNT(*),repo_id FROM pullrequests c
 				WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
-				AND ((NOT %(closed_only)s) OR (merged_at IS NOT NULL))
+				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
 				GROUP BY repo_id
 				''',{'closed_only':self.closed_only,'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
 				SELECT COUNT(*),repo_id FROM pullrequests c
 				WHERE :start_date <= created_at AND created_at < :end_date
-				AND ((NOT :closed_only) OR (merged_at IS NOT NULL))
+				AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
 				GROUP BY repo_id
 				''',{'closed_only':self.closed_only,'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		return list(db.cursor.fetchall())
@@ -1616,14 +1616,14 @@ class PullRequests(Issues):
 			db.cursor.execute('''
 				SELECT COUNT(*),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp,repo_id FROM pullrequests c
 				WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
-				AND ((NOT %(closed_only)s) OR (merged_at IS NOT NULL))
+				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
 				GROUP BY time_stamp,repo_id
 				''',{'closed_only':self.closed_only,'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
 				SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM pullrequests c
 				WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
-				AND ((NOT :closed_only) OR (merged_at IS NOT NULL))
+				AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
 				GROUP BY time_stamp,repo_id
 				''',{'closed_only':self.closed_only,'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		query_result = list(db.cursor.fetchall())
@@ -1645,7 +1645,7 @@ class MergedPullRequests(PullRequests):
 				SELECT COUNT(*),date_trunc(%(time_window)s, merged_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM pullrequests c
 				WHERE %(start_date)s <= merged_at AND merged_at < %(end_date)s
 				AND repo_id=%(project_id)s
-				AND ((NOT %(closed_only)s) OR (merged_at IS NOT NULL))
+				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
 				GROUP BY time_stamp
 				''',{'closed_only':self.closed_only,'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
@@ -1653,7 +1653,7 @@ class MergedPullRequests(PullRequests):
 				SELECT COUNT(*),date(datetime(merged_at,:startoftw),:offsettw) AS time_stamp FROM pullrequests c
 				WHERE datetime(:start_date) <= merged_at AND merged_at < datetime(:end_date)
 				AND repo_id=:project_id
-				AND ((NOT :closed_only) OR (merged_at IS NOT NULL))
+				AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
 				GROUP BY time_stamp
 				''',{'closed_only':self.closed_only,'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 
@@ -1669,14 +1669,14 @@ class MergedPullRequests(PullRequests):
 			db.cursor.execute('''
 				SELECT COUNT(*),date_trunc(%(time_window)s, merged_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM pullrequests c
 				WHERE %(start_date)s <= merged_at AND merged_at < %(end_date)s
-				AND ((NOT %(closed_only)s) OR (merged_at IS NOT NULL))
+				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
 				GROUP BY time_stamp
 				''',{'closed_only':self.closed_only,'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
 				SELECT COUNT(*),date(datetime(merged_at,:startoftw),:offsettw) AS time_stamp FROM pullrequests c
 				WHERE datetime(:start_date) <= merged_at AND merged_at < datetime(:end_date)
-				AND ((NOT :closed_only) OR (merged_at IS NOT NULL))
+				AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
 				GROUP BY time_stamp
 				''',{'closed_only':self.closed_only,'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		query_result = list(db.cursor.fetchall())
@@ -1690,14 +1690,14 @@ class MergedPullRequests(PullRequests):
 			db.cursor.execute('''
 				SELECT COUNT(*),repo_id FROM pullrequests c
 				WHERE %(start_date)s <= merged_at AND merged_at < %(end_date)s
-				AND ((NOT %(closed_only)s) OR (merged_at IS NOT NULL))
+				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
 				GROUP BY repo_id
 				''',{'closed_only':self.closed_only,'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
 				SELECT COUNT(*),repo_id FROM pullrequests c
 				WHERE :start_date <= merged_at AND merged_at < :end_date
-				AND ((NOT :closed_only) OR (merged_at IS NOT NULL))
+				AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
 				GROUP BY repo_id
 				''',{'closed_only':self.closed_only,'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		return list(db.cursor.fetchall())
@@ -1707,14 +1707,106 @@ class MergedPullRequests(PullRequests):
 			db.cursor.execute('''
 				SELECT COUNT(*),date_trunc(%(time_window)s, merged_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp,repo_id FROM pullrequests c
 				WHERE %(start_date)s <= merged_at AND merged_at < %(end_date)s
-				AND ((NOT %(closed_only)s) OR (merged_at IS NOT NULL))
+				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
 				GROUP BY time_stamp,repo_id
 				''',{'closed_only':self.closed_only,'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		else:
 			db.cursor.execute('''
 				SELECT COUNT(*),date(datetime(merged_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM pullrequests c
 				WHERE datetime(:start_date) <= merged_at AND merged_at < datetime(:end_date)
-				AND ((NOT :closed_only) OR (merged_at IS NOT NULL))
+				AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
+				GROUP BY time_stamp,repo_id
+				''',{'closed_only':self.closed_only,'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+		query_result = list(db.cursor.fetchall())
+		#correcting for datetime issue in sqlite:
+		if db.db_type == 'sqlite':
+			query_result = [(val,datetime.datetime.strptime(val_d,'%Y-%m-%d'),val_u) for val,val_d,val_u in query_result]
+		return query_result
+
+
+class ClosedPullRequests(PullRequests):
+	'''
+	Distinction between closed_only(still filtering by created_at) and merged!
+	'''
+	measure_name = 'pullrequests_closed'
+
+
+	def query_proj(self,db,time_window,start_date,end_date,project_id):
+		if db.db_type == 'postgres':
+			db.cursor.execute('''
+				SELECT COUNT(*),date_trunc(%(time_window)s, closed_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM pullrequests c
+				WHERE %(start_date)s <= closed_at AND closed_at < %(end_date)s
+				AND repo_id=%(project_id)s
+				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
+				GROUP BY time_stamp
+				''',{'closed_only':self.closed_only,'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+		else:
+			db.cursor.execute('''
+				SELECT COUNT(*),date(datetime(closed_at,:startoftw),:offsettw) AS time_stamp FROM pullrequests c
+				WHERE datetime(:start_date) <= closed_at AND closed_at < datetime(:end_date)
+				AND repo_id=:project_id
+				AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
+				GROUP BY time_stamp
+				''',{'closed_only':self.closed_only,'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+
+		query_result = list(db.cursor.fetchall())
+		#correcting for datetime issue in sqlite:
+		if db.db_type == 'sqlite':
+			query_result = [(val,datetime.datetime.strptime(val_d,'%Y-%m-%d')) for val,val_d in query_result]
+		return query_result
+
+
+	def query_aggregated(self,db,time_window,start_date,end_date,project_id=None):
+		if db.db_type == 'postgres':
+			db.cursor.execute('''
+				SELECT COUNT(*),date_trunc(%(time_window)s, closed_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM pullrequests c
+				WHERE %(start_date)s <= closed_at AND closed_at < %(end_date)s
+				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
+				GROUP BY time_stamp
+				''',{'closed_only':self.closed_only,'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+		else:
+			db.cursor.execute('''
+				SELECT COUNT(*),date(datetime(closed_at,:startoftw),:offsettw) AS time_stamp FROM pullrequests c
+				WHERE datetime(:start_date) <= closed_at AND closed_at < datetime(:end_date)
+				AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
+				GROUP BY time_stamp
+				''',{'closed_only':self.closed_only,'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+		query_result = list(db.cursor.fetchall())
+		#correcting for datetime issue in sqlite:
+		if db.db_type == 'sqlite':
+			query_result = [(val,datetime.datetime.strptime(val_d,'%Y-%m-%d')) for val,val_d in query_result]
+		return query_result
+
+	def query_notimeinfo(self,db,start_date,end_date,project_id=None,time_window=None):
+		if db.db_type == 'postgres':
+			db.cursor.execute('''
+				SELECT COUNT(*),repo_id FROM pullrequests c
+				WHERE %(start_date)s <= closed_at AND closed_at < %(end_date)s
+				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
+				GROUP BY repo_id
+				''',{'closed_only':self.closed_only,'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+		else:
+			db.cursor.execute('''
+				SELECT COUNT(*),repo_id FROM pullrequests c
+				WHERE :start_date <= closed_at AND closed_at < :end_date
+				AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
+				GROUP BY repo_id
+				''',{'closed_only':self.closed_only,'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+		return list(db.cursor.fetchall())
+
+	def query_all(self,db,start_date,end_date,time_window,project_id=None):
+		if db.db_type == 'postgres':
+			db.cursor.execute('''
+				SELECT COUNT(*),date_trunc(%(time_window)s, closed_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp,repo_id FROM pullrequests c
+				WHERE %(start_date)s <= closed_at AND closed_at < %(end_date)s
+				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
+				GROUP BY time_stamp,repo_id
+				''',{'closed_only':self.closed_only,'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+		else:
+			db.cursor.execute('''
+				SELECT COUNT(*),date(datetime(closed_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM pullrequests c
+				WHERE datetime(:start_date) <= closed_at AND closed_at < datetime(:end_date)
+				AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
 				GROUP BY time_stamp,repo_id
 				''',{'closed_only':self.closed_only,'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		query_result = list(db.cursor.fetchall())

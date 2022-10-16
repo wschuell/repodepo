@@ -7,7 +7,7 @@ import json
 import shutil
 import datetime
 import subprocess
-
+import time
 from psycopg2 import extras
 
 from .. import fillers
@@ -197,9 +197,10 @@ class MGBotFiller(BotFileFiller):
 
 class BotsManualChecksFiller(fillers.Filler):
 
-	def __init__(self,blocking=True,**kwargs):
+	def __init__(self,blocking=True,auto_update=True,**kwargs):
 		fillers.Filler.__init__(self,**kwargs)
 		self.blocking = blocking
+		self.auto_update = auto_update
 
 	def prepare(self):
 		df = bot_checks.BotChecks(db=self.db).get_result()
@@ -220,14 +221,13 @@ class BotsManualChecksFiller(fillers.Filler):
 												identity,
 												identity_type_id,
 												identity_type)
-				VALUES (
-					(SELECT i.id FROM identities i INNER JOIN identity_types it 
-						ON it.name=%(identity_type)s AND it.id=i.identity_type_id AND i.identity=%(identity)s),
-					%(identity)s,
-					(SELECT id FROM identity_types it 
-						WHERE it.name=%(identity_type)s ),
-					%(identity_type)s
-					)
+				SELECT i.id,
+						%(identity)s,
+						it.id,
+						%(identity_type)s
+				FROM identities i INNER JOIN identity_types it 
+						ON it.name=%(identity_type)s AND it.id=i.identity_type_id AND i.identity=%(identity)s
+				
 				ON CONFLICT DO NOTHING
 				;''',self.to_check)
 		else:
@@ -237,14 +237,12 @@ class BotsManualChecksFiller(fillers.Filler):
 												identity,
 												identity_type_id,
 												identity_type)
-				VALUES (
-					(SELECT i.id FROM identities i INNER JOIN identity_types it 
-						ON it.name=:identity_type AND it.id=i.identity_type_id AND i.identity=:identity),
-					:identity,
-					(SELECT id FROM identity_types it 
-						WHERE it.name=:identity_type ),
-					:identity_type
-					)
+				SELECT i.id,
+						:identity,
+						it.id,
+						:identity_type
+				FROM identities i INNER JOIN identity_types it 
+						ON it.name=:identity_type AND it.id=i.identity_type_id AND i.identity=:identity
 				;''',self.to_check)
 
 
@@ -269,7 +267,22 @@ class BotsManualChecksFiller(fillers.Filler):
 			self.db.cursor.execute('SELECT COUNT(*) FROM _bots_manual_check WHERE is_bot IS NULL;')
 			ans = self.db.cursor.fetchone()
 			if ans[0] != 0:
-				raise ValueError('Pending manual checks for bots/invalid identities in _bots_manual_checks table')
+				if self.auto_update:
+					self.cycle()
+				else:
+					raise ValueError('Pending manual checks for bots/invalid identities in _bots_manual_checks table')
 			elif not silent:
 				self.logger.info('Passed bot checks, no further identities to be checked manually')
 
+
+	def cycle(self):
+		bots_decision_remaining = -1
+		while bots_decision_remaining != 0:
+			time.sleep(10)
+			self.prepare() 
+			self.checks()
+			before_val = bots_decision_remaining
+			self.db.cursor.execute('SELECT COUNT(*) FROM _bots_manual_check WHERE is_bot IS NULL;')
+			bots_decision_remaining = self.db.cursor.fetchone()[0]
+			if bots_decision_remaining != before_val:
+				self.logger.info(f'Bots manual checks remaining: {bots_decision_remaining}')

@@ -19,7 +19,7 @@ class PackageDepsFilter(fillers.Filler):
 	fills from a string list
 	'''
 	default_source = 'crates'
-	def __init__(self,input_list=None,input_file=None,reason='filter from list',source=None,header=True,**kwargs):
+	def __init__(self,input_list=None,input_file=None,reason='filter from list',source=None,header=True,in_data_folder=False,**kwargs):
 		fillers.Filler.__init__(self,**kwargs)
 		if source is None:
 			self.info_source = self.default_source
@@ -29,6 +29,7 @@ class PackageDepsFilter(fillers.Filler):
 		self.reason = reason
 		self.input_list = input_list
 		self.input_file = input_file
+		self.in_data_folder = in_data_folder
 
 	def prepare(self):
 		fillers.Filler.prepare(self)
@@ -36,7 +37,10 @@ class PackageDepsFilter(fillers.Filler):
 		if self.input_list is not None:
 			self.input_list = self.input_list
 		elif self.input_file is not None:
-			filepath = os.path.join(self.data_folder,self.input_file)
+			if self.in_data_folder:
+				filepath = os.path.join(self.data_folder,self.input_file)
+			else:
+				filepath = self.input_file
 			if os.path.exists(filepath):
 				with open(filepath,"rb") as f:
 					filehash = hashlib.sha256(f.read()).hexdigest()
@@ -346,24 +350,21 @@ class FiltersFolderFiller(fillers.Filler):
 			packageedges_file='filtered_packageedges.csv',
 			repos_file='filtered_repos.csv',
 			packages_file='filtered_packages.csv',
+			in_data_folder=False,
 			**kwargs):
 		self.input_folder = input_folder
+		self.in_data_folder = in_data_folder
 		self.packages_file = packages_file
 		self.repos_file = repos_file
 		self.repoedges_file = repoedges_file
 		self.packageedges_file = packageedges_file
 		fillers.Filler.__init__(self,**kwargs)
 
-	def prepare(self):
-		if self.data_folder is None:
-			self.data_folder = self.db.data_folder
-
-		folder = os.path.join(self.data_folder,self.input_folder)
-
-		self.db.add_filler(PackageDepsFilter(input_file=os.path.join(folder,self.packages_file)))
-		self.db.add_filler(RepoDepsFilter(input_file=os.path.join(folder,self.repos_file)))
-		self.db.add_filler(RepoEdgesDepsFilter(input_file=os.path.join(folder,self.repoedges_file)))
-		self.db.add_filler(PackageEdgesDepsFilter(input_file=os.path.join(folder,self.packageedges_file)))
+	def after_insert(self):
+		self.db.add_filler(PackageDepsFilter(input_file=os.path.join(self.input_folder,self.packages_file),in_data_folder=self.in_data_folder))
+		self.db.add_filler(RepoDepsFilter(input_file=os.path.join(self.input_folder,self.repos_file),in_data_folder=self.in_data_folder))
+		self.db.add_filler(RepoEdgesDepsFilter(input_file=os.path.join(self.input_folder,self.repoedges_file),in_data_folder=self.in_data_folder))
+		self.db.add_filler(PackageEdgesDepsFilter(input_file=os.path.join(self.input_folder,self.packageedges_file),in_data_folder=self.in_data_folder))
 
 
 class FiltersLibFolderFiller(FiltersFolderFiller):
@@ -372,15 +373,16 @@ class FiltersLibFolderFiller(FiltersFolderFiller):
 
 
 class DepsManualChecksFiller(fillers.Filler):
-	def __init__(self,filename='deps_manualchecks.yml',cycle_limit=100,only_timestamp=True,**kwargs):
+	def __init__(self,filename='deps_manualchecks.yml',timestamp=None,cycle_limit=100,only_timestamp=True,**kwargs):
 		fillers.Filler.__init__(self,**kwargs)
 		self.filename = filename
 		self.cycle_limit = cycle_limit
 		self.only_timestamp = only_timestamp
+		self.timestamp = timestamp
 
 	def apply(self):
 		filepath = os.path.join(self.data_folder,self.filename)
-		s_obj = stats.DepsStats(db=self.db,only_filtered=True,limit=self.cycle_limit,detailed=True)
+		s_obj = stats.DepsStats(db=self.db,timestamp=self.timestamp,only_filtered=True,limit=self.cycle_limit,detailed=True)
 		s_obj.get_result()
 		s = s_obj.results 
 		

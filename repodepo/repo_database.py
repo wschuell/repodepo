@@ -361,6 +361,12 @@ class Database(object):
 			self.cursor.execute('DROP TABLE IF EXISTS watchers CASCADE;')
 			self.connection.commit()
 
+	def reconnect(self):
+		if self.db_type == 'sqlite':
+			self.connection = sqlite3.connect(**self.db_conninfo)
+		else:
+			self.connection = psycopg2.connect(**self.db_conninfo)
+		self.cursor = self.connection.cursor() 
 
 	def fill_db(self):
 		self.connection.commit()
@@ -379,6 +385,7 @@ class Database(object):
 							# They have to be shut down manually, but then the whole pipeline has to be restarted.
 							# Quick fix: allow one shutdown
 							self.logger.info('AdminShutdown detected for query, redoing query')
+							self.reconnect()
 							req = f.check_requirements()
 						if not req:
 							raise Exception(f'Requirements not fulfilled for filler: {f.name}')
