@@ -77,15 +77,24 @@ class Requester(object):
 
 	def get_rate_limit(self,refresh=False):
 		if refresh or self.refreshed_at is None or self.refreshed_at + datetime.timedelta(seconds=self.refresh_time)<= datetime.datetime.now():
-			self.query('''
-				query {
-					rateLimit {
-						cost
-						remaining
-						resetAt
+			query_str = '''
+					query {
+						rateLimit {
+							cost
+							remaining
+							resetAt
+						}
 					}
-				}
-				''')
+					'''
+			try:
+				self.query(query_str)
+			except gql.transport.exceptions.TransportServerError as e:
+				if hasattr(e,'code') and e.code == 403:
+					self.logger.info('Error 403 detected when setting up key, sleeping for 60s and retrying')
+					time.sleep(60)
+					self.query(query_str)
+				else:
+					raise
 		return self.remaining
 
 	def format_query(self,gql_query,params):
