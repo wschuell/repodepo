@@ -526,3 +526,97 @@ class RepoToRepoDeps(Getter):
 			ans_mat = sparse.csr_matrix((parsed_results['data'],(parsed_results['coords_r'],parsed_results['coords_r_do'])),shape=(r_max,r_max))
 			return ans_mat
 
+
+
+class OrgMembers(DevToRepo):
+
+	def query(self):
+		if self.db.db_type == 'postgres':
+			return '''
+				SELECT main_q.user_id,
+					user_q.user_rank,
+					main_q.org_id,
+					org_q.org_rank,
+					1.::DOUBLE PRECISION AS norm_value, -- (main_q.cnt::DOUBLE PRECISION /COALESCE(SUM(main_q.cnt::DOUBLE PRECISION) OVER (PARTITION BY main_q.org_id),1.::DOUBLE PRECISION))::DOUBLE PRECISION AS norm_value,
+					1.::DOUBLE PRECISION AS abs_value --main_q.cnt::DOUBLE PRECISION AS abs_value
+				FROM
+					(SELECT i.user_id,om.org_id,1 AS cnt FROM org_memberships om
+					INNER JOIN identities i
+					ON om.member=i.id -- AND c.created_at>%(start_time)s AND c.created_at<=%(end_time)s AND NOT i.is_bot
+					GROUP BY i.user_id ,om.org_id
+					--ORDER BY count(*) DESC
+					) AS main_q
+				INNER JOIN (
+					SELECT id AS user_id,
+					RANK() OVER
+						(ORDER BY id) AS user_rank,
+					is_bot
+					FROM users uu
+					) AS user_q
+				ON main_q.user_id=user_q.user_id
+				INNER JOIN (
+					SELECT id AS org_id,
+					RANK() OVER
+						(ORDER BY id) AS org_rank
+					FROM organizations oo
+					) AS org_q
+				ON main_q.org_id=org_q.org_id
+			;'''
+		else:
+			return '''
+				SELECT main_q.user_id,
+					user_q.user_rank,
+					main_q.org_id,
+					org_q.org_rank,
+					1. AS norma_value, --(main_q.cnt*1./COALESCE(SUM(main_q.cnt) OVER (PARTITION BY main_q.org_id),1.)) AS norm_value,
+					1. AS abs_value --main_q.cnt*1. AS abs_value
+				FROM
+					(SELECT i.user_id,om.org_id,1 AS cnt FROM org_memberships om
+					INNER JOIN identities i
+					ON om.member=i.id -- AND c.created_at>:start_time AND c.created_at<=:end_time AND NOT i.is_bot
+					GROUP BY i.user_id ,om.org_id
+					--ORDER BY count(*) DESC
+					) AS main_q
+				INNER JOIN (
+					SELECT id AS user_id,
+					RANK() OVER
+						(ORDER BY id) AS user_rank,
+					is_bot
+					FROM users uu
+					) AS user_q
+				ON main_q.user_id=user_q.user_id
+				INNER JOIN (
+					SELECT id AS org_id,
+					RANK() OVER
+						(ORDER BY id) AS org_rank
+					FROM organizations oo
+					) AS org_q
+				ON main_q.org_id=org_q.org_id
+			;'''
+
+
+	def query_attributes(self):
+		return {
+		'start_time':self.start_time,
+		'end_time':self.end_time,
+		}
+
+	def get_omax(self,db=None):
+		if db is None:
+			db = self.db
+		db.cursor.execute('SELECT COUNT(*) FROM organizations o;')
+		return db.cursor.fetchone()[0]
+
+	def get(self,db,abs_value=False,raw_result=False,**kwargs):
+		u_max = self.get_umax(db=db)
+		o_max = self.get_omax(db=db)
+		db.cursor.execute(self.query(),self.query_attributes())
+		# query_result = list(db.cursor.fetchall())
+		# self.parse_results(query_result=query_result)
+		if raw_result:
+			return ({'user_id':uid,'user_rank':urk,'org_id':rid,'org_rank':rrk,'norm_value':normval,'abs_value':absval} for (uid,urk,rid,rrk,normval,absval) in db.cursor.fetchall())
+		else:
+			parsed_results = self.parse_results(query_result=db.cursor.fetchall(),abs_value=abs_value)
+			ans_mat = sparse.csr_matrix((parsed_results['data'],(parsed_results['coords_r'],parsed_results['coords_u'])),shape=(o_max,u_max))
+			return ans_mat
+

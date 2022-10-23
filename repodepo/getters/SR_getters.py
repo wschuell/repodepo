@@ -48,6 +48,7 @@ class SRGetter(Getter):
 			self.dl_getter = rank_getters.RepoDLRank(db=self.db,start_time=self.start_time,end_time=self.end_time)#,dl_correction=dl_correction)
 		self.deps_getter = edge_getters.RepoToRepoDeps(db=self.db,ref_time=self.end_time)
 		self.devs_getter = edge_getters.DevToRepo(db=self.db,start_time=self.start_time,end_time=self.end_time)
+		self.orgs_getter = edge_getters.OrgMembers(db=self.db)
 		self.vaccinated_repo_ranks = None
 		self.vaccinate_matrix = None
 
@@ -55,6 +56,8 @@ class SRGetter(Getter):
 		self.get_repo_ranks()
 		self.get_deps_mat()
 		self.get_devs_mat()
+		if self.scenario_space == 'orgs':
+			self.get_orgs_mat()
 		self.get_dl_vec()
 		self.get_init_vaccmat()
 		self.get_repo_commits()
@@ -98,6 +101,10 @@ class SRGetter(Getter):
 		if not hasattr(self,'deps_mat'):
 			self.deps_mat = self.deps_getter.get_result(**kwargs)#.transpose()
 
+	def get_orgs_mat(self,**kwargs):
+		if not hasattr(self,'orgs_mat'):
+			self.orgs_mat = self.orgs_getter.get_result(**kwargs)#.transpose()
+
 	def get_dl_vec(self):
 		if self.dl_weights:
 			if not hasattr(self,'dl_vec'):
@@ -112,6 +119,8 @@ class SRGetter(Getter):
 	def get(self,db,**kwargs):
 		self.get_devs_mat()
 		self.get_deps_mat()
+		if self.scenario_space == 'orgs':
+			self.get_orgs_mat()
 
 		self.get_dl_vec()
 
@@ -217,8 +226,9 @@ class SRGetter(Getter):
 			self.init_repo_status = sparse.csc_matrix((r_max,u_max))
 			self.init_dev_status = sparse.eye(u_max)
 		elif self.scenario_space == 'orgs':
-			self.init_repo_status = sparse.csc_matrix((r_max,u_max))
-			self.init_dev_status = sparse.eye(u_max)
+			o_max = self.orgs_mat.shape[0]
+			self.init_repo_status = sparse.csc_matrix((r_max,o_max))
+			self.init_dev_status = copy.deepcopy(self.orgs_mat).transpose()
 		elif self.scenario_space == 'repos':
 			self.init_repo_status = sparse.eye(r_max)
 			self.init_dev_status = sparse.csc_matrix((u_max,r_max))
