@@ -862,7 +862,8 @@ class ClonesFiller(fillers.Filler):
 		if ssh_mode:
 			return 'git@{}:{}/{}'.format(source_urlroot,owner,name)
 		else:
-			return 'https://{}/{}/{}.git'.format(source_urlroot,owner,name)
+			# return 'https://{}/{}/{}.git'.format(source_urlroot,owner,name)
+			return 'https://{}/{}/{}'.format(source_urlroot,owner,name)
 
 	def set_init_dl(self,repo_id,source,owner,repo):
 		'''
@@ -927,7 +928,7 @@ class ClonesFiller(fillers.Filler):
 				pygit2.clone_repository(url=self.build_url(source_urlroot=source_urlroot,name=name,owner=owner,ssh_mode=ssh_mode),path=repo_folder,callbacks=callbacks)
 				success = True
 			except pygit2.GitError as e:
-				err_txt = 'Git Error for repo {}/{}/{}'.format(source,owner,name)
+				err_txt = 'Git Error for repo {}/{}/{}: {}'.format(source,owner,name,str(e))
 				self.logger.info(err_txt)
 				self.db.log_error(err_txt)
 				success = False
