@@ -8,6 +8,7 @@ import shutil
 import datetime
 import subprocess
 import time
+import psycopg2
 from psycopg2 import extras
 
 from .. import fillers
