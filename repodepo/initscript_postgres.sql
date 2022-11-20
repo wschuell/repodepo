@@ -237,6 +237,7 @@
 				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
 				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 				created_at TIMESTAMP DEFAULT NULL,
+				archived_at TIMESTAMP DEFAULT NULL,
 				UNIQUE(source_id,insource_id)
 				);
 

@@ -70,12 +70,16 @@ class PackageFiller(fillers.Filler):
 			with open(os.path.join(self.data_folder,self.package_list_file),'r') as f:
 				reader = csv.reader(f)
 				headers = next(reader) #remove header
-				if len(headers) == 4:
+				if len(headers) == 5:
 					self.package_list = [r for r in reader]
+				elif len(headers) == 4:
+					self.package_list = [(r[0],r[1],r[2],r[3],None) for r in reader]
 				elif len(headers) == 3:
-					self.package_list = [(i,r[0],r[1],r[2]) for i,r in enumerate(reader)]
+					self.package_list = [(i,r[0],r[1],r[2],None) for i,r in enumerate(reader)]
 				else:
 					raise ValueError('''Expected syntax:
+external_id,name,created_at,repository,archived_at
+or
 external_id,name,created_at,repository
 or
 name,created_at,repository
@@ -247,25 +251,26 @@ got: {}'''.format(headers))
 			self.set_source_id()
 			if self.db.db_type == 'postgres':
 				extras.execute_batch(self.db.cursor,'''
-					INSERT INTO package_version_downloads(package_version,downloaded_at,downloads)
-					SELECT
-						(CASE WHEN %(version_str)s IS NOT NULL THEN (SELECT v.id FROM package_versions v
+					WITH p_version AS (SELECT (CASE WHEN %(version_str)s IS NOT NULL THEN (SELECT v.id FROM package_versions v
 							INNER JOIN packages p
 							ON p.source_id=%(package_source_id)s AND p.insource_id=%(package_insource_id)s
 							AND p.id=v.package_id AND v.version_str=%(version_str)s)
 						ELSE
-							(SELECT pv.id FROM package_versions pv 
-							INNER JOIN packages p 
+							(SELECT pv.id FROM package_versions pv
+							INNER JOIN packages p
 							ON p.insource_id = %(package_insource_id)s
 							AND p.source_id = %(package_source_id)s
-							AND p.id=pv.package_id 
+							AND p.id=pv.package_id
 							-- AND pv.created_at::date <= %(downloaded_at)s::date
-							ORDER BY (pv.created_at::date <= %(downloaded_at)s::date) DESC, GREATEST(pv.created_at-%(downloaded_at)s::date,%(downloaded_at)s::date-pv.created_at) ASC 
+							ORDER BY (pv.created_at::date <= %(downloaded_at)s::date) DESC, GREATEST(pv.created_at-%(downloaded_at)s::date,%(downloaded_at)s::date-pv.created_at) ASC
 							LIMIT 1)
-							
-						END)
-						,%(downloaded_at)s,%(nb_downloads)s
+
+						END) AS pv)
+					INSERT INTO package_version_downloads(package_version,downloaded_at,downloads)
+					SELECT  p_version.pv
+						,%(downloaded_at)s,%(nb_downloads)s FROM p_version
 					WHERE EXISTS (SELECT id FROM packages WHERE insource_id=%(package_insource_id)s AND source_id=%(package_source_id)s)
+						AND p_version.pv IS NOT NULL
 					ON CONFLICT DO NOTHING
 					;''',({'version_str':v_str,'package_insource_id':str(p_id),'package_source_id':self.source_id,'downloaded_at':dl_at,'nb_downloads':nb_dl} for (p_id,v_str,nb_dl,dl_at) in package_version_download_list),
 					page_size=self.page_size)
@@ -290,6 +295,20 @@ got: {}'''.format(headers))
 						END)
 						,:downloaded_at,:nb_downloads
 					WHERE EXISTS (SELECT id FROM packages WHERE insource_id=:package_insource_id AND source_id=:package_source_id)
+						AND EXISTS (SELECT CASE WHEN :version_str IS NOT NULL THEN (SELECT v.id FROM package_versions v
+							INNER JOIN packages p
+							ON p.source_id=:package_source_id AND p.insource_id=:package_insource_id
+							AND p.id=v.package_id AND v.version_str=:version_str)
+						ELSE
+							(SELECT pv.id FROM package_versions pv
+							INNER JOIN packages p
+							ON p.insource_id = :package_insource_id
+							AND p.source_id = :package_source_id
+							AND p.id=pv.package_id
+							-- AND pv.created_at <= :downloaded_at
+							ORDER BY (pv.created_at <= :downloaded_at) DESC, MAX(pv.created_at-:downloaded_at,:downloaded_at-pv.created_at) ASC
+							LIMIT 1)
+						END)
 					;''',({'version_str':v_str,'package_insource_id':str(p_id),'package_source_id':self.source_id,'downloaded_at':dl_at,'nb_downloads':nb_dl} for (p_id,v_str,nb_dl,dl_at) in package_version_download_list))
 
 			self.logger.info('Filled package version downloads')
@@ -406,7 +425,7 @@ got: {}'''.format(headers))
 							AND p.id=v.package_id AND v.version_str=%(version_str)s),
 						(SELECT id FROM packages WHERE source_id=%(package_source_id)s AND insource_id=%(depending_on_package)s),
 						%(semver_str)s
-					--WHERE EXISTS (SELECT id FROM packages WHERE source_id=%(package_source_id)s AND insource_id=%(depending_on_package)s)
+					WHERE EXISTS (SELECT id FROM packages WHERE source_id=%(package_source_id)s AND insource_id=%(depending_on_package)s)
 					ON CONFLICT DO NOTHING
 					;''',({'version_package_id':str(vp_id),'version_str':v_str,'depending_on_package':str(dop_id),'package_source_id':self.source_id,'semver_str':semver_str} for (vp_id,v_str,dop_id,semver_str) in package_deps_list),
 					page_size=self.page_size)
@@ -434,7 +453,7 @@ got: {}'''.format(headers))
 							AND p.id=v.package_id AND v.version_str=:version_str),
 						(SELECT id FROM packages WHERE source_id=:package_source_id AND insource_id=:depending_on_package),
 						:semver_str
-					--WHERE EXISTS (SELECT id FROM packages WHERE source_id=:package_source_id AND insource_id=:depending_on_package)
+					WHERE EXISTS (SELECT id FROM packages WHERE source_id=:package_source_id AND insource_id=:depending_on_package)
 					;''',({'version_package_id':str(vp_id),'version_str':v_str,'depending_on_package':str(dop_id),'package_source_id':self.source_id,'semver_str':semver_str} for (vp_id,v_str,dop_id,semver_str) in package_deps_list))
 
 

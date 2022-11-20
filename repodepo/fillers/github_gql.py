@@ -318,14 +318,14 @@ class GHGQLFiller(github_rest.GithubFiller):
 			try:
 				g.get_rate_limit()
 			except Exception as e:
-				self.logger.info('API key starting with "{}" and of length {} not valid: {}:{}'.format(ak[:5],len(ak),e.__class__,e))
+				self.logger.info('API key starting with "{}" and of length {} not valid: {}:{}'.format(ak[:6],len(ak),e.__class__,e))
 			else:
 				missing_scopes = []
 				for s in self.scopes:
 					if not g.check_scope(scope=s):
 						missing_scopes.append(s)
 				if len(missing_scopes) > 0:
-					self.logger.info('API key starting with "{}" missing scopes: {}'.format(ak[:5],missing_scopes))
+					self.logger.info('API key starting with "{}" missing scopes: {}'.format(ak[:6],missing_scopes))
 				else:
 					requesters.append(g)
 

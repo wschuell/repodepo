@@ -73,7 +73,7 @@ class JuliaHubFiller(generic.PackageFiller):
 		self.download(url=self.file_url,destination=os.path.join(self.data_folder,'juliahub_packages.json'))
 		with open(os.path.join(self.data_folder,'juliahub_packages.json'),'r') as f:
 			packages_json = json.load(f)
-		self.package_list = [(i,p['name'],None,p['metadata']['repo']) for i,p in enumerate(packages_json['packages'])]
+		self.package_list = [(i,p['name'],None,p['metadata']['repo'],None) for i,p in enumerate(packages_json['packages'])]
 		if not self.force:
 			if self.db.db_type == 'postgres':
 				self.db.cursor.execute('''SELECT COUNT(*) FROM packages p

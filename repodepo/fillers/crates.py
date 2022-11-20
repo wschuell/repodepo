@@ -431,7 +431,7 @@ class CratesFiller(generic.PackageFiller):
 			limit_str = ''
 
 		cursor.execute('''
-			SELECT id,name,created_at,COALESCE(repository,homepage,documentation) FROM crates {}
+			SELECT id,name,created_at,COALESCE(repository,homepage,documentation),NULL FROM crates {}
 			;'''.format(limit_str))
 
 		return cursor.fetchall()

@@ -542,47 +542,47 @@ class Database(object):
 		URLs are supposed to be already filled
 
 		syntax of package list:
-		package id (in source), package name, created_at (datetime.datetime),repo_url
+		package id (in source), package name, created_at (datetime.datetime),repo_url [,archive_date]
 
 		'''
 		source_id = self.get_source_info(source=source)[0]
 		if self.db_type == 'postgres':
 			extras.execute_batch(self.cursor,'''
-				INSERT INTO packages(repo_id,source_id,insource_id,name,created_at,url_id)
+				INSERT INTO packages(repo_id,source_id,insource_id,name,created_at,url_id,archived_at)
 				VALUES(
 					(SELECT r.id FROM urls u
 						INNER JOIN repositories r ON r.url_id=u.cleaned_url
-						AND u.url=%s),
-				%s,%s,%s,%s,(SELECT id FROM urls WHERE url=%s))
+						AND u.url=%(url)s),
+				%(source)s,%(pid)s,%(name)s,%(c_at)s,(SELECT id FROM urls WHERE url=%(url)s),%(a_at)s)
 				ON CONFLICT DO NOTHING
-				;''',((p[-1],source_id,*p) for p in package_list))
+				;''',({'pid':pid,'name':name,'c_at':c_at,'url':url,'a_at':a_at,'source':source_id} for pid,name,c_at,url,a_at in package_list))
 			if update_urls:
 				extras.execute_batch(self.cursor,'''
 					UPDATE packages SET repo_id=
 						(SELECT r.id FROM urls u
 							INNER JOIN repositories r ON r.url_id=u.cleaned_url
-							AND u.url=%s),
-						url_id=(SELECT id FROM urls WHERE url=%s)
-					WHERE (url_id IS NULL OR repo_id IS NULL) AND insource_id=%s
-					;''',((p[-1],p[-1],p[0]) for p in package_list))
+							AND u.url=%(url)s),
+						url_id=(SELECT id FROM urls WHERE url=%(url)s)
+					WHERE (url_id IS NULL OR repo_id IS NULL) AND insource_id=%(pid)s
+				;''',({'pid':pid,'name':name,'c_at':c_at,'url':url,'a_at':a_at,'source':source_id} for pid,name,c_at,url,a_at in package_list))
 
 		else:
 			self.cursor.executemany('''
-				INSERT OR IGNORE INTO packages(repo_id,source_id,insource_id,name,created_at,url_id)
+				INSERT OR IGNORE INTO packages(repo_id,source_id,insource_id,name,created_at,url_id,archived_at)
 				VALUES(
 					(SELECT r.id FROM urls u
 						INNER JOIN repositories r ON r.url_id=u.cleaned_url
-						AND u.url=?),?,?,?,?,(SELECT id FROM urls WHERE url=?))
-				;''',((p[-1],source_id,*p) for p in package_list))
+						AND u.url=:url),:source,:pid,:name,:c_at,(SELECT id FROM urls WHERE url=:url),:a_at)
+				;''',({'pid':pid,'name':name,'c_at':c_at,'url':url,'a_at':a_at,'source':source_id} for pid,name,c_at,url,a_at in package_list))
 			if update_urls:
 				self.cursor.executemany('''
 					UPDATE packages SET repo_id=
 						(SELECT r.id FROM urls u
 							INNER JOIN repositories r ON r.url_id=u.cleaned_url
-							AND u.url=?),
-						url_id=(SELECT id FROM urls WHERE url=?)
-					WHERE (url_id IS NULL or repo_id IS NULL) AND insource_id=?
-					;''',((p[-1],p[-1],p[0]) for p in package_list))
+							AND u.url=:url),
+						url_id=(SELECT id FROM urls WHERE url=:url)
+					WHERE (url_id IS NULL or repo_id IS NULL) AND insource_id=:pid
+				;''',({'pid':pid,'name':name,'c_at':c_at,'url':url,'a_at':a_at,'source':source_id} for pid,name,c_at,url,a_at in package_list))
 
 		if autocommit:
 			self.connection.commit()

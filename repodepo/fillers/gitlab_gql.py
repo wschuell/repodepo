@@ -61,13 +61,28 @@ class RequesterGitlab(github_gql.Requester):
 		self.remaining = 2000
 		return self.remaining
 
+	def format_query(self,gql_query,params):
+		if params is not None:
+			gql_query = gql_query.format(**params)
+		# RL_query = '''
+		# 		rateLimit {
+		# 			cost
+		# 			remaining
+		# 			resetAt
+		# 		}
+		# '''
+		# if 'rateLimit' not in gql_query:
+		# 	splitted_string = gql_query.split('}')
+		# 	gql_query = '}'.join(splitted_string[:-1])+RL_query+'}'+splitted_string[-1]
+		return gql_query
+
 	def query(self,gql_query,params=None,retries=None,cp_params=True):
 		if cp_params:
 			params = copy.deepcopy(params)
 		if retries is None:
 			retries = self.retries
-		if params is not None:
-			gql_query = gql_query.format(**params)
+		# if params is not None:
+		# 	gql_query = gql_query.format(**params)
 		# RL_query = '''
 		# 		rateLimit {
 		# 			cost
@@ -84,12 +99,17 @@ class RequesterGitlab(github_gql.Requester):
 			result_found = False
 			while not result_found:
 				try:
-					result = self.client.execute(gql.gql(gql_query))
+					result = self.client.execute(gql.gql(self.format_query(gql_query=gql_query,params=params)))
 					result_found = True
 				except asyncio.TimeoutError as e:
 					if retries_left>0:
 						time.sleep(0.1*(retries-retries_left)*random.random())
 						retries_left -= 1
+						for k in ['page_size','max_page_size']:
+							if params is not None and k in params.keys():
+								params[k] = max(1,int(0.9*params[k]))
+								self.logger.info(f'Setting {k} to {params[k]}')
+						self.logger.info(f'Retries left: {retries_left}')
 					else:
 						raise e.__class__('''TimeoutError happened more times than the set retries: {}. Rerun, maybe with higher value.
 Original error message: {}'''.format(retries,e))

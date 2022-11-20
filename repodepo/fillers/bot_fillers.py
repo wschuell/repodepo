@@ -197,10 +197,11 @@ class MGBotFiller(BotFileFiller):
 
 class BotsManualChecksFiller(fillers.Filler):
 
-	def __init__(self,blocking=True,auto_update=True,**kwargs):
+	def __init__(self,blocking=True,auto_update=True,error_catch_counts = 5,**kwargs):
 		fillers.Filler.__init__(self,**kwargs)
 		self.blocking = blocking
 		self.auto_update = auto_update
+		self.error_catch_counts = error_catch_counts
 
 	def prepare(self):
 		df = bot_checks.BotChecks(db=self.db).get_result()
@@ -279,8 +280,27 @@ class BotsManualChecksFiller(fillers.Filler):
 		bots_decision_remaining = -1
 		while bots_decision_remaining != 0:
 			time.sleep(10)
-			self.prepare() 
-			self.checks()
+			try:
+				self.prepare()
+				self.checks()
+			except KeyboardInterrupt:
+				raise
+			except psycopg2.errors.AdminShutdown as e:
+				if self.error_catch_counts>0:
+					self.error_catch_counts -= 1
+					self.logger.info(f'Catched error in bot manual check cycle: {e}')
+					self.db.reconnect()
+					continue
+				else:
+					raise
+			except Exception as e:
+				if self.error_catch_counts>0:
+					self.error_catch_counts -= 1
+					self.logger.info(f'Catched error in bot manual check cycle: {e}')
+					continue
+				else:
+					raise
+
 			before_val = bots_decision_remaining
 			self.db.cursor.execute('SELECT COUNT(*) FROM _bots_manual_check WHERE is_bot IS NULL;')
 			bots_decision_remaining = self.db.cursor.fetchone()[0]

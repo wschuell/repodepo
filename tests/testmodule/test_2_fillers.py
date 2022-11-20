@@ -1,6 +1,6 @@
 
 import repodepo
-from repodepo.fillers import generic,commit_info,github_rest,meta_fillers,bot_fillers,deps_filters_fillers
+from repodepo.fillers import generic,commit_info,github_rest,meta_fillers,bot_fillers,deps_filters_fillers,metacran
 import pytest
 import datetime
 import time
@@ -194,8 +194,14 @@ def test_filters(testdb):
 	testdb.add_filler(deps_filters_fillers.RepoDepsFilter(input_list=['GitHub/blah/blih',('GitHub','bloh','bluh'),'blyh/bluh']))
 	testdb.add_filler(deps_filters_fillers.RepoEdgesDepsFilter(input_list=[('GitHub/blah/blih','Gitlab/blih/blah'),('GitHub','bloh','bluh','GitHub','blyh','bloh')]))
 	testdb.add_filler(deps_filters_fillers.PackageEdgesDepsFilter(input_list=[('crates/bloh','juliahub/blah'),('crates','bloh','crates','blyh')]))
+	testdb.fill_db()
 
 @pytest.mark.timeout(30)
 def test_filters_folder(testdb):
 	testdb.add_filler(deps_filters_fillers.FiltersLibFolderFiller())
+	testdb.fill_db()
+
+@pytest.mark.timeout(200)
+def test_metacran(testdb):
+	testdb.add_filler(metacran.MetaCRANFiller(package_limit=150,start_date_dl=datetime.datetime(2021,1,1),end_date_dl=datetime.datetime(2021,6,1),include_R=True))
 	testdb.fill_db()

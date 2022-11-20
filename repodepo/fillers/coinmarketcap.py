@@ -12,6 +12,7 @@ import oyaml as yaml
 import pygit2
 import subprocess
 import copy
+import time
 import csv
 import semantic_version
 import sqlite3
@@ -65,7 +66,7 @@ class CMCFiller(generic.PackageFiller):
 			source_urlroot=None,
 			package_limit=None,
 			force=False,
-			range_len=10**3,
+			range_len=10**2,
 			filename='coinmarketcap_currencies.csv',
 			api_url='https://pro-api.coinmarketcap.com',
 			# api_url='https://sandbox-api.coinmarketcap.com',
@@ -101,8 +102,8 @@ class CMCFiller(generic.PackageFiller):
 
 	def load_file(self):
 		ans = []
-		if os.path.exists(self.filename):
-			with open(self.filename,'r') as f:
+		if os.path.exists(os.path.join(self.data_folder,self.filename)):
+			with open(os.path.join(self.data_folder,self.filename),'r') as f:
 				reader = csv.reader(f)
 				for r in reader:
 					u,n,sy,sl,da,i = r
@@ -110,12 +111,12 @@ class CMCFiller(generic.PackageFiller):
 		return ans
 
 	def save_file(self,ans):
-		with open(self.filename,'w') as f:
+		with open(os.path.join(self.data_folder,self.filename),'w') as f:
 			past_ids = set()
 			ans = sorted(ans,key=lambda x: x['id'])
 			for a in ans:
 				if a['id'] not in past_ids:
-					f.write(f'''{a['url']},{a['name']},{a['symbol']},{a['slug']},{a['date_added']},{a['id']}\n''')
+					f.write(f'''"{a['url']}","{a['name']}","{a['symbol']}","{a['slug']}","{a['date_added']}","{a['id']}"\n''')
 					past_ids.add(a['id'])
 
 	def get_package_list(self):
@@ -131,10 +132,11 @@ class CMCFiller(generic.PackageFiller):
 			ans += [{'url':(v['urls']['source_code'][0] if len(v['urls']['source_code']) else None),'name':v['name'],'symbol':v['symbol'],'slug':v['slug'],'date_added':v['date_added'],'id':v['id']} for k,v in currencies['data'].items()]
 			init_range += self.range_len
 			self.save_file(ans)
+			self.logger.info(f'''Retrieved currency info up to ID {ans[-1]['id']}''')
 			if len(currencies['data']) == 0 or (self.package_limit is not None and len(ans)>= self.package_limit):
 				break
 
-		self.package_list = [(p['id'],p['slug'],p['date_added'],(None if p['url'] in ('None','') else p['url'])) for p in ans]
+		self.package_list = [(p['id'],p['slug'],p['date_added'],(None if p['url'] in ('None','') else p['url']),None) for p in ans]
 
 	def request_currencies(self,query_range):
 		query_range = copy.deepcopy(query_range)
@@ -147,6 +149,11 @@ class CMCFiller(generic.PackageFiller):
 				return self.request_currencies(query_range=query_range)
 			else:
 				return {'data':dict()}
+		elif ans['status']['error_code'] == 1008:
+			time.sleep(60)
+			return self.request_currencies(query_range=query_range)
+		elif ans['status']['error_code'] != 0:
+			raise IOError(ans['status'])
 		else:
 			return ans
 

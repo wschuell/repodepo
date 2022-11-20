@@ -11,6 +11,7 @@ import gzip
 import shutil
 import pygit2
 import tarfile
+import gzip
 
 logger = logging.getLogger(__name__)
 ch = logging.StreamHandler()
@@ -79,8 +80,7 @@ class Filler(object):
 	def after_insert(self):
 		pass
 
-
-	def download(self,url,destination,wget=False,force=False):
+	def download(self,url,destination,wget=False,force=False,autogzip=False):
 		if not force and os.path.exists(destination):
 			self.logger.info('Skipping download {}'.format(url))
 		else:
@@ -89,10 +89,20 @@ class Filler(object):
 				os.makedirs(os.path.dirname(destination))
 			if not wget:
 				r = requests.get(url, allow_redirects=True)
-				with open(destination, 'wb') as f:
-					f.write(r.content)
+				r.raise_for_status()
+				if autogzip:
+					with gzip.open(destination, 'wb') as f:
+						f.write(r.content)
+				else:
+					with open(destination, 'wb') as f:
+						f.write(r.content)
 			else:
-				subprocess.check_call('wget -O {} {}'.format(destination,url).split(' '))
+				if autogzip:
+					raise NotImplementedError('Gzipping downloaded files automatically when using wget/curl is not implemented yet')
+				try:
+					subprocess.check_call('wget -O {} {}'.format(destination,url).split(' '))
+				except:
+					subprocess.check_call('curl -o {} -L {}'.format(destination,url).split(' '))
 
 	def unzip(self,orig_file,destination,clean_zip=False):
 		self.logger.info('Unzipping {}'.format(orig_file))

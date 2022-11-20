@@ -144,7 +144,7 @@ class RepoDepsFilter(PackageDepsFilter):
 				# return (elt[0],elt[1].split('/')[0],'/'.join(elt[1].split('/')[1:]))
 				return elt
 		elif len(elt) == 3:
-			return (elt[0],'/'.join([elt[1:]]))
+			return (elt[0],'/'.join(elt[1:]))
 		elif len(elt) == 1:
 			if len(elt[0].split('/')) == 3:
 				return (elt[0].split('/')[0],'/'.join(elt[0].split('/')[1:]))
