@@ -43,7 +43,12 @@ inner join identities i
 on i.id=c.author_id and not i.is_bot and i.identity like '%bot%'
 group by i.user_id
 order by count(*) desc
-				;''',]
+				;''',
+				'''
+select distinct i.user_id from identities i
+where identity like '@%'
+				;''',
+				]
 
 				
 

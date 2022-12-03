@@ -12,3 +12,5 @@ psutil
 python-dateutil
 networkx
 semantic-version
+toml
+ijson

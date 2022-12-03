@@ -269,12 +269,13 @@ class BotsManualChecksFiller(fillers.Filler):
 			self.db.cursor.execute('SELECT COUNT(*) FROM _bots_manual_check WHERE is_bot IS NULL;')
 			ans = self.db.cursor.fetchone()
 			if ans[0] != 0:
-				if self.auto_update:
-					self.cycle()
-				else:
+				if not self.auto_update:
 					raise ValueError('Pending manual checks for bots/invalid identities in _bots_manual_checks table')
+				else:
+					self.cycle()
 			elif not silent:
 				self.logger.info('Passed bot checks, no further identities to be checked manually')
+				return
 
 
 	def cycle(self):

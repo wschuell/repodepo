@@ -21,7 +21,7 @@
 				source INTEGER REFERENCES sources(id) ON DELETE CASCADE,
 				source_root INTEGER REFERENCES sources(id) ON DELETE CASCADE,
 				url TEXT NOT NULL UNIQUE,
-				cleaned_url INTEGER REFERENCES urls(id) ON DELETE CASCADE,
+				cleaned_url INTEGER REFERENCES urls(id) ON DELETE SET NULL,
 				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 				);
 
@@ -228,7 +228,7 @@
 				insource_id TEXT DEFAULT NULL,
 				name TEXT,
 				url_id INTEGER REFERENCES urls(id) ON DELETE CASCADE,
-				repo_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
+				repo_id INTEGER REFERENCES repositories(id) ON DELETE SET NULL,
 				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 				created_at TIMESTAMP DEFAULT NULL,
 				archived_at TIMESTAMP DEFAULT NULL,
@@ -531,7 +531,7 @@
 				CREATE TABLE IF NOT EXISTS org_memberships(
 					id INTEGER PRIMARY KEY,
 					org_id INTEGER REFERENCES organizations(id),
-					member INTEGER REFERENCES identities(id),
+					member INTEGER REFERENCES identities(id) ON DELETE CASCADE,
 					joined_at TIMESTAMP,
 					left_at TIMESTAMP,
 					UNIQUE(org_id,member,joined_at)

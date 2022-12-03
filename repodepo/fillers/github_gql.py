@@ -33,6 +33,13 @@ ch.setFormatter(formatter)
 logger.addHandler(ch)
 logger.setLevel(logging.INFO)
 
+def sanitize_text(txt):
+	'''
+	Some text fields returned by github can contain chars not insertable in a PostgreSQL DB: ValueError: A string literal cannot contain NUL (0x00) characters.
+	Example: title of https://github.com/dmlc/xgboost/issues/857
+	'''
+	return txt.replace("\x00", "\uFFFD")
+
 
 class Requester(object):
 	'''
@@ -290,8 +297,13 @@ class GHGQLFiller(github_rest.GithubFiller):
 		self.db.batch_merge_repos()
 
 	def prepare(self):
-		github_rest.GithubFiller.prepare(self)
+		if self.data_folder is None:
+			self.data_folder = self.db.data_folder
 		self.set_element_list()
+		if self.elt_list:
+			github_rest.GithubFiller.prepare(self)
+		else:
+			self.done = True
 
 	def get_rate_limit(self,requester):
 		return requester.get_rate_limit()
@@ -2654,7 +2666,7 @@ class IssuesGQLFiller(GHGQLFiller):
 				d['created_at'] = e['createdAt']
 				d['closed_at'] = e['closedAt']
 				d['issue_number'] = e['number']
-				d['issue_title'] = e['title']
+				d['issue_title'] = sanitize_text(e['title'])
 				d['issue_text'] = e['bodyText']
 				try:
 					d['author_login'] = e['author']['login']
@@ -2963,7 +2975,7 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
 				d['created_at'] = e['createdAt']
 				d['closed_at'] = e['closedAt']
 				d['issue_number'] = e['number']
-				d['issue_title'] = e['title']
+				d['issue_title'] = sanitize_text(e['title'])
 				d['issue_gql_id'] = e['id']
 				d['issue_text'] = e['bodyText']
 

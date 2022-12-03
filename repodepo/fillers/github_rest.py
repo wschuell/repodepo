@@ -55,7 +55,7 @@ class GithubFiller(fillers.Filler):
 		self.set_requesters()
 
 		if self.db.db_type == 'postgres':
-			self.db.cursor.execute(''' INSERT INTO identity_types(name) VALUES(%s) ON CONFLICT DO NOTHING;''',(self.identity_type,))
+			self.db.cursor.execute(''' INSERT INTO identity_types(name) SELECT %(id_type)s WHERE NOT EXISTS (SELECT id FROM identity_types WHERE name=%(id_type)s) ON CONFLICT DO NOTHING;''',{'id_type':self.identity_type})
 		else:
 			self.db.cursor.execute(''' INSERT OR IGNORE INTO identity_types(name) VALUES(?);''',(self.identity_type,))
 		self.db.connection.commit()

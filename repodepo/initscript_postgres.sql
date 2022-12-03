@@ -21,7 +21,7 @@
 				source BIGINT REFERENCES sources(id) ON DELETE CASCADE,
 				source_root BIGINT REFERENCES sources(id) ON DELETE CASCADE,
 				url TEXT NOT NULL UNIQUE,
-				cleaned_url BIGINT REFERENCES urls(id) ON DELETE CASCADE,
+				cleaned_url BIGINT REFERENCES urls(id) ON DELETE SET NULL,
 				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 				);
 
@@ -234,7 +234,7 @@
 				insource_id TEXT DEFAULT NULL,
 				name TEXT,
 				url_id BIGINT REFERENCES urls(id) ON DELETE CASCADE,
-				repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
+				repo_id BIGINT REFERENCES repositories(id) ON DELETE SET NULL,
 				inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 				created_at TIMESTAMP DEFAULT NULL,
 				archived_at TIMESTAMP DEFAULT NULL,
@@ -536,7 +536,7 @@
 				CREATE TABLE IF NOT EXISTS org_memberships(
 					id BIGSERIAL PRIMARY KEY,
 					org_id BIGINT REFERENCES organizations(id),
-					member BIGINT REFERENCES identities(id),
+					member BIGINT REFERENCES identities(id) ON DELETE CASCADE,
 					joined_at TIMESTAMP,
 					left_at TIMESTAMP,
 					UNIQUE(org_id,member,joined_at)

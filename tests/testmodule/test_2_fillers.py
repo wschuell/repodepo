@@ -1,6 +1,6 @@
 
 import repodepo
-from repodepo.fillers import generic,commit_info,github_rest,meta_fillers,bot_fillers,deps_filters_fillers,metacran
+from repodepo.fillers import generic,commit_info,github_rest,meta_fillers,bot_fillers,deps_filters_fillers,metacran,npm
 import pytest
 import datetime
 import time
@@ -204,4 +204,9 @@ def test_filters_folder(testdb):
 @pytest.mark.timeout(200)
 def test_metacran(testdb):
 	testdb.add_filler(metacran.MetaCRANFiller(package_limit=150,start_date_dl=datetime.datetime(2021,1,1),end_date_dl=datetime.datetime(2021,6,1),include_R=True))
+	testdb.fill_db()
+
+@pytest.mark.timeout(200)
+def test_npm(testdb):
+	testdb.add_filler(npm.NPMFiller(package_limit=150,start_date_dl=datetime.datetime(2021,1,1),end_date_dl=datetime.datetime(2021,6,1)))
 	testdb.fill_db()

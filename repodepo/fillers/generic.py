@@ -7,6 +7,7 @@ import json
 import shutil
 import datetime
 import subprocess
+import itertools
 
 from psycopg2 import extras
 
@@ -28,7 +29,7 @@ class PackageFiller(fillers.Filler):
 	CSV file syntax is expected to be, with header:
 	external_id,name,created_at,repository
 	or
-	name,created_at,repository
+	name,created_at,repository,archived_at
 	"""
 	def __init__(self,package_list=None,package_list_file=None,package_version_list=None,package_deps_list=None,package_download_list=None,package_version_download_list=None,force=False,deps_to_delete=None,package_limit=None,page_size=10**5,**kwargs):
 		self.package_list = package_list
@@ -129,16 +130,20 @@ got: {}'''.format(headers))
 		else:
 			self.logger.info('Filling packages from {}'.format(source))
 			self.db.register_source(source)
-			self.db.register_urls(source=source,url_list=[p[3] for p in package_list if p[3] is not None])
-
-			self.logger.info('Filled URLs')
-
-
-			# self.db.register_repositories(repo_info_list=[(self.clean_url(p[3])[1],self.clean_url(p[3])[0].split('/')[-2],self.clean_url(p[3])[0].split('/')[-1],self.clean_url(p[3])[0]) for p in package_list if p[3] is not None and self.clean_url(p[3])[0] is not None])
-			# self.logger.info('Filled repositories')
-
-			self.db.register_packages(source=source,package_list=package_list)
-			self.logger.info('Filled packages')
+			if isinstance(self.package_list,list):
+				self.db.register_urls(source=source,url_list=[p[3] for p in package_list if p[3] is not None])
+				self.logger.info('Filled URLs')
+				self.db.register_packages(source=source,package_list=package_list)
+				self.logger.info('Filled packages')
+			else:
+				while True:
+					p_list = list(itertools.islice(package_list,10**4))
+					if len(p_list):
+						self.db.register_urls(source=source,url_list=[p[3] for p in p_list if p[3] is not None])
+						self.db.register_packages(source=source,package_list=p_list)
+					else:
+						self.logger.info('Filled URLs and packages')
+						break
 
 
 	def fill_package_versions(self,package_version_list=None,source=None,force=False,clean_urls=True):
@@ -426,6 +431,10 @@ got: {}'''.format(headers))
 						(SELECT id FROM packages WHERE source_id=%(package_source_id)s AND insource_id=%(depending_on_package)s),
 						%(semver_str)s
 					WHERE EXISTS (SELECT id FROM packages WHERE source_id=%(package_source_id)s AND insource_id=%(depending_on_package)s)
+						AND EXISTS (SELECT v.id FROM package_versions v
+							INNER JOIN packages p
+							ON p.source_id=%(package_source_id)s AND p.insource_id=%(version_package_id)s
+							AND p.id=v.package_id AND v.version_str=%(version_str)s)
 					ON CONFLICT DO NOTHING
 					;''',({'version_package_id':str(vp_id),'version_str':v_str,'depending_on_package':str(dop_id),'package_source_id':self.source_id,'semver_str':semver_str} for (vp_id,v_str,dop_id,semver_str) in package_deps_list),
 					page_size=self.page_size)
@@ -454,6 +463,10 @@ got: {}'''.format(headers))
 						(SELECT id FROM packages WHERE source_id=:package_source_id AND insource_id=:depending_on_package),
 						:semver_str
 					WHERE EXISTS (SELECT id FROM packages WHERE source_id=:package_source_id AND insource_id=:depending_on_package)
+						AND EXISTS (SELECT v.id FROM package_versions v
+							INNER JOIN packages p
+							ON p.source_id=:package_source_id AND p.insource_id=:version_package_id
+							AND p.id=v.package_id AND v.version_str=:version_str)
 					;''',({'version_package_id':str(vp_id),'version_str':v_str,'depending_on_package':str(dop_id),'package_source_id':self.source_id,'semver_str':semver_str} for (vp_id,v_str,dop_id,semver_str) in package_deps_list))
 
 
@@ -580,7 +593,7 @@ class RepositoriesFiller(fillers.Filler):
 		self.url_roots = list(self.db.cursor.fetchall())
 
 		if self.force:
-
+			# !! Experimental. If FixURL has been used, behavior has to be checked; there can be conflicts if the manual FixURL does not correspond to the automatical parsing
 			self.db.cursor.execute('SELECT url FROM urls;')
 			# self.urls = [(raw_url,cleaned_url,source_id)]
 		else:
@@ -591,6 +604,7 @@ class RepositoriesFiller(fillers.Filler):
 					WHERE r.url_id IS NULL AND (u.id=u.cleaned_url OR u.cleaned_url IS NULL)
 					;''')
 		self.urls = list(set([(u[0],*self.clean_url(u[0])) for u in self.db.cursor.fetchall()]))
+
 		self.cleaned_urls = list(set([(cleaned_url,source_id) for (raw_url,cleaned_url,source_id) in self.urls if cleaned_url is not None]))
 
 			# source_id,owner,name,cleaned_url
@@ -672,17 +686,17 @@ class RepositoriesFiller(fillers.Filler):
 			raise RepoSyntaxError('Repo {} has not expected source {}.'.format(repo,source_urlroot))
 
 		# Removing front elements
-		for start_str in ['http://','https://','http:/','https:/','www.','/',' ','\n','\t','\r','"',"'"]:
+		for start_str in ['git+','git:','http:','https:','www.','/',' ','\n','\t','\r','"',"'",'<','\\url{','ssh:','git@']:
 			if repo.lower().startswith(start_str):
 				return self.repo_formatting(repo=repo[len(start_str):],source_urlroot=source_urlroot,output_cleaned_url=output_cleaned_url,raise_error=raise_error)
 
 		# Remove end of url modifiers
-		for flagged_char in ['"',"'",'?',' ',' ','!',',',';']:
+		for flagged_char in ['"',"'",'?',' ',' ','!',',',';','>','}','\n','\t',' ','\r','#']:
 			if flagged_char in repo:
 				return self.repo_formatting(repo=repo.split(flagged_char)[0],source_urlroot=source_urlroot,output_cleaned_url=output_cleaned_url,raise_error=raise_error)
 
 		# Removing back elements
-		for end_str in ['.git',' ','/','\n','\t','\r']:
+		for end_str in ['.git',' ','/','\n','\t','\r','http:','https:',':']:
 			if repo.lower().endswith(end_str):
 				return self.repo_formatting(repo=repo[:-len(end_str)],source_urlroot=source_urlroot,output_cleaned_url=output_cleaned_url,raise_error=raise_error)
 
@@ -947,10 +961,13 @@ class ClonesFiller(fillers.Filler):
 				pygit2.clone_repository(url=self.build_url(source_urlroot=source_urlroot,name=name,owner=owner,ssh_mode=ssh_mode),path=repo_folder,callbacks=callbacks)
 				success = True
 			except pygit2.GitError as e:
-				err_txt = 'Git Error for repo {}/{}/{}: {}'.format(source,owner,name,str(e))
-				self.logger.info(err_txt)
-				self.db.log_error(err_txt)
-				success = False
+				if 'No space left on device' in str(e):
+					raise
+				else:
+					err_txt = 'Git Error for repo {}/{}/{}: {}'.format(source,owner,name,str(e))
+					self.logger.info(err_txt)
+					self.db.log_error(err_txt)
+					success = False
 			except ValueError as e:
 				if str(e).startswith('malformed URL'):
 					err_txt = 'Error for repo {}/{}/{}: {}'.format(source,owner,name,e)
@@ -1300,6 +1317,7 @@ class GithubNoreplyEmailMerger(IdentitiesFiller):
 				LEFT OUTER JOIN identities i2
 				ON i2.user_id=i.user_id AND i.id!=i2.id
 				WHERE i.identity LIKE '%@users.noreply.github.com'
+				AND i.identity != '@users.noreply.github.com'
 				AND i2.id IS NULL
 				;''')
 
@@ -1380,11 +1398,12 @@ class DLSamplePackages(fillers.Filler):
 
 class SourcesAutoFiller(SourcesFiller):
 
-	def __init__(self,max_tries=5,force=False,**kwargs):
+	def __init__(self,max_tries=5,force=False,timeout=10,**kwargs):
 		self.max_tries = max_tries
 		self.source = []
 		self.source_urlroot = []
 		self.force = force
+		self.timeout = timeout
 		fillers.Filler.__init__(self,**kwargs)
 
 	def prepare(self):
@@ -1413,7 +1432,6 @@ class SourcesAutoFiller(SourcesFiller):
 			if source not in self.candidates.keys():
 				self.candidates[source] = []
 			self.candidates[source].append(url)
-		print(sorted(self.candidates.keys()))
 
 
 	def filter_git_platforms(self):
@@ -1432,19 +1450,198 @@ class SourcesAutoFiller(SourcesFiller):
 			self.logger.info(f'Checking if {url} is a git repository'+additional_info)
 			sub_env = copy.deepcopy(os.environ)
 			sub_env.update(dict(GIT_TERMINAL_PROMPT='0',GIT_SSL_NO_VERIFY='1'))
-			subprocess.check_call(cmd.split(' '), env=sub_env)
+			subprocess.check_call(cmd.split(' '), env=sub_env, timeout=self.timeout)
 			return True
-		except subprocess.CalledProcessError:
+		except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
 			return False
 
+
 	def get_urlroot(self,url):
-		prefixes = ['https://','http://','https:/','http:/','/','/','www.']
+		prefixes = ['https://','http://','https:/','http:/','/','/','www.','ssh:','git@']
 		cleaned_url = url
-		for p in prefixes:
-			if cleaned_url.startswith(p):
-				cleaned_url = cleaned_url[len(p):]
+		while any(cleaned_url.startswith(p) for p in prefixes):
+			for p in prefixes:
+				if cleaned_url.startswith(p):
+					cleaned_url = cleaned_url[len(p):]
 		source = cleaned_url.split('/')[0].lower()
 		if url.startswith('https:'):
 			return source,'https://'+cleaned_url
 		else:
 			return source,'http://'+cleaned_url
+
+
+class FixURL(fillers.Filler):
+	'''
+	Steps for a surgical correction of a misparsed URL
+	'''
+
+	def __init__(self,orig_url,cleaned_url,del_users=True,**kwargs):
+		self.orig_url = orig_url
+		self.cleaned_url = cleaned_url
+		self.del_users = del_users
+		fillers.Filler.__init__(self,**kwargs)
+
+	def prepare(self):
+
+		# getting ID for urls and repo
+		if self.db.db_type == 'postgres':
+			self.db.cursor.execute('''
+				SELECT u.id,u.cleaned_url,r.id,cu.url FROM urls u
+				LEFT OUTER JOIN urls cu
+				ON cu.id=u.cleaned_url
+				LEFT OUTER JOIN repositories r
+				ON r.url_id=u.cleaned_url
+				WHERE u.url=%(url)s
+			;''',{'url':self.orig_url})
+		else:
+			self.db.cursor.execute('''
+				SELECT u.id,u.cleaned_url,r.id,cu.url FROM urls u
+				LEFT OUTER JOIN urls cu
+				ON cu.id=u.cleaned_url
+				LEFT OUTER JOIN repositories r
+				ON r.url_id=u.cleaned_url
+				WHERE u.url=:url
+			;''',{'url':self.orig_url})
+		res = list(self.db.cursor.fetchall())
+		if len(res) == 0:
+			raise ValueError('URL to replace not found')
+
+		self.url_id,self.cleaned_url_id,self.repo_id,self.cu_db = res[0]
+		if self.cu_db == self.cleaned_url:
+			self.logger.info(f'Fix for {self.orig_url} already done, skipping')
+			self.done = True
+		elif self.cleaned_url_id is not None:
+			if self.db.db_type == 'postgres':
+				self.db.cursor.execute('SELECT COUNT(*) FROM urls WHERE cleaned_url=%(cleaned_url_id)s AND id NOT IN (%(url_id)s,%(cleaned_url_id)s)',{'url_id':self.url_id,'cleaned_url_id':self.cleaned_url_id})
+			else:
+				self.db.cursor.execute('SELECT COUNT(*) FROM urls WHERE cleaned_url=:cleaned_url_id  AND id NOT IN (:url_id,:cleaned_url_id)',{'url_id':self.url_id,'cleaned_url_id':self.cleaned_url_id})
+			if self.db.cursor.fetchone()[0] > 0:
+				raise NotImplementedError('Several URLs point to the same cleaned URL, case not implemented yet. Caution to different parsing behaviors that lead to the same results, but correct in one case and not in another.')
+
+	def apply(self):
+		# setting to null commits that are also in other repos
+		if self.repo_id is not None:
+			if self.db.db_type == 'postgres':
+				self.db.cursor.execute('''
+					UPDATE commits SET repo_id=NULL
+					WHERE repo_id=%(repo_id)s AND id IN (SELECT cr.commit_id FROM commit_repos cr
+						INNER JOIN (SELECT commit_id FROM commit_repos WHERE repo_id=%(repo_id)s) cr1
+						ON cr1.commit_id=cr.commit_id
+						GROUP BY cr.commit_id
+						HAVING COUNT(*)>1 )
+					;''',{'repo_id':self.repo_id})
+			else:
+				self.db.cursor.execute('''
+					UPDATE commits SET repo_id=NULL
+					WHERE repo_id=:repo_id AND id IN (SELECT cr.commit_id FROM commit_repos cr
+						INNER JOIN (SELECT commit_id FROM commit_repos WHERE repo_id=:repo_id) cr1
+						ON cr1.commit_id=cr.commit_id
+						GROUP BY cr.commit_id
+						HAVING COUNT(*)>1 )
+					;''',{'repo_id':self.repo_id})
+
+		#Finding users to be deleted
+		if self.del_users:
+			if self.db.db_type == 'postgres':
+				self.db.cursor.execute('''
+					WITH repo_users AS (SELECT DISTINCT i.user_id AS uid FROM identities i
+					INNER JOIN commits c
+					ON (c.author_id=i.id OR c.committer_id=i.id) AND c.repo_id=%(repo_id)s)
+						, uid_to_del AS (SELECT uid FROM repo_users
+					EXCEPT
+					SELECT DISTINCT uid FROM repo_users
+					INNER JOIN identities i
+					ON i.user_id=uid
+					INNER JOIN commits c
+					ON (c.author_id=i.id OR c.committer_id=i.id) AND c.repo_id!=%(repo_id)s)
+						DELETE FROM users WHERE id IN (SELECT uid FROM uid_to_del)
+					;''',{'repo_id':self.repo_id})
+			else:
+				self.db.cursor.execute('''
+					WITH repo_users AS (SELECT DISTINCT i.user_id AS uid FROM identities i
+					INNER JOIN commits c
+					ON (c.author_id=i.id OR c.committer_id=i.id) AND c.repo_id=:repo_id)
+						, uid_to_del AS (SELECT uid FROM repo_users
+					EXCEPT
+					SELECT DISTINCT uid FROM repo_users
+					INNER JOIN identities i
+					ON i.user_id=uid
+					INNER JOIN commits c
+					ON (c.author_id=i.id OR c.committer_id=i.id) AND c.repo_id!=:repo_id)
+						DELETE FROM users WHERE id IN (SELECT uid FROM uid_to_del)
+					;''',{'repo_id':self.repo_id})
+
+		#deleting repo
+		if self.db.db_type == 'postgres':
+			self.db.cursor.execute('''
+				UPDATE packages SET repo_id=NULL WHERE id=%(repo_id)s
+				;''',{'repo_id':self.repo_id})
+			self.db.cursor.execute('''
+				DELETE FROM repositories WHERE id=%(repo_id)s
+				;''',{'repo_id':self.repo_id})
+		else:
+			self.db.cursor.execute('''
+				UPDATE packages SET repo_id=NULL WHERE id=:repo_id
+				;''',{'repo_id':self.repo_id})
+			self.db.cursor.execute('''
+				DELETE FROM repositories WHERE id=:repo_id
+				;''',{'repo_id':self.repo_id})
+
+		# checking that no other URL links to the same cleaned url
+		if self.db.db_type == 'postgres':
+			self.db.cursor.execute('''
+				SELECT COUNT(*) FROM urls WHERE cleaned_url=%(cleaned_url_id)s AND id NOT IN (%(cleaned_url_id)s,%(url_id)s)
+					;''',{'repo_id':self.repo_id,'url_id':self.url_id,'orig_url':self.orig_url,'cleaned_url':self.cleaned_url,'cleaned_url_id':self.cleaned_url_id})
+		else:
+			self.db.cursor.execute('''
+				SELECT COUNT(*) FROM urls WHERE cleaned_url=:cleaned_url_id AND id NOT IN (:cleaned_url_id,:url_id)
+					;''',{'repo_id':self.repo_id,'url_id':self.url_id,'orig_url':self.orig_url,'cleaned_url':self.cleaned_url,'cleaned_url_id':self.cleaned_url_id})
+
+		if self.db.cursor.fetchone()[0] > 0:
+			raise NotImplementedError('Several URLs point to the same cleaned URL, case not implemented yet. Caution to different parsing behaviors that lead to the same results, but correct in one case and not in another.')
+
+		# cleaning URL, distinguishing between 'autoclean version' or cleaned version separate
+		if self.cleaned_url_id == self.url_id or self.cleaned_url_id is None:
+			if self.db.db_type == 'postgres':
+				self.db.cursor.execute('''
+					INSERT INTO urls(url,source,source_root)
+					SELECT %(cleaned_url)s,u.source,u.source_root FROM urls u WHERE id=%(url_id)s
+					ON CONFLICT DO NOTHING
+					;''',{'repo_id':self.repo_id,'url_id':self.url_id,'orig_url':self.orig_url,'cleaned_url':self.cleaned_url,'cleaned_url_id':self.cleaned_url_id})
+				self.db.cursor.execute('''
+					UPDATE urls SET cleaned_url=(SELECT id FROM urls WHERE url=%(cleaned_url)s) WHERE id IN (%(url_id)s,(SELECT id FROM urls WHERE url=%(cleaned_url)s))
+					;''',{'repo_id':self.repo_id,'url_id':self.url_id,'orig_url':self.orig_url,'cleaned_url':self.cleaned_url,'cleaned_url_id':self.cleaned_url_id})
+			else:
+				self.db.cursor.execute('''
+					INSERT OR IGNORE INTO urls(url,source,source_root)
+					SELECT :cleaned_url,u.source,u.source_root FROM urls u WHERE id=:url_id
+					;''',{'repo_id':self.repo_id,'url_id':self.url_id,'orig_url':self.orig_url,'cleaned_url':self.cleaned_url,'cleaned_url_id':self.cleaned_url_id})
+				self.db.cursor.execute('''
+					UPDATE urls SET cleaned_url=(SELECT id FROM urls WHERE url=:cleaned_url) WHERE id IN (:url_id,(SELECT id FROM urls WHERE url=:cleaned_url))
+					;''',{'repo_id':self.repo_id,'url_id':self.url_id,'orig_url':self.orig_url,'cleaned_url':self.cleaned_url,'cleaned_url_id':self.cleaned_url_id})
+		else:
+			if self.db.db_type == 'postgres':
+				self.db.cursor.execute('''
+					UPDATE urls SET url=%(cleaned_url)s WHERE id=%(cleaned_url_id)s
+					AND NOT EXISTS (SELECT 1 FROM urls WHERE url=%(cleaned_url)s)
+					;''',{'repo_id':self.repo_id,'url_id':self.url_id,'orig_url':self.orig_url,'cleaned_url':self.cleaned_url,'cleaned_url_id':self.cleaned_url_id})
+				self.db.cursor.execute('''
+					UPDATE urls SET cleaned_url=(SELECT id FROM urls WHERE url=%(cleaned_url)s) WHERE id IN (%(url_id)s,(SELECT id FROM urls WHERE url=%(cleaned_url)s))
+					;''',{'repo_id':self.repo_id,'url_id':self.url_id,'orig_url':self.orig_url,'cleaned_url':self.cleaned_url,'cleaned_url_id':self.cleaned_url_id})
+				self.db.cursor.execute('''
+					DELETE FROM urls WHERE url=%(cu_db)s
+					;''',{'repo_id':self.repo_id,'url_id':self.url_id,'orig_url':self.orig_url,'cleaned_url':self.cleaned_url,'cleaned_url_id':self.cleaned_url_id,'cu_db':self.cu_db})
+			else:
+				self.db.cursor.execute('''
+					UPDATE urls SET url=:cleaned_url WHERE id=:cleaned_url_id
+					AND NOT EXISTS (SELECT 1 FROM urls WHERE url=:cleaned_url)
+					;''',{'repo_id':self.repo_id,'url_id':self.url_id,'orig_url':self.orig_url,'cleaned_url':self.cleaned_url,'cleaned_url_id':self.cleaned_url_id})
+				self.db.cursor.execute('''
+					UPDATE urls SET cleaned_url=(SELECT id FROM urls WHERE url=:cleaned_url) WHERE id IN (:url_id,(SELECT id FROM urls WHERE url=:cleaned_url))
+					;''',{'repo_id':self.repo_id,'url_id':self.url_id,'orig_url':self.orig_url,'cleaned_url':self.cleaned_url,'cleaned_url_id':self.cleaned_url_id})
+				self.db.cursor.execute('''
+					DELETE FROM urls WHERE url=:cu_db
+					;''',{'repo_id':self.repo_id,'url_id':self.url_id,'orig_url':self.orig_url,'cleaned_url':self.cleaned_url,'cleaned_url_id':self.cleaned_url_id,'cu_db':self.cu_db})
+
+		self.db.connection.commit()
+
