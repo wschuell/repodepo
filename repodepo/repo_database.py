@@ -440,10 +440,10 @@ class Database(object):
 		'''
 		if self.db_type == 'postgres':
 			self.cursor.execute(''' INSERT INTO sources(name,url_root)
-				 VALUES(%s,%s) ON CONFLICT DO NOTHING;''',(source,source_urlroot))
+				 SELECT %(source)s,%(url_root)s WHERE NOT EXISTS (SELECT 1 FROM sources WHERE name=%(source)s) ON CONFLICT DO NOTHING;''',{'source':source,'url_root':source_urlroot})
 		else:
 			self.cursor.execute(''' INSERT OR IGNORE INTO sources(name,url_root)
-				 VALUES(?,?);''',(source,source_urlroot))
+				 SELECT :source,:url_root WHERE NOT EXISTS (SELECT 1 FROM sources WHERE name=:source);''',{'source':source,'url_root':source_urlroot})
 		self.connection.commit()
 
 	def register_urls(self,source,url_list):

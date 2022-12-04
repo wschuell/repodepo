@@ -48,7 +48,6 @@ class NPMFiller(generic.PackageFiller):
 			buffer_size=2**23,
 			log_step=10**4,
 					**kwargs):
-		generic.PackageFiller.__init__(self,page_size=page_size,**kwargs)
 		self.source = source
 		self.buffer_size = buffer_size
 		self.source_urlroot = source_urlroot
@@ -69,6 +68,7 @@ class NPMFiller(generic.PackageFiller):
 			self.end_date_dl = datetime.datetime.now()
 		else:
 			self.end_date_dl = end_date_dl
+		generic.PackageFiller.__init__(self,page_size=page_size,**kwargs)
 
 	def prepare(self):
 		if self.data_folder is None:
@@ -204,8 +204,8 @@ class NPMFiller(generic.PackageFiller):
 		return ans
 
 	def apply(self):
-		# self.fill_packages(force=self.force)
-		# self.fill_package_versions(force=self.force)
+		self.fill_packages(force=self.force)
+		self.fill_package_versions(force=self.force)
 		self.fill_package_dependencies(force=self.force)
-		# self.fill_package_version_downloads(force=self.force)
+		self.fill_package_version_downloads(force=self.force)
 		self.db.connection.commit()
