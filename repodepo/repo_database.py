@@ -1618,7 +1618,6 @@ class Database(object):
 				;''',(identity1,))
 		user_id = self.cursor.fetchall()[0][0]
 
-		#If same do nothing
 		if user_id != old_user_id2:
 			#Update user_id for identity2 and all that have old_user_id2
 			if self.db_type == 'postgres':
@@ -1639,8 +1638,17 @@ class Database(object):
 				self.cursor.execute(''' DELETE FROM users WHERE id=%s;''',(old_user_id2,))
 			else:
 				self.cursor.execute(''' DELETE FROM users WHERE id=?;''',(old_user_id2,))
-
-
+		else:
+			#If same just update record
+			if record:
+				if self.db_type == 'postgres':
+					self.cursor.execute('''INSERT INTO merged_identities(main_identity_id,secondary_identity_id,main_user_id,secondary_user_id,affected_identities,reason)
+							SELECT %(id1)s,%(id2)s,%(uid1)s,%(uid2)s,%(aff)s,%(reason)s
+							WHERE NOT EXISTS(SELECT 1 FROM merged_identities WHERE main_identity_id=%(id1)s AND secondary_identity_id=%(id2)s);''',{'id1':identity1,'id2':identity2,'uid1':user_id,'uid2':old_user_id2,'aff':0,'reason':reason})
+				else:
+					self.cursor.execute('''INSERT INTO merged_identities(main_identity_id,secondary_identity_id,main_user_id,secondary_user_id,affected_identities,reason)
+							SELECT :id1,:id2,:uid1,:uid2,:aff,:reason
+							WHERE NOT EXISTS(SELECT 1 FROM merged_identities WHERE main_identity_id=:id1 AND secondary_identity_id=:id2);''',{'id1':identity1,'id2':identity2,'uid1':user_id,'uid2':old_user_id2,'aff':0,'reason':reason})
 		if autocommit:
 			self.connection.commit()
 

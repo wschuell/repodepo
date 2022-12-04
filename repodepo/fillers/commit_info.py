@@ -388,7 +388,7 @@ class CommitsFiller(fillers.Filler):
 		if self.db.db_type == 'postgres':
 
 			self.db.cursor.execute('''
-				INSERT INTO identity_types(name) VALUES('email')
+				INSERT INTO identity_types(name) SELECT 'email' WHERE NOT EXISTS (SELECT 1 FROM identity_types WHERE name='email')
 				ON CONFLICT DO NOTHING
 				;''')
 			self.db.connection.commit()
@@ -436,7 +436,7 @@ class CommitsFiller(fillers.Filler):
 
 		else:
 			self.db.cursor.execute('''
-				INSERT OR IGNORE INTO identity_types(name) VALUES('email')
+				INSERT OR IGNORE INTO identity_types(name) SELECT 'email' WHERE NOT EXISTS (SELECT 1 FROM identity_types WHERE name='email')
 				;''')
 			self.db.connection.commit()
 			for c in tr_gen:

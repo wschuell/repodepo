@@ -5393,6 +5393,141 @@ class UserCreatedAtGQLFiller(GHGQLFiller):
 		'''
 		return 1
 
+class UserInfoGQLFiller(GHGQLFiller):
+	'''
+	Querying creation dates through the GraphQL API
+	'''
+	def __init__(self,**kwargs):
+		self.items_name = 'user_info'
+		self.queried_obj = 'user'
+		self.pageinfo_path = None
+		GHGQLFiller.__init__(self,**kwargs)
+
+	def query_string(self,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: python-formatable string representing the graphql query
+		'''
+		return '''query {{
+					user(login:"{user_login}") {{
+						login
+						avatarUrl
+						bio
+						createdAt
+						location
+						twitterUsername
+						status {{message emoji}}
+						name
+					}}
+				}}'''
+
+	def parse_query_result(self,query_result,identity_id,identity_type_id,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: [ {'repo_id':r_id,'repo_owner':r_ow,'repo_name':r_na,'starrer_login':s_lo,'starred_at':st_at} , ...]
+		'''
+		ans = []
+		user_login = query_result['user']['login']
+		d = {'identity_id':identity_id,'user_login':user_login,'identity_type_id':identity_type_id,'identity_type':self.target_identity_type}
+		try:
+			d['created_at'] = query_result['user']['createdAt']
+			d['twitter'] = query_result['user']['twitterUsername']
+			d['user_info'] = {}
+			if query_result['user']['avatarUrl'] is not None:
+				d['user_info']['avatar'] = query_result['user']['avatarUrl']
+			if query_result['user']['name'] is not None:
+				d['user_info']['name'] = query_result['user']['name']
+			if query_result['user']['status'] is not None:
+				d['user_info']['status'] = query_result['user']['status']
+			if query_result['user']['bio'] is not None:
+				d['user_info']['description'] = query_result['user']['bio']
+			if query_result['user']['location'] is not None and query_result['user']['location']!='':
+				d['user_info']['location'] = query_result['user']['location']
+			if len(d['user_info']) == 0:
+				d['user_info'] = None
+		except (KeyError,TypeError) as err:
+			self.logger.info('KeyError when parsing user info for {}: {}'.format(user_login,err))
+		else:
+			ans.append(d)
+		return ans
+
+
+	def insert_items(self,items_list,commit=True,db=None):
+		'''
+		In subclasses this has to be implemented
+		inserts results in the DB
+		'''
+		if db is None:
+			db = self.db
+		if db.db_type == 'postgres':
+			extras.execute_batch(db.cursor,'''
+				UPDATE identities SET created_at=%(created_at)s, attributes=%(user_info)s
+				WHERE id=%(identity_id)s
+				AND identity_type_id=%(identity_type_id)s
+				;''',(s for s in items_list))
+		else:
+			db.cursor.executemany('''
+					UPDATE identities SET created_at=date(:created_at), attributes=:user_info
+				WHERE id=:identity_id
+				AND identity_type_id=:identity_type_id
+						;''',(s for s in items_list))
+
+		db.cursor.execute('''
+			INSERT INTO identity_types(name) SELECT 'twitter_login' WHERE NOT EXISTS (SELECT 1 FROM identity_types WHERE name='twitter_login')
+			;''')
+
+
+		if db.db_type == 'postgres':
+			extras.execute_batch(db.cursor,'''
+				INSERT INTO identities(identity,identity_type_id,user_id)
+				SELECT %(twitter)s,it.id,i.user_id FROM identity_types it
+				INNER JOIN identities i
+				ON it.name='twitter_login'
+				AND i.id=%(identity_id)s
+				ON CONFLICT DO NOTHING
+				;''',(s for s in items_list if s['twitter'] is not None))
+		else:
+			db.cursor.executemany('''
+				INSERT OR IGNORE INTO identities(identity,identity_type_id,user_id)
+				SELECT :twitter,it.id,i.user_id FROM identity_types it
+				INNER JOIN identities i
+				ON it.name='twitter_login'
+				AND i.id=:identity_id
+				;''',(s for s in items_list if s['twitter'] is not None))
+
+
+		for s in items_list:
+			if s['twitter'] is not None:
+				id_gh = s['identity_id']
+				if db.db_type == 'postgres':
+					db.cursor.execute('''
+						SELECT i.id FROM identities i
+						INNER JOIN identity_types it
+						ON it.name='twitter_login'
+						AND it.id=i.identity_type_id
+						AND i.identity=%(twitter)s
+						;''',s)
+				else:
+					db.cursor.execute('''
+						SELECT i.id FROM identities i
+						INNER JOIN identity_types it
+						ON it.name='twitter_login'
+						AND it.id=i.identity_type_id
+						AND i.identity=:twitter
+						;''',s)
+				id_tw = db.cursor.fetchone()[0]
+				db.merge_identities(id_gh,id_tw,autocommit=False,record=True,reason=f'''Twitter login {s['twitter']} corresponding to {s['identity_type']} {s['user_login']}''')
+
+		if commit:
+			db.connection.commit()
+
+	def get_nb_items(self,query_result):
+		'''
+		In subclasses this has to be implemented
+		output: nb_items or None if not relevant
+		'''
+		return 1
+
 
 class UserOrgsGQLFiller(GHGQLFiller):
 	'''

@@ -286,6 +286,65 @@ class RandomCommitLoginsFiller(LoginsFiller):
 		github_gql.RandomCommitLoginsGQLFiller.set_element_list(self,**kwargs)
 
 
+class UserInfoGQLFiller(github_gql.UserInfoGQLFiller):
+	'''
+	'''
+	def __init__(self,**kwargs):
+		new_kwargs = dict(requester_class=RequesterGitlab,env_apikey='GITLAB_API_KEY',source_name='Gitlab',target_identity_type='gitlab_login',api_keys_file='gitlab_api_keys.txt')
+		new_kwargs.update(kwargs)
+		github_gql.UserInfoGQLFiller.__init__(self,**new_kwargs)
+
+	def query_string(self,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: python-formatable string representing the graphql query
+		'''
+		return '''query {{
+					user(username:"{user_login}") {{
+						username
+						avatarUrl
+						#	bio
+						#	createdAt
+						location
+						#	twitter
+						status {{message emoji}}
+						name
+					}}
+				}}'''
+
+	def parse_query_result(self,query_result,identity_id,identity_type_id,**kwargs):
+		'''
+		In subclasses this has to be implemented
+		output: [ {'repo_id':r_id,'repo_owner':r_ow,'repo_name':r_na,'starrer_login':s_lo,'starred_at':st_at} , ...]
+		'''
+		ans = []
+		user_login = query_result['user']['username']
+		d = {'identity_id':identity_id,'user_login':user_login,'identity_type_id':identity_type_id,'identity_type':self.target_identity_type}
+		try:
+			# d['created_at'] = query_result['user']['createdAt']
+			d['created_at'] = None
+			#d['twitter'] = query_result['user']['twitter']
+			d['twitter'] = None
+			d['user_info'] = {}
+			if query_result['user']['avatarUrl'] is not None:
+				d['user_info']['avatar'] = query_result['user']['avatarUrl']
+			if query_result['user']['name'] is not None:
+				d['user_info']['name'] = query_result['user']['name']
+			if query_result['user']['status'] is not None:
+				d['user_info']['status'] = query_result['user']['status']
+			# if query_result['user']['bio'] is not None:
+			# 	d['user_info']['description'] = query_result['user']['bio']
+			if query_result['user']['location'] is not None and query_result['user']['location']!='':
+				d['user_info']['location'] = query_result['user']['location']
+			if len(d['user_info']) == 0:
+				d['user_info'] = None
+		except (KeyError,TypeError) as err:
+			self.logger.info('KeyError when parsing user info for {}: {}'.format(user_login,err))
+		else:
+			ans.append(d)
+		return ans
+
+
 class CompleteIssuesGQLFiller(github_gql.CompleteIssuesGQLFiller):
 	'''
 	Querying issues through the GraphQL API
