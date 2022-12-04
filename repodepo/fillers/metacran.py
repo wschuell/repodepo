@@ -32,7 +32,6 @@ class MetaCRANFiller(generic.PackageFiller):
 	def __init__(self,
 			source='cran',
 			source_urlroot=None,
-			package_limit=None,
 			force=False,
 			start_date_dl=None,
 			end_date_dl=None,
@@ -47,7 +46,6 @@ class MetaCRANFiller(generic.PackageFiller):
 		generic.PackageFiller.__init__(self,page_size=page_size,**kwargs)
 		self.source = source
 		self.source_urlroot = source_urlroot
-		self.package_limit = package_limit
 		self.metacran_url = metacran_url
 		self.metacran_filename = metacran_filename
 		self.dlstats_url = dlstats_url

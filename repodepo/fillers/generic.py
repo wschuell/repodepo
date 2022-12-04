@@ -136,9 +136,9 @@ got: {}'''.format(headers))
 		self.set_source_id()
 		if not force:
 			if self.db.db_type == 'postgres':
-				self.db.cursor.execute('SELECT 1 FROM full_updates WHERE update_type=%s;',(f'packages_{source}',))
+				self.db.cursor.execute('SELECT 1 FROM full_updates WHERE update_type=%s LIMIT 1;',(f'packages_{source}',))
 			else:
-				self.db.cursor.execute('SELECT 1 FROM full_updates WHERE update_type=?;',(f'packages_{source}',))
+				self.db.cursor.execute('SELECT 1 FROM full_updates WHERE update_type=? LIMIT 1;',(f'packages_{source}',))
 			status = self.db.cursor.fetchone()
 			if status is not None:
 				self.logger.info('Skipping packages from {}'.format(source))
@@ -163,7 +163,7 @@ got: {}'''.format(headers))
 			if offset_package is not None:
 				offset_list = itertools.dropwhile(lambda x: x[0]!=offset_package[0] ,package_list)
 			else:
-				offset_list = package_list
+				offset_list = iter(package_list)
 			while True:
 				p_list = list(itertools.islice(offset_list,self.process_batch_size))
 				if len(p_list):
@@ -195,9 +195,9 @@ got: {}'''.format(headers))
 		self.set_source_id()
 		if not force:
 			if self.db.db_type == 'postgres':
-				self.db.cursor.execute('SELECT 1 FROM full_updates WHERE update_type=%s;',(f'package_versions_{source}',))
+				self.db.cursor.execute('SELECT 1 FROM full_updates WHERE update_type=%s LIMIT 1;',(f'package_versions_{source}',))
 			else:
-				self.db.cursor.execute('SELECT 1 FROM full_updates WHERE update_type=?;',(f'package_versions_{source}',))
+				self.db.cursor.execute('SELECT 1 FROM full_updates WHERE update_type=? LIMIT 1;',(f'package_versions_{source}',))
 			status = self.db.cursor.fetchone()
 			if status is not None:
 				self.logger.info('Skipping package versions from {}'.format(source))
@@ -218,7 +218,7 @@ got: {}'''.format(headers))
 			if offset_package is not None:
 				offset_list = itertools.dropwhile(lambda x: x[0]!=offset_package[0] and x[1]!=offset_package[1],package_version_list)
 			else:
-				offset_list = package_version_list
+				offset_list = iter(package_version_list)
 			while True:
 				p_list = list(itertools.islice(offset_list,self.process_batch_size))
 				if len(p_list):
@@ -280,9 +280,9 @@ got: {}'''.format(headers))
 		self.set_source_id()
 		if not force:
 			if self.db.db_type == 'postgres':
-				self.db.cursor.execute('SELECT 1 FROM full_updates WHERE update_type=%s;',(f'package_version_downloads_{source}',))
+				self.db.cursor.execute('SELECT 1 FROM full_updates WHERE update_type=%s LIMIT 1;',(f'package_version_downloads_{source}',))
 			else:
-				self.db.cursor.execute('SELECT 1 FROM full_updates WHERE update_type=?;',(f'package_verion_downloads_{source}',))
+				self.db.cursor.execute('SELECT 1 FROM full_updates WHERE update_type=? LIMIT 1;',(f'package_verion_downloads_{source}',))
 			status = self.db.cursor.fetchone()
 			if status is not None:
 				self.logger.info('Skipping package version downloads from {}'.format(source))
@@ -307,7 +307,7 @@ got: {}'''.format(headers))
 			if offset_package is not None:
 				offset_list = itertools.dropwhile(lambda x: x[0]!=offset_package[0] and x[1]!=offset_package[1] and x[2]!=offset_package[2],package_version_download_list)
 			else:
-				offset_list = package_version_download_list
+				offset_list = iter(package_version_download_list)
 			while True:
 				p_list = list(itertools.islice(offset_list,self.process_batch_size))
 				if len(p_list):
@@ -403,9 +403,9 @@ got: {}'''.format(headers))
 		self.set_source_id()
 		if not force:
 			if self.db.db_type == 'postgres':
-				self.db.cursor.execute('SELECT 1 FROM full_updates WHERE update_type=%s;',(f'package_dependencies_{source}',))
+				self.db.cursor.execute('SELECT 1 FROM full_updates WHERE update_type=%s LIMIT 1;',(f'package_dependencies_{source}',))
 			else:
-				self.db.cursor.execute('SELECT 1 FROM full_updates WHERE update_type=?;',(f'package_dependencies_{source}',))
+				self.db.cursor.execute('SELECT 1 FROM full_updates WHERE update_type=? LIMIT 1;',(f'package_dependencies_{source}',))
 			status = self.db.cursor.fetchone()
 			if status is not None:
 				self.logger.info('Skipping package dependencies from {}'.format(source))
@@ -419,7 +419,7 @@ got: {}'''.format(headers))
 				else:
 
 					self.db.cursor.execute('''SELECT p.insource_id,pv.version_str FROM package_dependencies pd
-						INNER JOIN package_versions pv ON pv.id=pd.dependeing_version
+						INNER JOIN package_versions pv ON pv.id=pd.depending_version
 						INNER JOIN packages p ON p.source_id=? AND p.id=pv.package_id
 						ORDER BY pd.rowid DESC LIMIT 1;''',(self.source_id,))
 				sample_package = self.db.cursor.fetchone()
@@ -431,7 +431,7 @@ got: {}'''.format(headers))
 			if offset_package is not None:
 				offset_list = itertools.dropwhile(lambda x: x[0]!=offset_package[0] and x[1]!=offset_package[1] ,package_deps_list)
 			else:
-				offset_list = package_deps_list
+				offset_list = iter(package_deps_list)
 			while True:
 				p_list = list(itertools.islice(offset_list,self.process_batch_size))
 				if len(p_list):
@@ -945,7 +945,7 @@ class ClonesFiller(fillers.Filler):
 
 		'''
 		os.environ['GIT_SSL_NO_VERIFY'] = '1'
-		os.environ['GIT_SSH_COMMAND'] == 'ssh -o StrictHostKeyChecking=no'
+		os.environ['GIT_SSH_COMMAND'] = 'ssh -o StrictHostKeyChecking=no'
 		if db is None:
 			db = self.db
 		repo_folder = os.path.join(self.clone_folder,source,owner,name)

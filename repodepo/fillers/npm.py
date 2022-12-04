@@ -35,7 +35,6 @@ class NPMFiller(generic.PackageFiller):
 	def __init__(self,
 			source='npm',
 			source_urlroot=None,
-			package_limit=None,
 			force=False,
 			start_date_dl=None,
 			end_date_dl=None,
@@ -44,14 +43,12 @@ class NPMFiller(generic.PackageFiller):
 			registry_filename='registry.json.gz',
 			dlstats_url='https://api.npmjs.org/downloads',
 			dlstats_folder='registry_dlstats',
-			page_size=10**4,
 			buffer_size=2**23,
 			log_step=10**4,
 					**kwargs):
 		self.source = source
 		self.buffer_size = buffer_size
 		self.source_urlroot = source_urlroot
-		self.package_limit = package_limit
 		self.registry_url = registry_url
 		self.registry_filename = registry_filename
 		self.dlstats_url = dlstats_url
@@ -68,7 +65,7 @@ class NPMFiller(generic.PackageFiller):
 			self.end_date_dl = datetime.datetime.now()
 		else:
 			self.end_date_dl = end_date_dl
-		generic.PackageFiller.__init__(self,page_size=page_size,**kwargs)
+		generic.PackageFiller.__init__(self,**kwargs)
 
 	def prepare(self):
 		if self.data_folder is None:
