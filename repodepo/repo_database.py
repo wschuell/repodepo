@@ -205,6 +205,9 @@ class Database(object):
 				'db_schema':db_schema,
 		}
 
+		with open(os.path.join(os.path.dirname(__file__),f'initscript_{self.db_type}.sql'),'r') as f:
+			self.DB_INIT = f.read()
+
 	def __getstate__(self):
 		d = self.__dict__.copy()
 		del d['connection']
@@ -257,8 +260,8 @@ class Database(object):
 		'''
 		logger.info('Creating database ({}) table and indexes'.format(self.db_type))
 		if self.db_type == 'sqlite':
-			with open(os.path.join(os.path.dirname(__file__),'initscript_sqlite.sql'),'r') as f:
-				self.DB_INIT = f.read()
+			# with open(os.path.join(os.path.dirname(__file__),'initscript_sqlite.sql'),'r') as f:
+			# 	self.DB_INIT = f.read()
 			for q in self.DB_INIT.split(';')[:-1]:
 				self.cursor.execute(q)
 
@@ -267,8 +270,8 @@ class Database(object):
 
 		elif self.db_type == 'postgres':
 
-			with open(os.path.join(os.path.dirname(__file__),'initscript_postgres.sql'),'r') as f:
-				self.DB_INIT = f.read()
+			# with open(os.path.join(os.path.dirname(__file__),'initscript_postgres.sql'),'r') as f:
+			# 	self.DB_INIT = f.read()
 			self.cursor.execute(self.DB_INIT)
 			self.cursor.execute('''INSERT INTO _dbinfo(info_type,info_content) VALUES('uuid',%s) ON CONFLICT (info_type) DO NOTHING ;''',(str(uuid.uuid1()),))
 			# self.cursor.execute('''INSERT INTO _dbinfo(info_type,info_content) VALUES('DB_INIT',%s) ON CONFLICT (info_type) DO UPDATE SET info_content=EXCLUDED.info_content;''',(self.DB_INIT,))
@@ -446,12 +449,15 @@ class Database(object):
 				 SELECT :source,:url_root WHERE NOT EXISTS (SELECT 1 FROM sources WHERE name=:source);''',{'source':source,'url_root':source_urlroot})
 		self.connection.commit()
 
-	def register_urls(self,source,url_list):
+	def register_urls(self,url_list,source='manual input'):
 		'''
 		Registering URLs and potentially their cleaned version in the database
 		url_list should be [(url,cleaned_url,source_root_id)] # source is the source of the url (eg crates), source_root is the repository system source (eg github)
 		but if [url], completed by [(url,None,None)]
 		'''
+
+		self.register_source(source=source)
+
 		if len(url_list)>0 and isinstance(url_list[0],str):
 			url_list = [(url,None,None) for url in url_list]
 
