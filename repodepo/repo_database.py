@@ -455,8 +455,8 @@ class Database(object):
 		url_list should be [(url,cleaned_url,source_root_id)] # source is the source of the url (eg crates), source_root is the repository system source (eg github)
 		but if [url], completed by [(url,None,None)]
 		'''
-
-		self.register_source(source=source)
+		if source is not None:
+			self.register_source(source=source)
 
 		if len(url_list)>0 and isinstance(url_list[0],str):
 			url_list = [(url,None,None) for url in url_list]
@@ -489,7 +489,7 @@ class Database(object):
 
 		self.connection.commit()
 
-	def register_url(self,source,repo_url,repo_id=None,clean_info=None): # DEPRECATED
+	def register_url(self,repo_url,source='manual input',repo_id=None,clean_info=None): # DEPRECATED
 		'''
 		Putting URLs in the database
 		'''

@@ -620,3 +620,71 @@ class OrgMembers(DevToRepo):
 			ans_mat = sparse.csr_matrix((parsed_results['data'],(parsed_results['coords_r'],parsed_results['coords_u'])),shape=(o_max,u_max))
 			return ans_mat
 
+
+class DevToRepoIssues(DevToRepo):
+	def query(self):
+		if self.db.db_type == 'postgres':
+			return '''
+				SELECT main_q.user_id,
+					user_q.user_rank,
+					main_q.repo_id,
+					repo_q.repo_rank,
+					(main_q.cnt::DOUBLE PRECISION /COALESCE(SUM(main_q.cnt::DOUBLE PRECISION) OVER (PARTITION BY main_q.repo_id),1.::DOUBLE PRECISION))::DOUBLE PRECISION AS norm_value,
+					main_q.cnt::DOUBLE PRECISION AS abs_value
+				FROM
+					(SELECT i.user_id,c.repo_id,count(*) AS cnt FROM issues c
+					INNER JOIN identities i
+					ON c.author_id=i.id AND c.created_at>%(start_time)s AND c.created_at<=%(end_time)s AND NOT i.is_bot
+					GROUP BY i.user_id ,c.repo_id
+					--ORDER BY count(*) DESC
+					) AS main_q
+				INNER JOIN (
+					SELECT id AS user_id,
+					RANK() OVER
+						(ORDER BY id) AS user_rank,
+					is_bot
+					FROM users uu
+					) AS user_q
+				ON main_q.user_id=user_q.user_id
+				INNER JOIN (
+					SELECT id AS repo_id,
+					RANK() OVER
+						(ORDER BY id) AS repo_rank
+					FROM repositories rr
+					) AS repo_q
+				ON main_q.repo_id=repo_q.repo_id
+			;'''
+		else:
+			return '''
+				SELECT main_q.user_id,
+					user_q.user_rank,
+					main_q.repo_id,
+					repo_q.repo_rank,
+					(main_q.cnt*1./COALESCE(SUM(main_q.cnt) OVER (PARTITION BY main_q.repo_id),1.)) AS norm_value,
+					main_q.cnt*1. AS abs_value
+				FROM
+					(SELECT i.user_id,c.repo_id,count(*) AS cnt FROM issues c
+					INNER JOIN identities i
+					ON c.author_id=i.id AND c.created_at>:start_time AND c.created_at<=:end_time AND NOT i.is_bot
+					GROUP BY i.user_id ,c.repo_id
+					--ORDER BY count(*) DESC
+					) AS main_q
+				INNER JOIN (
+					SELECT id AS user_id,
+					RANK() OVER
+						(ORDER BY id) AS user_rank,
+					is_bot
+					FROM users uu
+					) AS user_q
+				ON main_q.user_id=user_q.user_id
+				INNER JOIN (
+					SELECT id AS repo_id,
+					RANK() OVER
+						(ORDER BY id) AS repo_rank
+					FROM repositories rr
+					) AS repo_q
+				ON main_q.repo_id=repo_q.repo_id
+			;'''
+
+
+

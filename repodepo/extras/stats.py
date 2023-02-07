@@ -104,7 +104,9 @@ class PackageStats(DBStats):
 		results['nb_withurl'] = self.get_nb_withurl()
 		results['nb_withrepo'] = self.get_nb_withrepo(cloned=False)
 		results['nb_withrepo_cloned'] = self.get_nb_withrepo(cloned=True)
-
+		results['earliest_package'] = self.get_earliest_package()
+		results['latest_package'] = self.get_latest_package()
+		
 		return results
 
 
@@ -191,6 +193,16 @@ class PackageStats(DBStats):
 				ans['distinct'][s] = cnt
 
 		return ans
+
+	def get_earliest_package(self):
+
+		self.db.cursor.execute('SELECT MIN(created_at) FROM packages;')
+		return self.db.cursor.fetchone()[0]
+
+	def get_latest_package(self):
+
+		self.db.cursor.execute('SELECT MAX(created_at) FROM packages;')
+		return self.db.cursor.fetchone()[0]
 
 
 class URLStats(DBStats):

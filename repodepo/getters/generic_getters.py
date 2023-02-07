@@ -133,8 +133,20 @@ class RepoCreatedAt(Getter):
 	'''
 	IDs and creation dates (or proxy) of repositories
 	'''
+	def __init__(self,force_repo_date=False,**kwargs):
+		self.force_repo_date = force_repo_date
+		Getter.__init__(self,**kwargs)
+
 	def query(self):
-		return '''
+		if self.force_repo_date:
+			return '''
+				SELECT r.id,r.created_at
+				FROM repositories r
+				GROUP BY r.id
+				ORDER BY r.id;
+				'''
+		else:
+			return '''
 				SELECT r.id,MIN(p.created_at)
 				FROM repositories r
 				LEFT OUTER JOIN packages p

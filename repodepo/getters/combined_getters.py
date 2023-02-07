@@ -20,12 +20,13 @@ class CombinedGetter(Getter):
 	'''
 	abstract class
 	'''
-	def __init__(self,db,start_date=default_start_date,end_date=default_end_date,time_window='month',with_reponame=True,with_userlogin=True,**kwargs):
+	def __init__(self,db,start_date=default_start_date,end_date=default_end_date,force_repo_date=False,time_window='month',with_reponame=True,with_userlogin=True,**kwargs):
 		self.time_window = time_window
 		self.start_date = start_date
 		self.end_date = end_date
 		self.with_reponame = with_reponame
 		self.with_userlogin = with_userlogin
+		self.force_repo_date = force_repo_date
 		Getter.__init__(self,db=db,**kwargs)
 
 class UsageGetter(CombinedGetter):
@@ -65,7 +66,7 @@ class UsageGetter(CombinedGetter):
 		df = pd.merge(df, pullrequests,  how='outer', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
 		df = pd.merge(df, pullrequests_merged,  how='outer', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
 
-		creation_dates = generic_getters.RepoCreatedAt(db=self.db).get_result()
+		creation_dates = generic_getters.RepoCreatedAt(db=self.db,force_repo_date=self.force_repo_date).get_result()
 		creation_dates.set_index('project_id',inplace=True)
 		creation_dates.fillna(self.start_date,inplace=True)
 		df = df.join(creation_dates,how='left',on='project_id')

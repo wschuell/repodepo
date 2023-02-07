@@ -161,7 +161,10 @@ got: {}'''.format(headers))
 			# 	self.logger.info('Filled packages')
 			# else:
 			if offset_package is not None:
-				offset_list = itertools.dropwhile(lambda x: x[0]!=offset_package[0] ,package_list)
+				self.logger.info(f'Searching for offset package {offset_package}')
+				offset_func = lambda x: x[0]!=offset_package[0]
+				offset_print_func = lambda x: [offset_func(x),(self.logger.info(f'Resuming at {x}') if not offset_func(x) else None)][0] 
+				offset_list = itertools.dropwhile(offset_print_func ,package_list)
 			else:
 				offset_list = iter(package_list)
 			while True:
@@ -216,7 +219,10 @@ got: {}'''.format(headers))
 			self.db.register_source(source)
 
 			if offset_package is not None:
-				offset_list = itertools.dropwhile(lambda x: x[0]!=offset_package[0] and x[1]!=offset_package[1],package_version_list)
+				self.logger.info(f'Searching for offset package {offset_package}')
+				offset_func = lambda x: x[0]!=offset_package[0]
+				offset_print_func = lambda x: [offset_func(x),(self.logger.info(f'Resuming {x}') if not offset_func(x) else None)][0] 
+				offset_list = itertools.dropwhile(offset_print_func ,package_version_list)
 			else:
 				offset_list = iter(package_version_list)
 			while True:
@@ -305,7 +311,11 @@ got: {}'''.format(headers))
 			self.db.register_source(source)
 
 			if offset_package is not None:
-				offset_list = itertools.dropwhile(lambda x: x[0]!=offset_package[0] and x[1]!=offset_package[1] and x[2]!=offset_package[2],package_version_download_list)
+				self.logger.info(f'Searching for offset package {offset_package}')
+				offset_func = lambda x: x[0]!=offset_package[0]
+				offset_print_func = lambda x: [offset_func(x),(self.logger.info(f'Resuming at {x}') if not offset_func(x) else None)][0] 
+				offset_list = itertools.dropwhile(offset_print_func ,package_version_download_list)
+				# offset_list = itertools.dropwhile(lambda x: x[0]!=offset_package[0] and x[1]!=offset_package[1] and x[2]!=offset_package[2],package_version_download_list)
 			else:
 				offset_list = iter(package_version_download_list)
 			while True:
@@ -429,7 +439,10 @@ got: {}'''.format(headers))
 			self.db.register_source(source)
 
 			if offset_package is not None:
-				offset_list = itertools.dropwhile(lambda x: x[0]!=offset_package[0] and x[1]!=offset_package[1] ,package_deps_list)
+				self.logger.info(f'Searching for offset package {offset_package}')
+				offset_func = lambda x: x[0]!=offset_package[0]
+				offset_print_func = lambda x: [offset_func(x),(self.logger.info(f'Resuming at {x}') if not offset_func(x) else None)][0] 
+				offset_list = itertools.dropwhile(offset_print_func ,package_deps_list)
 			else:
 				offset_list = iter(package_deps_list)
 			while True:
