@@ -159,6 +159,8 @@ class ContributionsGetter(CombinedGetter):
 	removing bots. Not counting
 	'''
 
+	contrib_getter_class = edge_getters.DevToRepo
+
 	def get_result(self):
 		# date_range = pd.date_range(self.start_date,self.end_date,freq=pandas_freq[self.time_window]).to_pydatetime()
 		date_range = pd.date_range(self.start_date,self.end_date,freq=pandas_freq[self.time_window]).to_pydatetime()
@@ -171,7 +173,7 @@ class ContributionsGetter(CombinedGetter):
 			res = ({'repo_id':d['repo_id'],
 						'user_id':d['user_id'],
 						'nb_commits':d['abs_value']
-						} for d in edge_getters.DevToRepo(db=self.db,start_time=t-relativedelta(**{self.time_window:1}),end_time=t).get_result(raw_result=True))
+						} for d in self.contrib_getter_class(db=self.db,start_time=t-relativedelta(**{self.time_window:1}),end_time=t).get_result(raw_result=True))
 			deps_df = pd.DataFrame(res,columns=['timestamp','repo_id','user_id','nb_commits'])
 			deps_df = deps_df.convert_dtypes()
 			deps_df['timestamp'] = t
@@ -199,3 +201,7 @@ class ContributionsGetter(CombinedGetter):
 		ans_df = ans_df[order]
 
 		return ans_df
+
+
+class IssueContributionsGetter(ContributionsGetter):
+	contrib_getter_class = edge_getters.DevToRepoIssues

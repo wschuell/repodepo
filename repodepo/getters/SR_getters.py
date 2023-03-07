@@ -9,7 +9,7 @@ import scipy
 import numpy as np
 import pandas as pd
 
-scenario_space_list = ('repos','devs','orgs')
+scenario_space_list = ('repos','devs','orgs','dev_contrib_vec')
 
 class SRGetter(Getter):
 	'''
@@ -23,24 +23,30 @@ class SRGetter(Getter):
 				dl_correction=False,
 				iter_max=10**4,
 				stationary_devcontrib=True,
+				dev_contrib=None,
 				dev_cd_power=0.5,
 				deps_cd_power=0.5,
 				#dev_mode=True, # replaced by scenario_space
 				scenario_space='devs',
 				**kwargs):
 		Getter.__init__(self,**kwargs)
-		self.stationary_devcontrib = stationary_devcontrib
+		# self.dev_mode = dev_mode
+		if scenario_space in scenario_space_list:
+			self.scenario_space = scenario_space
+		else:
+			raise ValueError(f'Scenario space {scenario_space} not in available list: {scenario_space_list}')
+		if dev_contrib is not None:
+			self.dev_contrib = dev_contrib
+			self.scenario_space = 'dev_contrib_vec'
+			self.stationary_devcontrib = True
+		else:
+			self.stationary_devcontrib = stationary_devcontrib
 		self.start_time = start_time
 		self.end_time = end_time
 		self.dev_cd_power = dev_cd_power
 		self.deps_cd_power = deps_cd_power
 		self.iter_max = iter_max
 		self.norm_dl = norm_dl
-		# self.dev_mode = dev_mode
-		if scenario_space in scenario_space_list:
-			self.scenario_space = scenario_space
-		else:
-			raise ValueError(f'Scenario space {scenario_space} not in available list: {scenario_space_list}')
 		self.dl_weights = dl_weights
 		if dl_correction:
 			self.dl_getter = rank_getters.RepoDLCorrectionRank(db=self.db,start_time=self.start_time,end_time=self.end_time)#,dl_correction=dl_correction)
@@ -210,7 +216,7 @@ class SRGetter(Getter):
 			return repo_status
 
 	def get_dev_contrib(self,dev_status,force=False):
-		if not force and self.stationary_devcontrib:
+		if (self.scenario_space == 'dev_contrib_vec' or not force) and self.stationary_devcontrib:
 			if not hasattr(self,'dev_contrib'):
 				self.dev_contrib = self.devs_mat * dev_status
 			return self.dev_contrib
@@ -225,6 +231,9 @@ class SRGetter(Getter):
 		if self.scenario_space == 'devs':
 			self.init_repo_status = sparse.csc_matrix((r_max,u_max))
 			self.init_dev_status = sparse.eye(u_max)
+		elif self.scenario_space == 'dev_contrib_vec':
+			self.init_repo_status = sparse.csc_matrix(self.dev_contrib.shape)
+			self.init_dev_status = sparse.eye(u_max)
 		elif self.scenario_space == 'orgs':
 			o_max = self.orgs_mat.shape[0]
 			self.init_repo_status = sparse.csc_matrix((r_max,o_max))
@@ -233,7 +242,6 @@ class SRGetter(Getter):
 			self.init_repo_status = sparse.eye(r_max)
 			self.init_dev_status = sparse.csc_matrix((u_max,r_max))
 		
-		r_max = self.devs_mat.shape[0]
 
 	def parallelize_repo_space(self,factor):
 		'''
