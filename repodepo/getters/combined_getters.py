@@ -3,6 +3,7 @@ import pandas as pd
 import datetime
 from dateutil.relativedelta import relativedelta
 import numpy as np
+import copy
 
 from . import pandas_freq
 from .generic_getters import Getter
@@ -38,33 +39,49 @@ class UsageGetter(CombinedGetter):
 	also could distinguish commit authors and total contributors (authors + committers + mergers + comment writers etc)
 	'''
 
+	subgetters = [
+		{'class':project_getters.Stars,'rename':{},'extra_kwargs':{}},
+		{'class':project_getters.Forks,'rename':{},'extra_kwargs':{}},
+		{'class':project_getters.Commits,'rename':{},'extra_kwargs':{'cumulative':False}},
+		{'class':project_getters.Commits,'rename':{'commits':'commits_cumul'},'extra_kwargs':{'cumulative':True}},
+		{'class':project_getters.Developers,'rename':{},'extra_kwargs':{}},
+		{'class':project_getters.ActiveDevelopers,'rename':{},'extra_kwargs':{'cumulative':False}},
+		{'class':project_getters.Downloads,'rename':{},'extra_kwargs':{}},
+		{'class':project_getters.Issues,'rename':{},'extra_kwargs':{}},
+		{'class':project_getters.ClosedIssues,'rename':{},'extra_kwargs':{}},
+		{'class':project_getters.PullRequests,'rename':{},'extra_kwargs':{}},
+		{'class':project_getters.MergedPullRequests,'rename':{},'extra_kwargs':{}},
+
+			]
+
+	order = [
+					# 'repo_id',
+					# 'timestamp',
+					'repo_name',
+					'stars',
+					'forks',
+					'commits',
+					'commits_cumul',
+					'developers',
+					'active_developers',
+					'downloads',
+					'issues',
+					'issues_closed',
+					'pullrequests',
+					'pullrequests_merged',]
+
 	def get_result(self):
-		stars = project_getters.Stars(db=self.db).get_result(time_window=self.time_window,start_date=self.start_date,end_date=self.end_date,aggregated=False)
-		forks = project_getters.Forks(db=self.db).get_result(time_window=self.time_window,start_date=self.start_date,end_date=self.end_date,aggregated=False)
-		commits = project_getters.Commits(db=self.db).get_result(time_window=self.time_window,start_date=self.start_date,end_date=self.end_date,aggregated=False,cumulative=False)
-		commits_cumul = project_getters.Commits(db=self.db).get_result(time_window=self.time_window,start_date=self.start_date,end_date=self.end_date,aggregated=False,cumulative=True)
-		commits_cumul.rename(columns={'commits':'commits_cumul'},inplace=True)
-		devs = project_getters.Developers(db=self.db).get_result(time_window=self.time_window,start_date=self.start_date,end_date=self.end_date,aggregated=False)
-		active_devs = project_getters.ActiveDevelopers(db=self.db).get_result(time_window=self.time_window,start_date=self.start_date,end_date=self.end_date,aggregated=False,cumulative=False)
-		downloads = project_getters.Downloads(db=self.db).get_result(time_window=self.time_window,start_date=self.start_date,end_date=self.end_date,aggregated=False)
-		issues = project_getters.Issues(db=self.db).get_result(time_window=self.time_window,start_date=self.start_date,end_date=self.end_date,aggregated=False)
-		issues_closed = project_getters.ClosedIssues(db=self.db).get_result(time_window=self.time_window,start_date=self.start_date,end_date=self.end_date,aggregated=False)
-		pullrequests = project_getters.PullRequests(db=self.db).get_result(time_window=self.time_window,start_date=self.start_date,end_date=self.end_date,aggregated=False)
-		pullrequests_merged = project_getters.MergedPullRequests(db=self.db).get_result(time_window=self.time_window,start_date=self.start_date,end_date=self.end_date,aggregated=False)
 
 		df = pd.DataFrame(columns=['project_id','timestamp'])
 		# df = commits_cumul
-		df = pd.merge(df, stars,  how='outer', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
-		df = pd.merge(df, forks,  how='outer', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
-		df = pd.merge(df, commits,  how='outer', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
-		df = pd.merge(df, commits_cumul,  how='outer', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
-		df = pd.merge(df, devs,  how='outer', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
-		df = pd.merge(df, active_devs,  how='outer', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
-		df = pd.merge(df, downloads,  how='outer', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
-		df = pd.merge(df, issues,  how='outer', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
-		df = pd.merge(df, issues_closed,  how='outer', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
-		df = pd.merge(df, pullrequests,  how='outer', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
-		df = pd.merge(df, pullrequests_merged,  how='outer', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
+		for sg in self.subgetters:
+			sg_df = sg['class'](db=self.db).get_result(time_window=self.time_window,
+														start_date=self.start_date,
+														end_date=self.end_date,
+														aggregated=False,
+														**sg['extra_kwargs'])
+			sg_df.rename(columns=sg['rename'],inplace=True)
+			df = pd.merge(df, sg_df,  how='outer', left_on=['project_id','timestamp'], right_on = ['project_id','timestamp'])
 
 		creation_dates = generic_getters.RepoCreatedAt(db=self.db,force_repo_date=self.force_repo_date).get_result()
 		creation_dates.set_index('project_id',inplace=True)
@@ -84,29 +101,42 @@ class UsageGetter(CombinedGetter):
 
 
 		# reordering columns
-		order = [
-				# 'repo_id',
-				# 'timestamp',
-				'repo_name',
-				'stars',
-				'forks',
-				'commits',
-				'commits_cumul',
-				'developers',
-				'active_developers',
-				'downloads',
-				'issues',
-				'issues_closed',
-				'pullrequests',
-				'pullrequests_merged',
-					]
+		order = copy.deepcopy(self.order)
+
 		if not self.with_reponame:
 			order.remove('repo_name')
 
 		df = df[order]
 
-		df.fillna(0,inplace=True)
+		cols = df.select_dtypes(exclude=['string'])
+		df.fillna({c:0 for c in cols},inplace=True)
 
+		return df
+
+
+class IdleReposGetter(UsageGetter):
+	subgetters = [
+		{'class':project_getters.LastCommit,'rename':{},'extra_kwargs':{'cumulative':False}},
+		{'class':project_getters.Downloads,'rename':{'downloads':'downloads_noncumul'},'extra_kwargs':{'cumulative':False}},
+		{'class':project_getters.Issues,'rename':{'issues':'issues_noncumul'},'extra_kwargs':{'cumulative':False}},
+		{'class':project_getters.ClosedIssues,'rename':{'issues_closed':'issues_closed_noncumul'},'extra_kwargs':{'cumulative':False}},
+		{'class':project_getters.PullRequests,'rename':{'pullrequests':'pullrequests_noncumul'},'extra_kwargs':{'cumulative':False}},
+		{'class':project_getters.MergedPullRequests,'rename':{'pullrequests_merged':'pullrequests_merged_noncumul'},'extra_kwargs':{'cumulative':False}},
+		] + UsageGetter.subgetters
+
+	order = UsageGetter.order + [
+						'downloads_noncumul',
+						'issues_noncumul',
+						'issues_closed_noncumul',
+						'pullrequests_noncumul',
+						'pullrequests_merged_noncumul',
+						'created_at',
+						'last_commit']
+
+	def get_result(self):
+		df = UsageGetter.get_result(self)
+		# remove not idle
+		df.drop(df[df.commits > 0].index, inplace=True)
 		return df
 
 class DepsGetter(CombinedGetter):

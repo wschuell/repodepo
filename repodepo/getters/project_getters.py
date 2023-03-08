@@ -18,6 +18,9 @@ class ProjectGetter(Getter):
 	NB: This class does not use yet the generic structure of the Getter class (methods query(), parse_results(), query_attributes() )
 	'''
 	measure_name = 'measure'
+	cumulable = True
+	fill_value = 0
+	is_date = False
 
 	def __init__(self,include_bots=False,**kwargs):
 		self.include_bots = include_bots
@@ -108,6 +111,8 @@ class ProjectGetter(Getter):
 
 			df = pd.DataFrame(data=query_result,columns=(self.measure_name,'timestamp')).convert_dtypes()
 			df['timestamp'] = pd.to_datetime(df['timestamp'])
+			if self.is_date:
+				df[self.measure_name] = pd.to_datetime(df[self.measure_name])
 			df.set_index('timestamp',inplace=True)
 			df.sort_values(by='timestamp',inplace=True)
 
@@ -147,10 +152,10 @@ class ProjectGetter(Getter):
 			end_date_idx = end_date
 			idx = pd.date_range(round_datetime_upper(start_date_idx,time_window=time_window,strict=False),round_datetime_upper(end_date_idx,time_window=time_window),freq=pandas_freq[time_window])
 
-			df = df.reindex(idx,fill_value=0)
-			if cumulative:
+			df = df.reindex(idx,fill_value=self.fill_value)
+			if cumulative and self.cumulable:
 				orig_df = df
-				df = df.fillna(0)
+				df = df.fillna(self.fill_value)
 				df[self.measure_name] = df.cumsum()
 				# df.loc[(orig_df[self.measure_name].isna()),self.measure_name] = np.nan
 				# df[self.measure_name][orig_df[self.measure_name].isna()] = np.nan
@@ -158,9 +163,9 @@ class ProjectGetter(Getter):
 					# correction_df = self.get_result(db=db,project_id=project_id,time_window=time_window,start_date=zero_date,end_date=start_date,cumulative=True,aggregated=False)
 					correction_df = self.get_result(db=db,project_id=project_id,time_window='year',start_date=zero_date,end_date=start_date,cumulative=True,aggregated=False)
 					if correction_df.empty:
-						correction_value = 0
+						correction_value = self.fill_value
 					else:
-						correction_value = correction_df[self.measure_name].fillna(0).max()
+						correction_value = correction_df[self.measure_name].fillna(self.fill_value).max()
 					df[self.measure_name] = df[self.measure_name]+correction_value
 
 			# complete_idx = pd.date_range(start_date,end_date,freq=pandas_freq[time_window],name='timestamp')
@@ -198,6 +203,9 @@ class ProjectGetter(Getter):
 
 				df = pd.DataFrame(data=query_result,columns=(self.measure_name,'timestamp')).convert_dtypes()
 				df.set_index('timestamp',inplace=True)
+
+				if self.is_date:
+					df[self.measure_name] = pd.to_datetime(df[self.measure_name])
 				df.sort_values(by='timestamp',inplace=True)
 
 				# if not df.empty:
@@ -209,15 +217,15 @@ class ProjectGetter(Getter):
 				end_date_idx = end_date
 				# idx = pd.date_range(start_date_idx,end_date_idx,freq=pandas_freq[time_window])
 				idx = pd.date_range(round_datetime_upper(start_date_idx,time_window=time_window,strict=False),round_datetime_upper(end_date_idx,time_window=time_window),freq=pandas_freq[time_window])
-				df = df.reindex(idx,fill_value=0)
-				if cumulative:
+				df = df.reindex(idx,fill_value=self.fill_value)
+				if cumulative and self.cumulable:
 					df[self.measure_name] = df.cumsum()
 				if convert_date(start_date) > convert_date(zero_date):
 						correction_df = self.get_result(db=db,project_id=None,time_window=time_window,start_date=zero_date,end_date=start_date,cumulative=True,aggregated=True)
 						if correction_df.empty:
-							correction_value = 0
+							correction_value = self.fill_value
 						else:
-							correction_value = correction_df[self.measure_name].fillna(0).max()
+							correction_value = correction_df[self.measure_name].fillna(self.fill_value).max()
 						df[self.measure_name] = df[self.measure_name]+correction_value
 				complete_idx = pd.date_range(round_datetime_upper(start_date,time_window=time_window,strict=True),round_datetime_upper(end_date,time_window=time_window),freq=pandas_freq[time_window],name='timestamp')
 				df = df.reindex(complete_idx)
@@ -248,18 +256,21 @@ class ProjectGetter(Getter):
 					query_result = self.query_notimeinfo(db=db,start_date=start_date,end_date=end_date)
 
 					df = pd.DataFrame(data=query_result,columns=(self.measure_name,'project_id'))
+
+					if self.is_date:
+						df[self.measure_name] = pd.to_datetime(df[self.measure_name])
 					project_ids = generic_getters.RepoIDs(db=db).get_result()['project_id'].tolist()
 					complete_idx = pd.Index(project_ids,name='project_id')
 
 					df = df.convert_dtypes()
 					df.set_index(['project_id'],inplace=True)
 					df.sort_values(by='project_id',inplace=True)
-					df = df.reindex(complete_idx,fill_value=0)
+					df = df.reindex(complete_idx,fill_value=self.fill_value)
 					df = df.convert_dtypes()
-					if cumulative:
+					if cumulative and self.cumulable:
 						if convert_date(start_date) > convert_date(zero_date):
 							correction_df = self.get_result(db=db,project_id=None,time_window=None,start_date=zero_date,end_date=start_date,cumulative=True,aggregated=False)
-							correction_df.fillna(0,inplace=True)
+							correction_df.fillna(self.fill_value,inplace=True)
 							correction_df = correction_df.convert_dtypes()
 							df[self.measure_name] = df[self.measure_name]+correction_df[self.measure_name]
 					return df
@@ -291,6 +302,8 @@ class ProjectGetter(Getter):
 
 					df = pd.DataFrame(data=query_result,columns=(self.measure_name,'timestamp','project_id')).convert_dtypes()
 
+					if self.is_date:
+						df[self.measure_name] = pd.to_datetime(df[self.measure_name])
 					# project_ids = df['project_id'].sort_values().unique()#.tolist()
 					project_ids = generic_getters.RepoIDs(db=db).get_result()['project_id'].tolist()
 
@@ -303,9 +316,11 @@ class ProjectGetter(Getter):
 
 					#if not df.empty:
 					idx = pd.MultiIndex.from_product([project_ids,pd.date_range(round_datetime_upper(start_date_idx,time_window=time_window,strict=False),round_datetime_upper(end_date_idx,time_window=time_window),freq=pandas_freq[time_window])],names=['project_id','timestamp'])
-					df = df.reindex(idx,fill_value=0).fillna(0)
+					
+					if self.cumulable:
+						df = df.reindex(idx,fill_value=self.fill_value).fillna(self.fill_value)
 
-					if cumulative:
+					if cumulative and self.cumulable:
 						df = df.groupby(level=0).cumsum().reset_index()
 						# df = df[df[self.measure_name]!=0]
 						df.set_index(['project_id','timestamp'],inplace=True)
@@ -714,6 +729,128 @@ class Commits(ProjectGetter):
 				AND (:include_bots OR NOT i.is_bot)
 				AND repo_id IS NOT NULL
 				GROUP BY time_stamp,repo_id
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+		query_result = list(db.cursor.fetchall())
+		#correcting for datetime issue in sqlite:
+		if db.db_type == 'sqlite':
+			query_result = [(val,datetime.datetime.strptime(val_d,'%Y-%m-%d'),val_u) for val,val_d,val_u in query_result]
+		return query_result
+
+#########################
+# last_commit
+#########################
+class LastCommit(ProjectGetter):
+	'''
+	Last commit per project per time
+
+	When time_window needs to be used, the default value None is replaced by 'month'
+	'''
+	measure_name = 'last_commit'
+	cumulable = False
+	fill_value = np.nan
+	is_date = True
+
+	def query_proj(self,db,time_window,start_date,end_date,project_id):
+		if db.db_type == 'postgres':
+			db.cursor.execute('''
+				SELECT MAX(c.created_at),date_trunc(%(time_window)s, c.created_at) + CONCAT('1 ',%(time_window)s)::interval AS time_stamp FROM commits c
+				INNER JOIN identities i
+				ON c.created_at < %(end_date)s
+				AND c.repo_id=%(project_id)s
+				AND i.id=c.author_id
+				AND (%(include_bots)s OR NOT i.is_bot)
+				GROUP BY time_stamp
+				HAVING date_trunc(%(time_window)s, c.created_at) + CONCAT('1 ',%(time_window)s)::interval>=%(start_date)s
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+		else:
+			db.cursor.execute('''
+				SELECT MAX(c.created_at),date(datetime(c.created_at,:startoftw),:offsettw) AS time_stamp FROM commits c
+				INNER JOIN identities i
+				ON c.created_at < datetime(:end_date)
+				AND i.id=c.author_id
+				AND (:include_bots OR NOT i.is_bot)
+				AND c.repo_id=:project_id
+				GROUP BY time_stamp
+				HAVING date(datetime(c.created_at,:startoftw),:offsettw)>=:start_date
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+		query_result = list(db.cursor.fetchall())
+		#correcting for datetime issue in sqlite:
+		if db.db_type == 'sqlite':
+			query_result = [(val,datetime.datetime.strptime(val_d,'%Y-%m-%d')) for val,val_d in query_result]
+		return query_result
+
+	def query_aggregated(self,db,time_window,start_date,end_date,project_id=None):
+		if db.db_type == 'postgres':
+			db.cursor.execute('''
+				SELECT MAX(c.created_at),date_trunc(%(time_window)s, c.created_at) + CONCAT('1 ',%(time_window)s)::interval AS time_stamp FROM commits c
+				INNER JOIN identities i
+				ON c.created_at < %(end_date)s
+				AND i.id=c.author_id
+				AND (%(include_bots)s OR NOT i.is_bot)
+				GROUP BY time_stamp
+				HAVING date_trunc(%(time_window)s, c.created_at) + CONCAT('1 ',%(time_window)s)::interval>=%(start_date)s
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+		else:
+			db.cursor.execute('''
+				SELECT MAX(c.created_at),date(datetime(c.created_at,:startoftw),:offsettw) AS time_stamp FROM commits c
+				INNER JOIN identities i
+				ON c.created_at < datetime(:end_date)
+				AND i.id=c.author_id
+				AND (:include_bots OR NOT i.is_bot)
+				GROUP BY time_stamp
+				HAVING date(datetime(c.created_at,:startoftw),:offsettw)>=:start_date
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+		query_result = list(db.cursor.fetchall())
+		#correcting for datetime issue in sqlite:
+		if db.db_type == 'sqlite':
+			query_result = [(val,datetime.datetime.strptime(val_d,'%Y-%m-%d')) for val,val_d in query_result]
+		return query_result
+
+	def query_notimeinfo(self,db,start_date,end_date,project_id=None,time_window=None):
+		if db.db_type == 'postgres':
+			db.cursor.execute('''
+				SELECT MAX(c.created_at),repo_id FROM commits c
+				INNER JOIN identities i
+				ON c.created_at < %(end_date)s
+				AND i.id=c.author_id
+				AND (%(include_bots)s OR NOT i.is_bot)
+				AND repo_id IS NOT NULL
+				GROUP BY repo_id
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+		else:
+			db.cursor.execute('''
+				SELECT MAX(c.created_at),repo_id FROM commits c
+				INNER JOIN identities i
+				ON c.created_at < datetime(:end_date)
+				AND i.id=c.author_id
+				AND (:include_bots OR NOT i.is_bot)
+				AND repo_id IS NOT NULL
+				GROUP BY repo_id
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+		return list(db.cursor.fetchall())
+
+	def query_all(self,db,start_date,end_date,time_window,project_id=None):
+		if db.db_type == 'postgres':
+			db.cursor.execute('''
+				SELECT MAX(c.created_at),date_trunc(%(time_window)s, c.created_at) + CONCAT('1 ',%(time_window)s)::interval AS time_stamp,repo_id FROM commits c
+				INNER JOIN identities i
+				ON c.created_at < %(end_date)s
+				AND i.id=c.author_id
+				AND (%(include_bots)s OR NOT i.is_bot)
+				AND repo_id IS NOT NULL
+				GROUP BY time_stamp,repo_id
+				HAVING date_trunc(%(time_window)s, c.created_at) + CONCAT('1 ',%(time_window)s)::interval>=%(start_date)s
+				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+		else:
+			db.cursor.execute('''
+				SELECT MAX(c.created_at),date(datetime(c.created_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM commits c
+				INNER JOIN identities i
+				ON c.created_at < datetime(:end_date)
+				AND i.id=c.author_id
+				AND (:include_bots OR NOT i.is_bot)
+				AND repo_id IS NOT NULL
+				GROUP BY time_stamp,repo_id
+				HAVING date(datetime(c.created_at,:startoftw),:offsettw)>=:start_date
 				''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 		query_result = list(db.cursor.fetchall())
 		#correcting for datetime issue in sqlite:

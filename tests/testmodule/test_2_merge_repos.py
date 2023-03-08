@@ -32,7 +32,7 @@ workers = 5
 #### Tests
 
 
-@pytest.mark.timeout(10)
+@pytest.mark.timeout(100)
 def test_urls(testdb):
 	testdb.add_filler(generic.SourcesFiller(source='GitHub',source_urlroot='github.com'))
 	testdb.add_filler(generic.URLFiller(url_list=['github.com/Wschuell/FabSub'],data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))

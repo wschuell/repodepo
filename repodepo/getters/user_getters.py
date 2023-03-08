@@ -18,6 +18,9 @@ class UserGetter(Getter):
 	NB: This class does not use yet the generic structure of the Getter class (methods query(), parse_results(), query_attributes() )
 	'''
 	measure_name = 'measure'
+	cumulable = True
+	fill_value = 0
+	is_date = False
 
 	def __init__(self,include_bots=False,**kwargs):
 		self.include_bots = include_bots
@@ -60,6 +63,10 @@ class UserGetter(Getter):
 
 
 			df = pd.DataFrame(data=query_result,columns=(self.measure_name,'timestamp')).convert_dtypes()
+			
+			if self.is_date:
+				df[self.measure_name] = pd.to_datetime(df[self.measure_name])
+
 			df.set_index('timestamp',inplace=True)
 			df.sort_values(by='timestamp',inplace=True)
 
@@ -97,10 +104,10 @@ class UserGetter(Getter):
 			end_date_idx = end_date
 			idx = pd.date_range(round_datetime_upper(start_date_idx,time_window=time_window,strict=False),round_datetime_upper(end_date_idx,time_window=time_window),freq=pandas_freq[time_window])
 
-			df = df.reindex(idx,fill_value=0)
-			if cumulative:
+			df = df.reindex(idx,fill_value=self.fill_value)
+			if cumulative and self.cumulable:
 				orig_df = df
-				df = df.fillna(0)
+				df = df.fillna(self.fill_value)
 				df[self.measure_name] = df.cumsum()
 				# df.loc[(orig_df[self.measure_name].isna()),self.measure_name] = np.nan
 				# df[self.measure_name][orig_df[self.measure_name].isna()] = np.nan
@@ -108,9 +115,9 @@ class UserGetter(Getter):
 					# correction_df = self.get_result(db=db,user_id=user_id,time_window=time_window,start_date=zero_date,end_date=start_date,cumulative=True,aggregated=False)
 					correction_df = self.get_result(db=db,user_id=user_id,time_window='year',start_date=zero_date,end_date=start_date,cumulative=True,aggregated=False)
 					if correction_df.empty:
-						correction_value = 0
+						correction_value = self.fill_value
 					else:
-						correction_value = correction_df[self.measure_name].fillna(0).max()
+						correction_value = correction_df[self.measure_name].fillna(self.fill_value).max()
 					df[self.measure_name] = df[self.measure_name]+correction_value
 
 			# complete_idx = pd.date_range(start_date,end_date,freq=pandas_freq[time_window],name='timestamp')
@@ -146,6 +153,9 @@ class UserGetter(Getter):
 
 
 				df = pd.DataFrame(data=query_result,columns=(self.measure_name,'timestamp')).convert_dtypes()
+				
+				if self.is_date:
+					df[self.measure_name] = pd.to_datetime(df[self.measure_name])
 				df.set_index('timestamp',inplace=True)
 				df.sort_values(by='timestamp',inplace=True)
 
@@ -160,16 +170,16 @@ class UserGetter(Getter):
 				# idx = pd.date_range(start_date_idx,end_date_idx,freq=pandas_freq[time_window])
 				idx = pd.date_range(round_datetime_upper(start_date_idx,time_window=time_window,strict=False),round_datetime_upper(end_date_idx,time_window=time_window),freq=pandas_freq[time_window])
 				# print(df)
-				df = df.reindex(idx,fill_value=0)
+				df = df.reindex(idx,fill_value=self.fill_value)
 				# print(df)
-				if cumulative:
+				if cumulative and self.cumulable:
 					df[self.measure_name] = df.cumsum()
 					if convert_date(start_date) > convert_date(zero_date):
 						correction_df = self.get_result(db=db,user_id=None,time_window=time_window,start_date=zero_date,end_date=start_date,cumulative=True,aggregated=True)
 						if correction_df.empty:
-							correction_value = 0
+							correction_value = self.fill_value
 						else:
-							correction_value = correction_df[self.measure_name].fillna(0).max()
+							correction_value = correction_df[self.measure_name].fillna(self.fill_value).max()
 						df[self.measure_name] = df[self.measure_name]+correction_value
 				complete_idx = pd.date_range(round_datetime_upper(start_date,time_window=time_window,strict=True),round_datetime_upper(end_date,time_window=time_window),freq=pandas_freq[time_window],name='timestamp')
 				df = df.reindex(complete_idx)
@@ -198,17 +208,20 @@ class UserGetter(Getter):
 					query_result = self.query_notimeinfo(db=db,start_date=start_date,end_date=end_date)
 
 					df = pd.DataFrame(data=query_result,columns=(self.measure_name,'user_id'))
+					
+					if self.is_date:
+						df[self.measure_name] = pd.to_datetime(df[self.measure_name])
 					user_ids = generic_getters.UserIDs(db=db).get_result()['user_id'].tolist()
 					complete_idx = pd.Index(user_ids,name='user_id')
 
 					df = df.convert_dtypes()
 					df.set_index(['user_id'],inplace=True)
 					df.sort_values(by='user_id',inplace=True)
-					df = df.reindex(complete_idx,fill_value=0)
+					df = df.reindex(complete_idx,fill_value=self.fill_value)
 					df = df.convert_dtypes()
 					if convert_date(start_date) > convert_date(zero_date):
 						correction_df = self.get_result(db=db,user_id=None,time_window=None,start_date=zero_date,end_date=start_date,cumulative=True,aggregated=False)
-						correction_df.fillna(0,inplace=True)
+						correction_df.fillna(self.fill_value,inplace=True)
 						correction_df = correction_df.convert_dtypes()
 						df[self.measure_name] = df[self.measure_name]+correction_df[self.measure_name]
 					return df
@@ -239,6 +252,8 @@ class UserGetter(Getter):
 
 					df = pd.DataFrame(data=query_result,columns=(self.measure_name,'timestamp','user_id')).convert_dtypes()
 
+					if self.is_date:
+						df[self.measure_name] = pd.to_datetime(df[self.measure_name])
 					# user_ids = df['user_id'].sort_values().unique()#.tolist()
 					user_ids = generic_getters.UserIDs(db=db).get_result()['user_id'].tolist()
 
@@ -250,16 +265,16 @@ class UserGetter(Getter):
 
 					#if not df.empty:
 					idx = pd.MultiIndex.from_product([user_ids,pd.date_range(round_datetime_upper(start_date_idx,time_window=time_window,strict=False),round_datetime_upper(end_date_idx,time_window=time_window),freq=pandas_freq[time_window])],names=['user_id','timestamp'])
-					df = df.reindex(idx,fill_value=0).fillna(0)
+					df = df.reindex(idx,fill_value=self.fill_value).fillna(self.fill_value)
 
-					if cumulative:
+					if cumulative and self.cumulable:
 						df = df.groupby(level=0).cumsum().reset_index()
 						# df = df[df[self.measure_name]!=0]
 						df.set_index(['user_id','timestamp'],inplace=True)
 
 					# complete_idx = pd.MultiIndex.from_product([user_ids,pd.date_range(round_datetime_upper(start_date,time_window=time_window,strict=True),round_datetime_upper(end_date,time_window=time_window),freq=pandas_freq[time_window])],names=['user_id','timestamp'])
 
-					# df = df.reindex(complete_idx,fill_value=0)
+					# df = df.reindex(complete_idx,fill_value=self.fill_value)
 
 					return df
 
