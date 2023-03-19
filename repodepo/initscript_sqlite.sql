@@ -107,9 +107,11 @@
 				);
 
 				CREATE INDEX IF NOT EXISTS commits_ac_idx ON commits(author_id,created_at);
+				CREATE INDEX IF NOT EXISTS commits_cc_idx ON commits(committer_id,created_at);
 				CREATE INDEX IF NOT EXISTS commits_rc_idx ON commits(repo_id,created_at);
-				CREATE INDEX IF NOT EXISTS commits_rc_idx ON commits(original_created_at) WHERE original_created_at IS NOT NULL;
+				CREATE INDEX IF NOT EXISTS commits_rco_idx ON commits(original_created_at) WHERE original_created_at IS NOT NULL;
 				CREATE INDEX IF NOT EXISTS commits_cra_idx ON commits(created_at,repo_id,author_id);
+				CREATE INDEX IF NOT EXISTS commits_crc_idx ON commits(created_at,repo_id,committer_id);
 
 				CREATE TABLE IF NOT EXISTS commit_repos(
 				commit_id INTEGER REFERENCES commits(id) ON DELETE CASCADE,

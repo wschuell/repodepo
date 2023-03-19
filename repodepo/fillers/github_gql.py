@@ -1976,7 +1976,6 @@ class LoginsGQLFiller(GHGQLFiller):
 		#if retry: all without success false or null on last update
 		#else: all with success is null on lats update
 
-
 		if self.force:
 			if self.db.db_type == 'postgres':
 				self.db.cursor.execute('''
@@ -2043,9 +2042,45 @@ class LoginsGQLFiller(GHGQLFiller):
 					ORDER BY i.id
 					;''',{'target_identity_type':self.target_identity_type,'source_name':self.source_name,'actor':self.actor})
 			else:
+				
 				self.db.cursor.execute('''
-					SELECT s.id,r.owner,r.name,c.repo_id,c.sha,i.identity,i.id,i.identity_type_id
-					FROM (
+					DROP TABLE IF EXISTS temp_missing_logins
+					;''',{'target_identity_type':self.target_identity_type,'source_name':self.source_name,'actor':self.actor})
+				
+				self.db.cursor.execute('''
+					DROP TABLE IF EXISTS temp_missing_logins_commits
+					;''',{'target_identity_type':self.target_identity_type,'source_name':self.source_name,'actor':self.actor})
+				
+				self.db.cursor.execute('''
+					DROP TABLE IF EXISTS temp_missing_logins_commit_times
+					;''',{'target_identity_type':self.target_identity_type,'source_name':self.source_name,'actor':self.actor})
+				
+				self.db.cursor.execute('''
+					CREATE TEMPORARY TABLE temp_missing_logins(
+						id INTEGER PRIMARY KEY,
+						identity TEXT,
+						identity_type_id INTEGER
+						)	
+					;''',{'target_identity_type':self.target_identity_type,'source_name':self.source_name,'actor':self.actor})
+				
+				self.db.cursor.execute('''
+					CREATE TEMPORARY TABLE temp_missing_logins_commit_times(
+						id INTEGER PRIMARY KEY,
+						created_at TIMESTAMP
+						)	
+					;''',{'target_identity_type':self.target_identity_type,'source_name':self.source_name,'actor':self.actor})
+				
+				self.db.cursor.execute('''
+					CREATE TEMPORARY TABLE temp_missing_logins_commits(
+						id INTEGER,
+						sha TEXT,
+						repo_id INTEGER,
+						actor_id INTEGER PRIMARY KEY
+						)	
+					;''',{'target_identity_type':self.target_identity_type,'source_name':self.source_name,'actor':self.actor})
+				
+				self.db.cursor.execute('''
+					INSERT INTO temp_missing_logins(id,identity,identity_type_id)
 						SELECT ii.id,ii.identity,ii.identity_type_id FROM
 					 		(SELECT iii.id,iii.identity,iii.identity_type_id FROM identities iii
 							WHERE (SELECT iiii.id FROM identities iiii
@@ -2055,11 +2090,35 @@ class LoginsGQLFiller(GHGQLFiller):
 							ON tu.identity_id=ii.id AND tu.table_name='login'
 							GROUP BY ii.id,ii.identity,ii.identity_type_id,tu.identity_id
 							HAVING tu.identity_id IS NULL
-						) AS i
-					JOIN commits c
-						ON
-						c.id IN (SELECT cc.id FROM commits cc
-							WHERE (CASE :actor WHEN 'committer' THEN cc.committer_id ELSE cc.author_id END) = i.id ORDER BY cc.created_at DESC LIMIT 1)
+					;''',{'target_identity_type':self.target_identity_type,'source_name':self.source_name,'actor':self.actor})
+				
+
+
+				self.db.cursor.execute('''
+					INSERT INTO temp_missing_logins_commit_times(id,created_at)
+						SELECT i.id,max(cc.created_at)
+								FROM temp_missing_logins i
+								INNER JOIN commits cc
+									WHERE (CASE :actor WHEN 'committer' THEN cc.committer_id ELSE cc.author_id END) = i.id
+								GROUP BY i.id
+					;''',{'target_identity_type':self.target_identity_type,'source_name':self.source_name,'actor':self.actor})
+
+
+				self.db.cursor.execute('''
+					INSERT OR IGNORE INTO temp_missing_logins_commits(id,sha,repo_id,actor_id)
+							SELECT cc.id,cc.sha,cc.repo_id,ctime.id
+								FROM temp_missing_logins_commit_times ctime
+								INNER JOIN commits cc
+									ON (CASE :actor WHEN 'committer' THEN cc.committer_id ELSE cc.author_id END) = ctime.id
+									AND cc.created_at=ctime.created_at
+					;''',{'target_identity_type':self.target_identity_type,'source_name':self.source_name,'actor':self.actor})
+
+
+				self.db.cursor.execute('''
+					SELECT s.id,r.owner,r.name,c.repo_id,c.sha,i.identity,i.id,i.identity_type_id
+					FROM temp_missing_logins i
+					INNER JOIN temp_missing_logins_commits c
+						ON c.actor_id=i.id
 					INNER JOIN repositories r
 					ON r.id=c.repo_id
 					INNER JOIN sources s
@@ -2068,7 +2127,6 @@ class LoginsGQLFiller(GHGQLFiller):
 					;''',{'target_identity_type':self.target_identity_type,'source_name':self.source_name,'actor':self.actor})
 
 		self.elt_list = list(self.db.cursor.fetchall())
-		self.logger.info(self.force)
 
 class RandomCommitLoginsGQLFiller(LoginsGQLFiller):
 
