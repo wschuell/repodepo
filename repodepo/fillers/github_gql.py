@@ -5453,12 +5453,14 @@ class UserCreatedAtGQLFiller(GHGQLFiller):
 
 class UserInfoGQLFiller(GHGQLFiller):
 	'''
-	Querying creation dates through the GraphQL API
+	Querying user info through the GraphQL API, as json. Includes creation date treated as a separate attr.
+	To add an attribute, use the dict additional_data: {<key_in_db_json>:<attr_in_graphql>, ...}
 	'''
-	def __init__(self,**kwargs):
-		self.items_name = 'user_info'
+	def __init__(self,additional_data={},**kwargs):
 		self.queried_obj = 'user'
 		self.pageinfo_path = None
+		self.additional_data = copy.deepcopy(additional_data)
+		self.items_name = '_'.join(['user_info']+list(self.additional_data.keys()))
 		GHGQLFiller.__init__(self,**kwargs)
 
 	def query_string(self,**kwargs):
@@ -5476,6 +5478,7 @@ class UserInfoGQLFiller(GHGQLFiller):
 						twitterUsername
 						status {{message emoji}}
 						name
+						{additional_data_query}
 					}}
 				}}'''
 
@@ -5501,6 +5504,10 @@ class UserInfoGQLFiller(GHGQLFiller):
 				d['user_info']['description'] = query_result['user']['bio']
 			if query_result['user']['location'] is not None and query_result['user']['location']!='':
 				d['user_info']['location'] = query_result['user']['location']
+			for ad_name,ad_path in self.additional_data.items():
+				if query_result['user'][ad_path] is not None and query_result['user'][ad_path]!='':
+					d['user_info'][ad_name] = query_result['user'][ad_path]
+
 			if len(d['user_info']) == 0:
 				d['user_info'] = None
 		except (KeyError,TypeError) as err:
@@ -5509,6 +5516,14 @@ class UserInfoGQLFiller(GHGQLFiller):
 			ans.append(d)
 		return ans
 
+
+	def additional_query_attributes(self):
+		'''
+		Possibility to add specific parameters for the query formatting
+		'''
+		ans = GHGQLFiller.additional_query_attributes(self)
+		ans.update(additional_data_query='\n'.join(list(self.additional_data.values())))
+		return ans
 
 	def insert_items(self,items_list,commit=True,db=None):
 		'''
@@ -5530,10 +5545,15 @@ class UserInfoGQLFiller(GHGQLFiller):
 				AND identity_type_id=:identity_type_id
 						;''',(s for s in items_list))
 
-		db.cursor.execute('''
-			INSERT INTO identity_types(name) SELECT 'twitter_login' WHERE NOT EXISTS (SELECT 1 FROM identity_types WHERE name='twitter_login')
-			;''')
-
+		if db.db_type == 'postgres':
+			db.cursor.execute('''
+				INSERT INTO identity_types(name) SELECT 'twitter_login' WHERE NOT EXISTS (SELECT 1 FROM identity_types WHERE name='twitter_login')
+				ON CONFLICT DO NOTHING
+				;''')
+		else:
+			db.cursor.execute('''
+				INSERT OR IGNORE INTO identity_types(name) SELECT 'twitter_login' WHERE NOT EXISTS (SELECT 1 FROM identity_types WHERE name='twitter_login')
+				;''')
 
 		if db.db_type == 'postgres':
 			extras.execute_batch(db.cursor,'''

@@ -1360,7 +1360,7 @@ class GithubNoreplyEmailMerger(IdentitiesFiller):
 				AND i2.id IS NULL
 				;''')
 
-		self.to_merge_list = [(i,email,self.parse_email(email))for i,email in self.db.cursor.fetchall()]
+		self.to_merge_list = [(i,email,self.parse_email(email))for i,email in list(self.db.cursor.fetchall())]
 
 	def parse_email(self,email):
 		assert email.endswith('@users.noreply.github.com'),email

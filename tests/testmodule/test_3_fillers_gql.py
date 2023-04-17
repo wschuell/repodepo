@@ -35,9 +35,8 @@ workers = 5
 @pytest.mark.timeout(300)
 def test_github_gql(testdb):
 	testdb.add_filler(generic.SourcesFiller(source=['GitHub',],source_urlroot=['github.com',]))
-	testdb.add_filler(generic.PackageFiller(package_list_file='packages.csv',data_folder=os.path.join(os.path.dirname(__file__),'dummy_data')))
+	testdb.add_filler(generic.PackageFiller(package_list_file='packages.csv',data_folder=os.path.join(os.path.dirname(os.path.abspath(__file__)),'dummy_data')))
 	testdb.add_filler(generic.RepositoriesFiller())
-
 	testdb.add_filler(github_gql.ForksGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(generic.ClonesFiller(data_folder='dummy_clones')) # Clones after forks to have up-to-date repo URLS (detect redirects)
 	testdb.add_filler(commit_info.CommitsFiller(data_folder='dummy_clones',force=True,allbranches=True)) # Commits after forks because fork info needed for repo commit ownership
@@ -59,6 +58,7 @@ def test_github_gql(testdb):
 	testdb.add_filler(github_gql.RepoCreatedAtGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.UserCreatedAtGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(github_gql.UserInfoGQLFiller(fail_on_wait=True,workers=workers))
+	testdb.add_filler(github_gql.UserInfoGQLFiller(fail_on_wait=True,workers=workers,additional_data={'hireable':'isHireable','email':'email','gh_id':'id'}))
 	testdb.add_filler(github_gql.UserOrgsGQLFiller(fail_on_wait=True,workers=workers))
 	testdb.add_filler(generic.RepoCommitOwnershipFiller()) # Clones after forks to have up-to-date repo URLS (detect redirects)
 
