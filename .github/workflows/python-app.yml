@@ -56,7 +56,7 @@ jobs:
         pip install flake8 pytest
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
         sudo apt-get install -y libsqlite3-dev
-        pip install codecov pytest-cov
+        pip install pytest-cov
         pip install psycopg2
         python setup.py develop
     - name: Lint with flake8
@@ -71,6 +71,9 @@ jobs:
         REPOTOOLS_GITHUB_API_KEY: ${{ secrets.REPOTOOLS_GITHUB_API_KEY }}
       run: |
         pytest --cov=./
-    - name: Upload codecov info
-      run: |
-        codecov
+    - uses: codecov/codecov-action@v3
+      with:
+        # token: ${{ secrets.CODECOV_TOKEN }}
+        flags: unittests # optional
+        fail_ci_if_error: true # optional (default = false)
+        verbose: true
