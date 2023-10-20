@@ -11,5 +11,11 @@ def test_import():
     dir_name = os.path.dirname(os.path.dirname(os.path.dirname(path)))
     with open(os.path.join(dir_name, "setup.py"), "r") as f:
         file_content = f.read()
-    libname = file_content.split("setup(")[1].split("name='")[1].split("'")[0]
+    libname = (
+        file_content.split("setup(")[1]
+        .strip(" \t\n")
+        .split("name=")[1]
+        .split(",")[0]
+        .strip("""'" """)
+    )
     importlib.import_module(libname)
