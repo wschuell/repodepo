@@ -40,6 +40,7 @@ class CratesFiller(generic.PackageFiller):
 							#('arraygen','arraygen-docfix'),
 							#('expr-parent','expr-child'),],
 			page_size=10**4,
+			process_batch_size=10**4,
 					**kwargs):
 		self.source = source
 		self.source_urlroot = source_urlroot
@@ -69,6 +70,8 @@ class CratesFiller(generic.PackageFiller):
 			self.deps_to_delete = []
 		else:
 			self.deps_to_delete = deps_to_delete
+
+		self.process_batch_size = process_batch_size
 
 		fillers.Filler.__init__(self,**kwargs)
 
