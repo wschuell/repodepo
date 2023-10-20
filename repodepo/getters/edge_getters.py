@@ -7,15 +7,22 @@ import pandas as pd
 import copy
 import json
 
-class DevToRepo(Getter):
-	def __init__(self,db,start_time=datetime.datetime(2010,1,1),end_time=datetime.datetime.now(),**kwargs):
-		self.start_time = start_time
-		self.end_time = end_time
-		Getter.__init__(self,db=db,**kwargs)
 
-	def query(self):
-		if self.db.db_type == 'postgres':
-			return '''
+class DevToRepo(Getter):
+    def __init__(
+        self,
+        db,
+        start_time=datetime.datetime(2010, 1, 1),
+        end_time=datetime.datetime.now(),
+        **kwargs
+    ):
+        self.start_time = start_time
+        self.end_time = end_time
+        Getter.__init__(self, db=db, **kwargs)
+
+    def query(self):
+        if self.db.db_type == "postgres":
+            return """
 				SELECT main_q.user_id,
 					user_q.user_rank,
 					main_q.repo_id,
@@ -44,9 +51,9 @@ class DevToRepo(Getter):
 					FROM repositories rr
 					) AS repo_q
 				ON main_q.repo_id=repo_q.repo_id
-			;'''
-		else:
-			return '''
+			;"""
+        else:
+            return """
 				SELECT main_q.user_id,
 					user_q.user_rank,
 					main_q.repo_id,
@@ -75,67 +82,84 @@ class DevToRepo(Getter):
 					FROM repositories rr
 					) AS repo_q
 				ON main_q.repo_id=repo_q.repo_id
-			;'''
+			;"""
 
+    def query_attributes(self):
+        return {
+            "start_time": self.start_time,
+            "end_time": self.end_time,
+        }
 
-	def query_attributes(self):
-		return {
-		'start_time':self.start_time,
-		'end_time':self.end_time,
-		}
+    def parse_results(self, query_result, abs_value=False):
+        data = []
+        coords_u = []
+        coords_r = []
+        for user_id, user_rank, repo_id, repo_rank, cnt, cnt_abs in query_result:
+            if abs_value:
+                data.append(cnt_abs)
+            else:
+                data.append(cnt)
+            coords_u.append(user_rank - 1)
+            coords_r.append(repo_rank - 1)
+        return {"data": data, "coords_r": coords_r, "coords_u": coords_u}
 
-	def parse_results(self,query_result,abs_value=False):
-		data = []
-		coords_u = []
-		coords_r = []
-		for (user_id,user_rank,repo_id,repo_rank,cnt,cnt_abs) in query_result:
-			if abs_value:
-				data.append(cnt_abs)
-			else:
-				data.append(cnt)
-			coords_u.append(user_rank-1)
-			coords_r.append(repo_rank-1)
-		return {'data':data,'coords_r':coords_r,'coords_u':coords_u}
+    def get_umax(self, db=None):
+        if db is None:
+            db = self.db
+        db.cursor.execute("SELECT COUNT(*) FROM users u;")
+        return db.cursor.fetchone()[0]
 
-	def get_umax(self,db=None):
-		if db is None:
-			db = self.db
-		db.cursor.execute('SELECT COUNT(*) FROM users u;')
-		return db.cursor.fetchone()[0]
+    def get_rmax(self, db=None):
+        if db is None:
+            db = self.db
+        db.cursor.execute("SELECT COUNT(*) FROM repositories r;")
+        return db.cursor.fetchone()[0]
 
-	def get_rmax(self,db=None):
-		if db is None:
-			db = self.db
-		db.cursor.execute('SELECT COUNT(*) FROM repositories r;')
-		return db.cursor.fetchone()[0]
-
-	def get(self,db,abs_value=False,raw_result=False,**kwargs):
-		u_max = self.get_umax(db=db)
-		r_max = self.get_rmax(db=db)
-		db.cursor.execute(self.query(),self.query_attributes())
-		# query_result = list(db.cursor.fetchall())
-		# self.parse_results(query_result=query_result)
-		if raw_result:
-			return ({'user_id':uid,'user_rank':urk,'repo_id':rid,'repo_rank':rrk,'norm_value':normval,'abs_value':absval} for (uid,urk,rid,rrk,normval,absval) in db.cursor.fetchall())
-		else:
-			parsed_results = self.parse_results(query_result=db.cursor.fetchall(),abs_value=abs_value)
-			ans_mat = sparse.csr_matrix((parsed_results['data'],(parsed_results['coords_r'],parsed_results['coords_u'])),shape=(r_max,u_max))
-			return ans_mat
+    def get(self, db, abs_value=False, raw_result=False, **kwargs):
+        u_max = self.get_umax(db=db)
+        r_max = self.get_rmax(db=db)
+        db.cursor.execute(self.query(), self.query_attributes())
+        # query_result = list(db.cursor.fetchall())
+        # self.parse_results(query_result=query_result)
+        if raw_result:
+            return (
+                {
+                    "user_id": uid,
+                    "user_rank": urk,
+                    "repo_id": rid,
+                    "repo_rank": rrk,
+                    "norm_value": normval,
+                    "abs_value": absval,
+                }
+                for (uid, urk, rid, rrk, normval, absval) in db.cursor.fetchall()
+            )
+        else:
+            parsed_results = self.parse_results(
+                query_result=db.cursor.fetchall(), abs_value=abs_value
+            )
+            ans_mat = sparse.csr_matrix(
+                (
+                    parsed_results["data"],
+                    (parsed_results["coords_r"], parsed_results["coords_u"]),
+                ),
+                shape=(r_max, u_max),
+            )
+            return ans_mat
 
 
 class DevToRepoAddMax(DevToRepo):
-	def __init__(self,db,repo_list,**kwargs):
-		self.repo_list = tuple(int(r) for r in repo_list)
-		DevToRepo.__init__(self,db=db,**kwargs)
+    def __init__(self, db, repo_list, **kwargs):
+        self.repo_list = tuple(int(r) for r in repo_list)
+        DevToRepo.__init__(self, db=db, **kwargs)
 
-	def get_umax(self,db=None):
-		if db is None:
-			db = self.db
-		return DevToRepo.get_umax(self,db=db) + len(self.repo_list)
+    def get_umax(self, db=None):
+        if db is None:
+            db = self.db
+        return DevToRepo.get_umax(self, db=db) + len(self.repo_list)
 
-	def query(self):
-		if self.db.db_type == 'postgres':
-			return '''
+    def query(self):
+        if self.db.db_type == "postgres":
+            return """
 				SELECT main_q.user_id,
 					user_q.user_rank,
 					main_q.repo_id,
@@ -179,9 +203,9 @@ class DevToRepoAddMax(DevToRepo):
 					FROM repositories rr
 					) AS repo_q
 				ON main_q.repo_id=repo_q.repo_id
-			;'''
-		else:
-			return '''
+			;"""
+        else:
+            return """
 				SELECT main_q.user_id,
 					user_q.user_rank,
 					main_q.repo_id,
@@ -225,60 +249,77 @@ class DevToRepoAddMax(DevToRepo):
 					FROM repositories rr
 					) AS repo_q
 				ON main_q.repo_id=repo_q.repo_id
-			;'''.format(**self.query_attributes())
+			;""".format(
+                **self.query_attributes()
+            )
+
+    def parse_results(self, query_result, abs_value=False):
+        data = []
+        coords_u = []
+        coords_r = []
+        remaining_repos = list(copy.deepcopy(self.repo_list))
+        offset = 0
+        u_max = DevToRepo.get_umax(self)
+        for (
+            user_id,
+            user_rank,
+            repo_id,
+            repo_rank,
+            cnt,
+            cnt_abs,
+            cnt_max,
+        ) in query_result:
+            if abs_value:
+                data.append(cnt_abs)
+            else:
+                data.append(cnt)
+            coords_u.append(user_rank - 1)
+            coords_r.append(repo_rank - 1)
+            # if repo_id in remaining_repos:
+            # data.append(cnt_max)
+            # coords_r.append(repo_rank-1)
+            # coords_u.append(u_max + offset)
+            # offset += 1
+            # remaining_repos.remove(repo_id)
+        return {"data": data, "coords_r": coords_r, "coords_u": coords_u}
+
+    def query_attributes(self):
+        if self.db.db_type == "postgres":
+            ans = {
+                "start_time": self.start_time,
+                "end_time": self.end_time,
+                "repo_list": self.repo_list,
+            }
+            if len(self.repo_list) == 0:
+                ans["repo_list"] = None
+        else:
+            ans = {
+                "start_time": self.start_time,
+                "end_time": self.end_time,
+                "repo_list": self.repo_list,
+                "repo_list_str": "({})".format(
+                    ",".join(
+                        [
+                            ":repo_list_{}".format(i)
+                            for i, rl in enumerate(self.repo_list)
+                        ]
+                    )
+                ),
+                **{"repo_list_{}".format(i): rl for i, rl in enumerate(self.repo_list)},
+            }
+            if len(self.repo_list) == 0:
+                ans["repo_list_str"] = None
+        return ans
 
 
-	def parse_results(self,query_result,abs_value=False):
-		data = []
-		coords_u = []
-		coords_r = []
-		remaining_repos = list(copy.deepcopy(self.repo_list))
-		offset = 0
-		u_max = DevToRepo.get_umax(self)
-		for (user_id,user_rank,repo_id,repo_rank,cnt,cnt_abs,cnt_max) in query_result:
-			if abs_value:
-				data.append(cnt_abs)
-			else:
-				data.append(cnt)
-			coords_u.append(user_rank-1)
-			coords_r.append(repo_rank-1)
-			# if repo_id in remaining_repos:
-				# data.append(cnt_max)
-				# coords_r.append(repo_rank-1)
-				# coords_u.append(u_max + offset)
-				# offset += 1
-				# remaining_repos.remove(repo_id)
-		return {'data':data,'coords_r':coords_r,'coords_u':coords_u}
-
-	def query_attributes(self):
-		if self.db.db_type == 'postgres':
-			ans = {
-				'start_time':self.start_time,
-				'end_time':self.end_time,
-				'repo_list':self.repo_list
-				}
-			if len(self.repo_list) == 0:
-				ans['repo_list'] = None
-		else:
-			ans = {
-				'start_time':self.start_time,
-				'end_time':self.end_time,
-				'repo_list':self.repo_list,
-				'repo_list_str':'({})'.format(','.join([':repo_list_{}'.format(i) for i,rl in enumerate(self.repo_list)])),
-				**{'repo_list_{}'.format(i):rl for i,rl in enumerate(self.repo_list)}
-				}
-			if len(self.repo_list) == 0:
-				ans['repo_list_str'] = None
-		return ans
-		
 class DevToRepoAddDailyCommits(DevToRepoAddMax):
-	def __init__(self,daily_commits,**kwargs):
-		DevToRepoAddMax.__init__(self,**kwargs)
-		self.daily_commits = daily_commits
+    def __init__(self, daily_commits, **kwargs):
+        DevToRepoAddMax.__init__(self, **kwargs)
+        self.daily_commits = daily_commits
 
-	def query(self): 
-		if self.db.db_type == 'postgres': 
-			return '''
+    def query(self):
+        if self.db.db_type == "postgres":
+            return """
 				SELECT main_q.user_id,
 					user_q.user_rank,
 					main_q.repo_id,
@@ -329,9 +370,9 @@ class DevToRepoAddDailyCommits(DevToRepoAddMax):
 					FROM repositories rr
 					) AS repo_q
 				ON main_q.repo_id=repo_q.repo_id
-			;'''
-		else:
-			return '''
+			;"""
+        else:
+            return """
 				SELECT main_q.user_id,
 					user_q.user_rank,
 					main_q.repo_id,
@@ -376,26 +417,27 @@ class DevToRepoAddDailyCommits(DevToRepoAddMax):
 					FROM repositories rr
 					) AS repo_q
 				ON main_q.repo_id=repo_q.repo_id
-			;'''.format(**self.query_attributes())
+			;""".format(
+                **self.query_attributes()
+            )
 
-
-	def query_attributes(self):
-		ans = DevToRepoAddMax.query_attributes(self)
-		ans['daily_commits'] = self.daily_commits
-		return ans
-
-
+    def query_attributes(self):
+        ans = DevToRepoAddMax.query_attributes(self)
+        ans["daily_commits"] = self.daily_commits
+        return ans
 
 
 class RepoToRepoDeps(Getter):
-	def __init__(self,db,ref_time=datetime.datetime.now(),filter_deps=True,**kwargs):
-		self.ref_time = ref_time
-		self.filter_deps = filter_deps
-		Getter.__init__(self,db=db,**kwargs)
+    def __init__(
+        self, db, ref_time=datetime.datetime.now(), filter_deps=True, **kwargs
+    ):
+        self.ref_time = ref_time
+        self.filter_deps = filter_deps
+        Getter.__init__(self, db=db, **kwargs)
 
-	def query(self):
-		if self.db.db_type == 'postgres':
-			return '''
+    def query(self):
+        if self.db.db_type == "postgres":
+            return """
 				SELECT DISTINCT
 					dep_q.repo_id AS depending_repo_id,
 					repo_q1.repo_rank AS depending_repo_rank,
@@ -443,9 +485,9 @@ class RepoToRepoDeps(Getter):
 				ON fdre.repo_dest_id=dep_q.do_repo_id
 				AND fdre.repo_source_id=dep_q.repo_id
 				WHERE (NOT %(filter_deps)s OR fdre.repo_source_id IS NULL)
-			;'''
-		else:
-			return '''
+			;"""
+        else:
+            return """
 				SELECT DISTINCT
 					dep_q.repo_id AS depending_repo_id,
 					repo_q1.repo_rank AS depending_repo_rank,
@@ -493,46 +535,57 @@ class RepoToRepoDeps(Getter):
 				ON fdre.repo_dest_id=dep_q.do_repo_id
 				AND fdre.repo_source_id=dep_q.repo_id
 				WHERE (NOT :filter_deps OR fdre.repo_source_id IS NULL)
-			;'''
+			;"""
 
+    def query_attributes(self):
+        return {
+            "ref_time": self.ref_time,
+            "filter_deps": self.filter_deps,
+        }
 
-	def query_attributes(self):
-		return {
-		'ref_time':self.ref_time,
-		'filter_deps':self.filter_deps,
-		}
+    def parse_results(self, query_result):
+        data = []
+        coords_r = []
+        coords_r_do = []
+        for repo_id, repo_rank, do_repo_id, do_repo_rank, val in query_result:
+            data.append(val)
+            coords_r.append(repo_rank - 1)
+            coords_r_do.append(do_repo_rank - 1)
+        return {"data": data, "coords_r": coords_r, "coords_r_do": coords_r_do}
 
-	def parse_results(self,query_result):
-		data = []
-		coords_r = []
-		coords_r_do = []
-		for (repo_id,repo_rank,do_repo_id,do_repo_rank,val) in query_result:
-			data.append(val)
-			coords_r.append(repo_rank-1)
-			coords_r_do.append(do_repo_rank-1)
-		return {'data':data,'coords_r':coords_r,'coords_r_do':coords_r_do}
-
-
-	def get(self,db,raw_result=False,**kwargs):
-		db.cursor.execute('SELECT COUNT(*) FROM repositories r;')
-		r_max = db.cursor.fetchone()[0]
-		db.cursor.execute(self.query(),self.query_attributes())
-		# query_result = list(db.cursor.fetchall())
-		# self.parse_results(query_result=query_result)
-		if raw_result:
-			return ({'repo_id':rid,'repo_rank':rrk,'dep_id':did,'dep_rank':drk,'value':val} for (rid,rrk,did,drk,val) in db.cursor.fetchall())
-		else:
-			parsed_results = self.parse_results(query_result=db.cursor.fetchall())
-			ans_mat = sparse.csr_matrix((parsed_results['data'],(parsed_results['coords_r'],parsed_results['coords_r_do'])),shape=(r_max,r_max))
-			return ans_mat
-
+    def get(self, db, raw_result=False, **kwargs):
+        db.cursor.execute("SELECT COUNT(*) FROM repositories r;")
+        r_max = db.cursor.fetchone()[0]
+        db.cursor.execute(self.query(), self.query_attributes())
+        # query_result = list(db.cursor.fetchall())
+        # self.parse_results(query_result=query_result)
+        if raw_result:
+            return (
+                {
+                    "repo_id": rid,
+                    "repo_rank": rrk,
+                    "dep_id": did,
+                    "dep_rank": drk,
+                    "value": val,
+                }
+                for (rid, rrk, did, drk, val) in db.cursor.fetchall()
+            )
+        else:
+            parsed_results = self.parse_results(query_result=db.cursor.fetchall())
+            ans_mat = sparse.csr_matrix(
+                (
+                    parsed_results["data"],
+                    (parsed_results["coords_r"], parsed_results["coords_r_do"]),
+                ),
+                shape=(r_max, r_max),
+            )
+            return ans_mat
 
 
 class OrgMembers(DevToRepo):
-
-	def query(self):
-		if self.db.db_type == 'postgres':
-			return '''
+    def query(self):
+        if self.db.db_type == "postgres":
+            return """
 				SELECT main_q.user_id,
 					user_q.user_rank,
 					main_q.org_id,
@@ -561,9 +614,9 @@ class OrgMembers(DevToRepo):
 					FROM organizations oo
 					) AS org_q
 				ON main_q.org_id=org_q.org_id
-			;'''
-		else:
-			return '''
+			;"""
+        else:
+            return """
 				SELECT main_q.user_id,
 					user_q.user_rank,
 					main_q.org_id,
@@ -592,39 +645,56 @@ class OrgMembers(DevToRepo):
 					FROM organizations oo
 					) AS org_q
 				ON main_q.org_id=org_q.org_id
-			;'''
+			;"""
 
+    def query_attributes(self):
+        return {
+            "start_time": self.start_time,
+            "end_time": self.end_time,
+        }
 
-	def query_attributes(self):
-		return {
-		'start_time':self.start_time,
-		'end_time':self.end_time,
-		}
+    def get_omax(self, db=None):
+        if db is None:
+            db = self.db
+        db.cursor.execute("SELECT COUNT(*) FROM organizations o;")
+        return db.cursor.fetchone()[0]
 
-	def get_omax(self,db=None):
-		if db is None:
-			db = self.db
-		db.cursor.execute('SELECT COUNT(*) FROM organizations o;')
-		return db.cursor.fetchone()[0]
-
-	def get(self,db,abs_value=False,raw_result=False,**kwargs):
-		u_max = self.get_umax(db=db)
-		o_max = self.get_omax(db=db)
-		db.cursor.execute(self.query(),self.query_attributes())
-		# query_result = list(db.cursor.fetchall())
-		# self.parse_results(query_result=query_result)
-		if raw_result:
-			return ({'user_id':uid,'user_rank':urk,'org_id':rid,'org_rank':rrk,'norm_value':normval,'abs_value':absval} for (uid,urk,rid,rrk,normval,absval) in db.cursor.fetchall())
-		else:
-			parsed_results = self.parse_results(query_result=db.cursor.fetchall(),abs_value=abs_value)
-			ans_mat = sparse.csr_matrix((parsed_results['data'],(parsed_results['coords_r'],parsed_results['coords_u'])),shape=(o_max,u_max))
-			return ans_mat
+    def get(self, db, abs_value=False, raw_result=False, **kwargs):
+        u_max = self.get_umax(db=db)
+        o_max = self.get_omax(db=db)
+        db.cursor.execute(self.query(), self.query_attributes())
+        # query_result = list(db.cursor.fetchall())
+        # self.parse_results(query_result=query_result)
+        if raw_result:
+            return (
+                {
+                    "user_id": uid,
+                    "user_rank": urk,
+                    "org_id": rid,
+                    "org_rank": rrk,
+                    "norm_value": normval,
+                    "abs_value": absval,
+                }
+                for (uid, urk, rid, rrk, normval, absval) in db.cursor.fetchall()
+            )
+        else:
+            parsed_results = self.parse_results(
+                query_result=db.cursor.fetchall(), abs_value=abs_value
+            )
+            ans_mat = sparse.csr_matrix(
+                (
+                    parsed_results["data"],
+                    (parsed_results["coords_r"], parsed_results["coords_u"]),
+                ),
+                shape=(o_max, u_max),
+            )
+            return ans_mat
 
 
 class DevToRepoIssues(DevToRepo):
-	def query(self):
-		if self.db.db_type == 'postgres':
-			return '''
+    def query(self):
+        if self.db.db_type == "postgres":
+            return """
 				SELECT main_q.user_id,
 					user_q.user_rank,
 					main_q.repo_id,
@@ -653,9 +723,9 @@ class DevToRepoIssues(DevToRepo):
 					FROM repositories rr
 					) AS repo_q
 				ON main_q.repo_id=repo_q.repo_id
-			;'''
-		else:
-			return '''
+			;"""
+        else:
+            return """
 				SELECT main_q.user_id,
 					user_q.user_rank,
 					main_q.repo_id,
@@ -684,7 +754,4 @@ class DevToRepoIssues(DevToRepo):
 					FROM repositories rr
 					) AS repo_q
 				ON main_q.repo_id=repo_q.repo_id
-			;'''
-
-
-
+			;"""

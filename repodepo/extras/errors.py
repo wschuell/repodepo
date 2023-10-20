@@ -1,16 +1,18 @@
-
-
 class RepoToolsError(Exception):
-	pass
+    pass
+
 
 class RepoToolsExportSameDBError(RepoToolsError):
-	pass
+    pass
+
 
 class RepoToolsDumpSQLiteError(RepoToolsError):
-	pass
+    pass
+
 
 class RepoToolsDumpPGError(RepoToolsError):
-	pass
+    pass
+
 
 class RepoToolsDBStructError(RepoToolsError):
-	pass
+    pass
