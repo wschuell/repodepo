@@ -120,14 +120,14 @@ class Requester(object):
             <= datetime.datetime.now()
         ):
             query_str = """
-					query {
-						rateLimit {
-							cost
-							remaining
-							resetAt
-						}
-					}
-					"""
+                    query {
+                        rateLimit {
+                            cost
+                            remaining
+                            resetAt
+                        }
+                    }
+                    """
             try:
                 self.query(query_str)
             except gql.transport.exceptions.TransportServerError as e:
@@ -145,12 +145,12 @@ class Requester(object):
         if params is not None:
             gql_query = gql_query.format(**params)
         RL_query = """
-				rateLimit {
-					cost
-					remaining
-					resetAt
-				}
-		"""
+                rateLimit {
+                    cost
+                    remaining
+                    resetAt
+                }
+        """
         if "rateLimit" not in gql_query:
             splitted_string = gql_query.split("}")
             gql_query = (
@@ -713,9 +713,9 @@ class GHGQLFiller(github_rest.GithubFiller):
                             )
                         )
                         # if end_cursor is None:
-                        # 	end_cursor_json = None
+                        #   end_cursor_json = None
                         # else:
-                        # 	end_cursor_json = json.dumps({'end_cursor':end_cursor})
+                        #   end_cursor_json = json.dumps({'end_cursor':end_cursor})
                         if end_cursor is not None:
                             update_info.update({"end_cursor": end_cursor})
                         self.insert_update(
@@ -925,75 +925,75 @@ class GHGQLFiller(github_rest.GithubFiller):
                 if self.force:
                     self.db.cursor.execute(
                         """
-							SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-								(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-									FROM repositories r
-									INNER JOIN sources s
-									ON s.id=r.source AND s.name=%(source_name)s
-									LEFT OUTER JOIN table_updates tu
-									ON tu.repo_id=r.id AND tu.table_name=%(table_name)s
-									ORDER BY r.owner,r.name,tu.updated_at ) as t1
-								INNER JOIN
-									(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-									FROM repositories r
-									INNER JOIN sources s
-									ON s.id=r.source AND s.name=%(source_name)s
-									LEFT OUTER JOIN table_updates tu
-									ON tu.repo_id=r.id AND tu.table_name=%(table_name)s
-									GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-							ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-							ORDER BY t1.sid,t1.rowner,t1.rname
-					;""",
+                            SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
+                                (SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
+                                    FROM repositories r
+                                    INNER JOIN sources s
+                                    ON s.id=r.source AND s.name=%(source_name)s
+                                    LEFT OUTER JOIN table_updates tu
+                                    ON tu.repo_id=r.id AND tu.table_name=%(table_name)s
+                                    ORDER BY r.owner,r.name,tu.updated_at ) as t1
+                                INNER JOIN
+                                    (SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
+                                    FROM repositories r
+                                    INNER JOIN sources s
+                                    ON s.id=r.source AND s.name=%(source_name)s
+                                    LEFT OUTER JOIN table_updates tu
+                                    ON tu.repo_id=r.id AND tu.table_name=%(table_name)s
+                                    GROUP BY r.owner,r.name,r.id,s.id ) AS t2
+                            ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
+                            ORDER BY t1.sid,t1.rowner,t1.rname
+                    ;""",
                         {"source_name": self.source_name, "table_name": items_name},
                     )
                 elif self.retry:
                     self.db.cursor.execute(
                         """
-							SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-								(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-									FROM repositories r
-									INNER JOIN sources s
-									ON s.id=r.source AND s.name=%(source_name)s
-									LEFT OUTER JOIN table_updates tu
-									ON tu.repo_id=r.id AND tu.table_name=%(table_name)s
-									ORDER BY r.owner,r.name,tu.updated_at ) as t1
-								INNER JOIN
-									(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-									FROM repositories r
-									INNER JOIN sources s
-									ON s.id=r.source AND s.name=%(source_name)s
-									LEFT OUTER JOIN table_updates tu
-									ON tu.repo_id=r.id AND tu.table_name=%(table_name)s
-									GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-							ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-							AND ((NOT t1.success) OR t1.succ IS NULL)
-							ORDER BY t1.sid,t1.rowner,t1.rname
-					;""",
+                            SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
+                                (SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
+                                    FROM repositories r
+                                    INNER JOIN sources s
+                                    ON s.id=r.source AND s.name=%(source_name)s
+                                    LEFT OUTER JOIN table_updates tu
+                                    ON tu.repo_id=r.id AND tu.table_name=%(table_name)s
+                                    ORDER BY r.owner,r.name,tu.updated_at ) as t1
+                                INNER JOIN
+                                    (SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
+                                    FROM repositories r
+                                    INNER JOIN sources s
+                                    ON s.id=r.source AND s.name=%(source_name)s
+                                    LEFT OUTER JOIN table_updates tu
+                                    ON tu.repo_id=r.id AND tu.table_name=%(table_name)s
+                                    GROUP BY r.owner,r.name,r.id,s.id ) AS t2
+                            ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
+                            AND ((NOT t1.success) OR t1.succ IS NULL)
+                            ORDER BY t1.sid,t1.rowner,t1.rname
+                    ;""",
                         {"source_name": self.source_name, "table_name": items_name},
                     )
                 else:
                     self.db.cursor.execute(
                         """
-							SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-								(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-									FROM repositories r
-									INNER JOIN sources s
-									ON s.id=r.source AND s.name=%(source_name)s
-									LEFT OUTER JOIN table_updates tu
-									ON tu.repo_id=r.id AND tu.table_name=%(table_name)s
-									ORDER BY r.owner,r.name,tu.updated_at ) as t1
-								INNER JOIN
-									(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-									FROM repositories r
-									INNER JOIN sources s
-									ON s.id=r.source AND s.name=%(source_name)s
-									LEFT OUTER JOIN table_updates tu
-									ON tu.repo_id=r.id AND tu.table_name=%(table_name)s
-									GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-							ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-							AND t1.succ IS NULL
-							ORDER BY t1.sid,t1.rowner,t1.rname
-					;""",
+                            SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
+                                (SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
+                                    FROM repositories r
+                                    INNER JOIN sources s
+                                    ON s.id=r.source AND s.name=%(source_name)s
+                                    LEFT OUTER JOIN table_updates tu
+                                    ON tu.repo_id=r.id AND tu.table_name=%(table_name)s
+                                    ORDER BY r.owner,r.name,tu.updated_at ) as t1
+                                INNER JOIN
+                                    (SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
+                                    FROM repositories r
+                                    INNER JOIN sources s
+                                    ON s.id=r.source AND s.name=%(source_name)s
+                                    LEFT OUTER JOIN table_updates tu
+                                    ON tu.repo_id=r.id AND tu.table_name=%(table_name)s
+                                    GROUP BY r.owner,r.name,r.id,s.id ) AS t2
+                            ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
+                            AND t1.succ IS NULL
+                            ORDER BY t1.sid,t1.rowner,t1.rname
+                    ;""",
                         {"source_name": self.source_name, "table_name": items_name},
                     )
 
@@ -1003,75 +1003,75 @@ class GHGQLFiller(github_rest.GithubFiller):
                 if self.force:
                     self.db.cursor.execute(
                         """
-							SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-								(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, json_extract(tu.info,'$.end_cursor') as end_cursor
-									FROM repositories r
-									INNER JOIN sources s
-									ON s.id=r.source AND s.name=:source_name
-									LEFT OUTER JOIN table_updates tu
-									ON tu.repo_id=r.id AND tu.table_name=:table_name
-									ORDER BY r.owner,r.name,tu.updated_at ) as t1
-								INNER JOIN
-									(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-									FROM repositories r
-									INNER JOIN sources s
-									ON s.id=r.source AND s.name=:source_name
-									LEFT OUTER JOIN table_updates tu
-									ON tu.repo_id=r.id AND tu.table_name=:table_name
-									GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-							ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-							ORDER BY t1.sid,t1.rowner,t1.rname
-					;""",
+                            SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
+                                (SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, json_extract(tu.info,'$.end_cursor') as end_cursor
+                                    FROM repositories r
+                                    INNER JOIN sources s
+                                    ON s.id=r.source AND s.name=:source_name
+                                    LEFT OUTER JOIN table_updates tu
+                                    ON tu.repo_id=r.id AND tu.table_name=:table_name
+                                    ORDER BY r.owner,r.name,tu.updated_at ) as t1
+                                INNER JOIN
+                                    (SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
+                                    FROM repositories r
+                                    INNER JOIN sources s
+                                    ON s.id=r.source AND s.name=:source_name
+                                    LEFT OUTER JOIN table_updates tu
+                                    ON tu.repo_id=r.id AND tu.table_name=:table_name
+                                    GROUP BY r.owner,r.name,r.id,s.id ) AS t2
+                            ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
+                            ORDER BY t1.sid,t1.rowner,t1.rname
+                    ;""",
                         {"source_name": self.source_name, "table_name": items_name},
                     )
                 elif self.retry:
                     self.db.cursor.execute(
                         """
-							SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-								(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, json_extract(tu.info,'$.end_cursor') as end_cursor
-									FROM repositories r
-									INNER JOIN sources s
-									ON s.id=r.source AND s.name=:source_name
-									LEFT OUTER JOIN table_updates tu
-									ON tu.repo_id=r.id AND tu.table_name=:table_name
-									ORDER BY r.owner,r.name,tu.updated_at ) as t1
-								INNER JOIN
-									(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-									FROM repositories r
-									INNER JOIN sources s
-									ON s.id=r.source AND s.name=:source_name
-									LEFT OUTER JOIN table_updates tu
-									ON tu.repo_id=r.id AND tu.table_name=:table_name
-									GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-							ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-							AND ((NOT t1.success) OR t1.succ IS NULL)
-							ORDER BY t1.sid,t1.rowner,t1.rname
-					;""",
+                            SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
+                                (SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, json_extract(tu.info,'$.end_cursor') as end_cursor
+                                    FROM repositories r
+                                    INNER JOIN sources s
+                                    ON s.id=r.source AND s.name=:source_name
+                                    LEFT OUTER JOIN table_updates tu
+                                    ON tu.repo_id=r.id AND tu.table_name=:table_name
+                                    ORDER BY r.owner,r.name,tu.updated_at ) as t1
+                                INNER JOIN
+                                    (SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
+                                    FROM repositories r
+                                    INNER JOIN sources s
+                                    ON s.id=r.source AND s.name=:source_name
+                                    LEFT OUTER JOIN table_updates tu
+                                    ON tu.repo_id=r.id AND tu.table_name=:table_name
+                                    GROUP BY r.owner,r.name,r.id,s.id ) AS t2
+                            ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
+                            AND ((NOT t1.success) OR t1.succ IS NULL)
+                            ORDER BY t1.sid,t1.rowner,t1.rname
+                    ;""",
                         {"source_name": self.source_name, "table_name": items_name},
                     )
                 else:
                     self.db.cursor.execute(
                         """
-							SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
-								(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, json_extract(tu.info,'$.end_cursor') as end_cursor
-									FROM repositories r
-									INNER JOIN sources s
-									ON s.id=r.source AND s.name=:source_name
-									LEFT OUTER JOIN table_updates tu
-									ON tu.repo_id=r.id AND tu.table_name=:table_name
-									ORDER BY r.owner,r.name,tu.updated_at ) as t1
-								INNER JOIN
-									(SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
-									FROM repositories r
-									INNER JOIN sources s
-									ON s.id=r.source AND s.name=:source_name
-									LEFT OUTER JOIN table_updates tu
-									ON tu.repo_id=r.id AND tu.table_name=:table_name
-									GROUP BY r.owner,r.name,r.id,s.id ) AS t2
-							ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-							AND t1.succ IS NULL
-							ORDER BY t1.sid,t1.rowner,t1.rname
-					;""",
+                            SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.end_cursor FROM
+                                (SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ, json_extract(tu.info,'$.end_cursor') as end_cursor
+                                    FROM repositories r
+                                    INNER JOIN sources s
+                                    ON s.id=r.source AND s.name=:source_name
+                                    LEFT OUTER JOIN table_updates tu
+                                    ON tu.repo_id=r.id AND tu.table_name=:table_name
+                                    ORDER BY r.owner,r.name,tu.updated_at ) as t1
+                                INNER JOIN
+                                    (SELECT s.id AS sid,r.owner AS rowner,r.name AS rname,r.id AS rid,MAX(tu.updated_at) AS updated
+                                    FROM repositories r
+                                    INNER JOIN sources s
+                                    ON s.id=r.source AND s.name=:source_name
+                                    LEFT OUTER JOIN table_updates tu
+                                    ON tu.repo_id=r.id AND tu.table_name=:table_name
+                                    GROUP BY r.owner,r.name,r.id,s.id ) AS t2
+                            ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
+                            AND t1.succ IS NULL
+                            ORDER BY t1.sid,t1.rowner,t1.rname
+                    ;""",
                         {"source_name": self.source_name, "table_name": items_name},
                     )
 
@@ -1080,10 +1080,10 @@ class GHGQLFiller(github_rest.GithubFiller):
                 # # specific to sqlite because no internal json parsing implemented in query
                 # self.elt_list = []
                 # for (source,owner,name,repo_id,end_cursor_info) in elt_list:
-                # 	try:
-                # 		self.elt_list.append((source,owner,name,repo_id,json.loads(end_cursor_info)['end_cursor']))
-                # 	except:
-                # 		self.elt_list.append((source,owner,name,repo_id,None))
+                #   try:
+                #       self.elt_list.append((source,owner,name,repo_id,json.loads(end_cursor_info)['end_cursor']))
+                #   except:
+                #       self.elt_list.append((source,owner,name,repo_id,None))
 
             if self.start_offset is not None:
                 self.elt_list = [r for r in self.elt_list if r[1] >= self.start_offset]
@@ -1095,33 +1095,33 @@ class GHGQLFiller(github_rest.GithubFiller):
                 if self.retry:
                     self.db.cursor.execute(
                         """
-						SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.sq_id,t1.sq_gql_id,t2.info ->> 'end_cursor' AS end_cursor FROM
-							(SELECT s.id AS sid,
-									r.owner AS rowner,
-									r.name AS rname,
-									r.id AS rid,
-									tu.info ->> (%(sub_queried_obj)s||'_id') as sq_id,
-									tu.info ->> (%(sub_queried_obj)s||'_gql_id') as sq_gql_id,
-									--tu.info ->> 'end_cursor' as end_cursor
-									MAX(tu.updated_at) AS max_updated_at
-								FROM table_updates tu
-								INNER JOIN sources s
-								ON table_name=%(table_name)s
-								AND sq_id IS NOT NULL
-								AND sq_gql_id IS NOT NULL
-								AND s.name=%(source_name)s
-								INNER JOIN repositories r
-								ON s.id=r.source AND tu.repo_id=r.id
-								GROUP BY sid,rowner,rname,rid,sq_id,sq_gql_id
-								HAVING SUM(CASE WHEN (tu.success IS NULL OR NOT tu.success) THEN 0 ELSE 1 END)=0
-							) AS t1
-						INNER JOIN table_updates t2
-							ON t2.repo_id=t1.rid
-							AND t2.table_name=%(table_name)s
-							--AND tu.info ->>( %(sub_queried_obj)s||'_id') = t1.sq_id
-							AND t2.info ->> (%(sub_queried_obj)s||'_gql_id') = t1.sq_gql_id
-							AND t2.updated_at=t1.max_updated_at
-					;""",
+                        SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.sq_id,t1.sq_gql_id,t2.info ->> 'end_cursor' AS end_cursor FROM
+                            (SELECT s.id AS sid,
+                                    r.owner AS rowner,
+                                    r.name AS rname,
+                                    r.id AS rid,
+                                    tu.info ->> (%(sub_queried_obj)s||'_id') as sq_id,
+                                    tu.info ->> (%(sub_queried_obj)s||'_gql_id') as sq_gql_id,
+                                    --tu.info ->> 'end_cursor' as end_cursor
+                                    MAX(tu.updated_at) AS max_updated_at
+                                FROM table_updates tu
+                                INNER JOIN sources s
+                                ON table_name=%(table_name)s
+                                AND sq_id IS NOT NULL
+                                AND sq_gql_id IS NOT NULL
+                                AND s.name=%(source_name)s
+                                INNER JOIN repositories r
+                                ON s.id=r.source AND tu.repo_id=r.id
+                                GROUP BY sid,rowner,rname,rid,sq_id,sq_gql_id
+                                HAVING SUM(CASE WHEN (tu.success IS NULL OR NOT tu.success) THEN 0 ELSE 1 END)=0
+                            ) AS t1
+                        INNER JOIN table_updates t2
+                            ON t2.repo_id=t1.rid
+                            AND t2.table_name=%(table_name)s
+                            --AND tu.info ->>( %(sub_queried_obj)s||'_id') = t1.sq_id
+                            AND t2.info ->> (%(sub_queried_obj)s||'_gql_id') = t1.sq_gql_id
+                            AND t2.updated_at=t1.max_updated_at
+                    ;""",
                         {
                             "source_name": self.source_name,
                             "table_name": items_name,
@@ -1131,33 +1131,33 @@ class GHGQLFiller(github_rest.GithubFiller):
                 else:
                     self.db.cursor.execute(
                         """
-						SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.sq_id,t1.sq_gql_id,t2.info ->> 'end_cursor' AS end_cursor FROM
-							(SELECT s.id AS sid,
-									r.owner AS rowner,
-									r.name AS rname,
-									r.id AS rid,
-									tu.info ->> (%(sub_queried_obj)s||'_id') as sq_id,
-									tu.info ->> (%(sub_queried_obj)s||'_gql_id') as sq_gql_id,
-									--tu.info ->> 'end_cursor' as end_cursor
-									MAX(tu.updated_at) AS max_updated_at
-								FROM table_updates tu
-								INNER JOIN sources s
-								ON table_name=%(table_name)s
-								AND tu.info ->> (%(sub_queried_obj)s||'_id') IS NOT NULL
-								AND tu.info ->> (%(sub_queried_obj)s||'_gql_id') IS NOT NULL
-								AND s.name=%(source_name)s
-								INNER JOIN repositories r
-								ON s.id=r.source AND tu.repo_id=r.id
-								GROUP BY sid,rowner,rname,rid,sq_id,sq_gql_id
-								HAVING SUM(CASE WHEN tu.success IS NULL THEN 0 ELSE 1 END)=0
-							) AS t1
-						INNER JOIN table_updates t2
-							ON t2.repo_id=t1.rid
-							AND t2.table_name=%(table_name)s
-							--AND tu.info ->> (%(sub_queried_obj)s||'_id') = t1.sq_id
-							AND t2.info ->> (%(sub_queried_obj)s||'_gql_id') = t1.sq_gql_id
-							AND t2.updated_at=t1.max_updated_at
-					;""",
+                        SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.sq_id,t1.sq_gql_id,t2.info ->> 'end_cursor' AS end_cursor FROM
+                            (SELECT s.id AS sid,
+                                    r.owner AS rowner,
+                                    r.name AS rname,
+                                    r.id AS rid,
+                                    tu.info ->> (%(sub_queried_obj)s||'_id') as sq_id,
+                                    tu.info ->> (%(sub_queried_obj)s||'_gql_id') as sq_gql_id,
+                                    --tu.info ->> 'end_cursor' as end_cursor
+                                    MAX(tu.updated_at) AS max_updated_at
+                                FROM table_updates tu
+                                INNER JOIN sources s
+                                ON table_name=%(table_name)s
+                                AND tu.info ->> (%(sub_queried_obj)s||'_id') IS NOT NULL
+                                AND tu.info ->> (%(sub_queried_obj)s||'_gql_id') IS NOT NULL
+                                AND s.name=%(source_name)s
+                                INNER JOIN repositories r
+                                ON s.id=r.source AND tu.repo_id=r.id
+                                GROUP BY sid,rowner,rname,rid,sq_id,sq_gql_id
+                                HAVING SUM(CASE WHEN tu.success IS NULL THEN 0 ELSE 1 END)=0
+                            ) AS t1
+                        INNER JOIN table_updates t2
+                            ON t2.repo_id=t1.rid
+                            AND t2.table_name=%(table_name)s
+                            --AND tu.info ->> (%(sub_queried_obj)s||'_id') = t1.sq_id
+                            AND t2.info ->> (%(sub_queried_obj)s||'_gql_id') = t1.sq_gql_id
+                            AND t2.updated_at=t1.max_updated_at
+                    ;""",
                         {
                             "source_name": self.source_name,
                             "table_name": items_name,
@@ -1171,33 +1171,33 @@ class GHGQLFiller(github_rest.GithubFiller):
                 if self.retry:
                     self.db.cursor.execute(
                         """
-						SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.sq_id,t1.sq_gql_id,json_extract(t2.info, '$.end_cursor') AS end_cursor FROM
-							(SELECT s.id AS sid,
-									r.owner AS rowner,
-									r.name AS rname,
-									r.id AS rid,
-									json_extract(tu.info, '$.' || :sub_queried_obj || '_id') as sq_id,
-									json_extract(tu.info, '$.' || :sub_queried_obj || '_gql_id') as sq_gql_id,
-									--tu.info ->> 'end_cursor' as end_cursor
-									MAX(tu.updated_at) AS max_updated_at
-								FROM table_updates tu
-								INNER JOIN sources s
-								ON table_name=:table_name
-								AND json_extract(tu.info, '$.' || :sub_queried_obj || '_id') IS NOT NULL
-								AND json_extract(tu.info, '$.' || :sub_queried_obj || '_gql_id') IS NOT NULL
-								AND s.name=:source_name
-								INNER JOIN repositories r
-								ON s.id=r.source AND tu.repo_id=r.id
-								GROUP BY sid,rowner,rname,rid,sq_id,sq_gql_id
-								HAVING SUM(CASE WHEN (tu.success IS NULL OR NOT tu.success) THEN 0 ELSE 1 END)=0
-							) AS t1
-						INNER JOIN table_updates t2
-							ON t2.repo_id=t1.rid
-							AND t2.table_name=:table_name
-							--AND tu.info ->> :sub_queried_obj||'_id' = t1.sq_id
-							AND json_extract(t2.info, '$.' || :sub_queried_obj || '_gql_id') = t1.sq_gql_id
-							AND t2.updated_at=t1.max_updated_at
-					;""",
+                        SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.sq_id,t1.sq_gql_id,json_extract(t2.info, '$.end_cursor') AS end_cursor FROM
+                            (SELECT s.id AS sid,
+                                    r.owner AS rowner,
+                                    r.name AS rname,
+                                    r.id AS rid,
+                                    json_extract(tu.info, '$.' || :sub_queried_obj || '_id') as sq_id,
+                                    json_extract(tu.info, '$.' || :sub_queried_obj || '_gql_id') as sq_gql_id,
+                                    --tu.info ->> 'end_cursor' as end_cursor
+                                    MAX(tu.updated_at) AS max_updated_at
+                                FROM table_updates tu
+                                INNER JOIN sources s
+                                ON table_name=:table_name
+                                AND json_extract(tu.info, '$.' || :sub_queried_obj || '_id') IS NOT NULL
+                                AND json_extract(tu.info, '$.' || :sub_queried_obj || '_gql_id') IS NOT NULL
+                                AND s.name=:source_name
+                                INNER JOIN repositories r
+                                ON s.id=r.source AND tu.repo_id=r.id
+                                GROUP BY sid,rowner,rname,rid,sq_id,sq_gql_id
+                                HAVING SUM(CASE WHEN (tu.success IS NULL OR NOT tu.success) THEN 0 ELSE 1 END)=0
+                            ) AS t1
+                        INNER JOIN table_updates t2
+                            ON t2.repo_id=t1.rid
+                            AND t2.table_name=:table_name
+                            --AND tu.info ->> :sub_queried_obj||'_id' = t1.sq_id
+                            AND json_extract(t2.info, '$.' || :sub_queried_obj || '_gql_id') = t1.sq_gql_id
+                            AND t2.updated_at=t1.max_updated_at
+                    ;""",
                         {
                             "source_name": self.source_name,
                             "table_name": items_name,
@@ -1207,33 +1207,33 @@ class GHGQLFiller(github_rest.GithubFiller):
                 else:
                     self.db.cursor.execute(
                         """
-						SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.sq_id,t1.sq_gql_id,json_extract(t2.info, '$.end_cursor') AS end_cursor FROM
-							(SELECT s.id AS sid,
-									r.owner AS rowner,
-									r.name AS rname,
-									r.id AS rid,
-									json_extract(tu.info, '$.' || :sub_queried_obj || '_id') as sq_id,
-									json_extract(tu.info, '$.' || :sub_queried_obj || '_gql_id') as sq_gql_id,
-									--tu.info ->> 'end_cursor' as end_cursor
-									MAX(tu.updated_at) AS max_updated_at
-								FROM table_updates tu
-								INNER JOIN sources s
-								ON table_name=:table_name
-								AND json_extract(tu.info, '$.' || :sub_queried_obj || '_id') IS NOT NULL
-								AND json_extract(tu.info, '$.' || :sub_queried_obj || '_gql_id') IS NOT NULL
-								AND s.name=:source_name
-								INNER JOIN repositories r
-								ON s.id=r.source AND tu.repo_id=r.id
-								GROUP BY sid,rowner,rname,rid,sq_id,sq_gql_id
-								HAVING SUM(CASE WHEN tu.success IS NULL THEN 0 ELSE 1 END)=0
-							) AS t1
-						INNER JOIN table_updates t2
-							ON t2.repo_id=t1.rid
-							AND t2.table_name=:table_name
-							--AND tu.info ->> :sub_queried_obj||'_id' = t1.sq_id
-							AND json_extract(t2.info, '$.' || :sub_queried_obj || '_gql_id') = t1.sq_gql_id
-							AND t2.updated_at=t1.max_updated_at
-					;""",
+                        SELECT t1.sid,t1.rowner,t1.rname,t1.rid,t1.sq_id,t1.sq_gql_id,json_extract(t2.info, '$.end_cursor') AS end_cursor FROM
+                            (SELECT s.id AS sid,
+                                    r.owner AS rowner,
+                                    r.name AS rname,
+                                    r.id AS rid,
+                                    json_extract(tu.info, '$.' || :sub_queried_obj || '_id') as sq_id,
+                                    json_extract(tu.info, '$.' || :sub_queried_obj || '_gql_id') as sq_gql_id,
+                                    --tu.info ->> 'end_cursor' as end_cursor
+                                    MAX(tu.updated_at) AS max_updated_at
+                                FROM table_updates tu
+                                INNER JOIN sources s
+                                ON table_name=:table_name
+                                AND json_extract(tu.info, '$.' || :sub_queried_obj || '_id') IS NOT NULL
+                                AND json_extract(tu.info, '$.' || :sub_queried_obj || '_gql_id') IS NOT NULL
+                                AND s.name=:source_name
+                                INNER JOIN repositories r
+                                ON s.id=r.source AND tu.repo_id=r.id
+                                GROUP BY sid,rowner,rname,rid,sq_id,sq_gql_id
+                                HAVING SUM(CASE WHEN tu.success IS NULL THEN 0 ELSE 1 END)=0
+                            ) AS t1
+                        INNER JOIN table_updates t2
+                            ON t2.repo_id=t1.rid
+                            AND t2.table_name=:table_name
+                            --AND tu.info ->> :sub_queried_obj||'_id' = t1.sq_id
+                            AND json_extract(t2.info, '$.' || :sub_queried_obj || '_gql_id') = t1.sq_gql_id
+                            AND t2.updated_at=t1.max_updated_at
+                    ;""",
                         {
                             "source_name": self.source_name,
                             "table_name": items_name,
@@ -1246,10 +1246,10 @@ class GHGQLFiller(github_rest.GithubFiller):
                 # # specific to sqlite because no internal json parsing implemented in query
                 # self.elt_list = []
                 # for (source,owner,name,repo_id,end_cursor_info) in elt_list:
-                # 	try:
-                # 		self.elt_list.append((source,owner,name,repo_id,json.loads(end_cursor_info)['end_cursor']))
-                # 	except:
-                # 		self.elt_list.append((source,owner,name,repo_id,None))
+                #   try:
+                #       self.elt_list.append((source,owner,name,repo_id,json.loads(end_cursor_info)['end_cursor']))
+                #   except:
+                #       self.elt_list.append((source,owner,name,repo_id,None))
 
             if self.start_offset is not None:
                 self.elt_list = [r for r in self.elt_list if r[1] >= self.start_offset]
@@ -1260,25 +1260,25 @@ class GHGQLFiller(github_rest.GithubFiller):
                 if self.force:
                     self.db.cursor.execute(
                         """
-							SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-									FROM identities i
-									INNER JOIN identity_types it
-									ON it.id=i.identity_type_id AND it.name=%(target_identity_type)s
-									LEFT OUTER JOIN table_updates tu
-									ON tu.identity_id=i.id AND tu.table_name=%(table_name)s
-									ORDER BY i.identity,tu.updated_at ) as t1
-								INNER JOIN
-									(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-									FROM identities i
-									INNER JOIN identity_types it
-									ON it.id=i.identity_type_id AND it.name=%(target_identity_type)s
-									LEFT OUTER JOIN table_updates tu
-									ON tu.identity_id=i.id AND tu.table_name=%(table_name)s
-									GROUP BY i.identity,i.id,it.id ) AS t2
-							ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-							ORDER BY t1.itid,t1.identity
-					;""",
+                            SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
+                                (SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
+                                    FROM identities i
+                                    INNER JOIN identity_types it
+                                    ON it.id=i.identity_type_id AND it.name=%(target_identity_type)s
+                                    LEFT OUTER JOIN table_updates tu
+                                    ON tu.identity_id=i.id AND tu.table_name=%(table_name)s
+                                    ORDER BY i.identity,tu.updated_at ) as t1
+                                INNER JOIN
+                                    (SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
+                                    FROM identities i
+                                    INNER JOIN identity_types it
+                                    ON it.id=i.identity_type_id AND it.name=%(target_identity_type)s
+                                    LEFT OUTER JOIN table_updates tu
+                                    ON tu.identity_id=i.id AND tu.table_name=%(table_name)s
+                                    GROUP BY i.identity,i.id,it.id ) AS t2
+                            ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
+                            ORDER BY t1.itid,t1.identity
+                    ;""",
                         {
                             "target_identity_type": self.target_identity_type,
                             "table_name": items_name,
@@ -1287,26 +1287,26 @@ class GHGQLFiller(github_rest.GithubFiller):
                 elif self.retry:
                     self.db.cursor.execute(
                         """
-							SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-									FROM identities i
-									INNER JOIN identity_types it
-									ON it.id=i.identity_type_id AND it.name=%(target_identity_type)s
-									LEFT OUTER JOIN table_updates tu
-									ON tu.identity_id=i.id AND tu.table_name=%(table_name)s
-									ORDER BY i.identity,tu.updated_at ) as t1
-								INNER JOIN
-									(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-									FROM identities i
-									INNER JOIN identity_types it
-									ON it.id=i.identity_type_id AND it.name=%(target_identity_type)s
-									LEFT OUTER JOIN table_updates tu
-									ON tu.identity_id=i.id AND tu.table_name=%(table_name)s
-									GROUP BY i.identity,i.id,it.id ) AS t2
-							ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-							AND ((NOT t1.success) OR t1.succ IS NULL)
-							ORDER BY t1.itid,t1.identity
-					;""",
+                            SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
+                                (SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
+                                    FROM identities i
+                                    INNER JOIN identity_types it
+                                    ON it.id=i.identity_type_id AND it.name=%(target_identity_type)s
+                                    LEFT OUTER JOIN table_updates tu
+                                    ON tu.identity_id=i.id AND tu.table_name=%(table_name)s
+                                    ORDER BY i.identity,tu.updated_at ) as t1
+                                INNER JOIN
+                                    (SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
+                                    FROM identities i
+                                    INNER JOIN identity_types it
+                                    ON it.id=i.identity_type_id AND it.name=%(target_identity_type)s
+                                    LEFT OUTER JOIN table_updates tu
+                                    ON tu.identity_id=i.id AND tu.table_name=%(table_name)s
+                                    GROUP BY i.identity,i.id,it.id ) AS t2
+                            ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
+                            AND ((NOT t1.success) OR t1.succ IS NULL)
+                            ORDER BY t1.itid,t1.identity
+                    ;""",
                         {
                             "target_identity_type": self.target_identity_type,
                             "table_name": items_name,
@@ -1315,26 +1315,26 @@ class GHGQLFiller(github_rest.GithubFiller):
                 else:
                     self.db.cursor.execute(
                         """
-							SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
-									FROM identities i
-									INNER JOIN identity_types it
-									ON it.id=i.identity_type_id AND it.name=%(target_identity_type)s
-									LEFT OUTER JOIN table_updates tu
-									ON tu.identity_id=i.id AND tu.table_name=%(table_name)s
-									ORDER BY i.identity,tu.updated_at ) as t1
-								INNER JOIN
-									(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-									FROM identities i
-									INNER JOIN identity_types it
-									ON it.id=i.identity_type_id AND it.name=%(target_identity_type)s
-									LEFT OUTER JOIN table_updates tu
-									ON tu.identity_id=i.id AND tu.table_name=%(table_name)s
-									GROUP BY i.identity,i.id,it.id ) AS t2
-							ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-							AND t1.succ IS NULL
-							ORDER BY t1.itid,t1.identity
-					;""",
+                            SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
+                                (SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, tu.info ->> 'end_cursor' as end_cursor
+                                    FROM identities i
+                                    INNER JOIN identity_types it
+                                    ON it.id=i.identity_type_id AND it.name=%(target_identity_type)s
+                                    LEFT OUTER JOIN table_updates tu
+                                    ON tu.identity_id=i.id AND tu.table_name=%(table_name)s
+                                    ORDER BY i.identity,tu.updated_at ) as t1
+                                INNER JOIN
+                                    (SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
+                                    FROM identities i
+                                    INNER JOIN identity_types it
+                                    ON it.id=i.identity_type_id AND it.name=%(target_identity_type)s
+                                    LEFT OUTER JOIN table_updates tu
+                                    ON tu.identity_id=i.id AND tu.table_name=%(table_name)s
+                                    GROUP BY i.identity,i.id,it.id ) AS t2
+                            ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
+                            AND t1.succ IS NULL
+                            ORDER BY t1.itid,t1.identity
+                    ;""",
                         {
                             "target_identity_type": self.target_identity_type,
                             "table_name": items_name,
@@ -1347,25 +1347,25 @@ class GHGQLFiller(github_rest.GithubFiller):
                 if self.force:
                     self.db.cursor.execute(
                         """
-							SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, json_extract(tu.info,'$.end_cursor') as end_cursor
-									FROM identities i
-									INNER JOIN identity_types it
-									ON it.id=i.identity_type_id AND it.name=:target_identity_type
-									LEFT OUTER JOIN table_updates tu
-									ON tu.identity_id=i.id AND tu.table_name=:table_name
-									ORDER BY i.identity,tu.updated_at ) as t1
-								INNER JOIN
-									(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-									FROM identities i
-									INNER JOIN identity_types it
-									ON it.id=i.identity_type_id AND it.name=:target_identity_type
-									LEFT OUTER JOIN table_updates tu
-									ON tu.identity_id=i.id AND tu.table_name=:table_name
-									GROUP BY i.identity,i.id,it.id ) AS t2
-							ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-							ORDER BY t1.itid,t1.identity
-					;""",
+                            SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
+                                (SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, json_extract(tu.info,'$.end_cursor') as end_cursor
+                                    FROM identities i
+                                    INNER JOIN identity_types it
+                                    ON it.id=i.identity_type_id AND it.name=:target_identity_type
+                                    LEFT OUTER JOIN table_updates tu
+                                    ON tu.identity_id=i.id AND tu.table_name=:table_name
+                                    ORDER BY i.identity,tu.updated_at ) as t1
+                                INNER JOIN
+                                    (SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
+                                    FROM identities i
+                                    INNER JOIN identity_types it
+                                    ON it.id=i.identity_type_id AND it.name=:target_identity_type
+                                    LEFT OUTER JOIN table_updates tu
+                                    ON tu.identity_id=i.id AND tu.table_name=:table_name
+                                    GROUP BY i.identity,i.id,it.id ) AS t2
+                            ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
+                            ORDER BY t1.itid,t1.identity
+                    ;""",
                         {
                             "target_identity_type": self.target_identity_type,
                             "table_name": items_name,
@@ -1374,26 +1374,26 @@ class GHGQLFiller(github_rest.GithubFiller):
                 elif self.retry:
                     self.db.cursor.execute(
                         """
-							SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, json_extract(tu.info,'$.end_cursor') as end_cursor
-									FROM identities i
-									INNER JOIN identity_types it
-									ON it.id=i.identity_type_id AND it.name=:target_identity_type
-									LEFT OUTER JOIN table_updates tu
-									ON tu.identity_id=i.id AND tu.table_name=:table_name
-									ORDER BY i.identity,tu.updated_at ) as t1
-								INNER JOIN
-									(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-									FROM identities i
-									INNER JOIN identity_types it
-									ON it.id=i.identity_type_id AND it.name=:target_identity_type
-									LEFT OUTER JOIN table_updates tu
-									ON tu.identity_id=i.id AND tu.table_name=:table_name
-									GROUP BY i.identity,i.id,it.id ) AS t2
-							ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-							AND ((NOT t1.success) OR t1.succ IS NULL)
-							ORDER BY t1.itid,t1.identity
-					;""",
+                            SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
+                                (SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, json_extract(tu.info,'$.end_cursor') as end_cursor
+                                    FROM identities i
+                                    INNER JOIN identity_types it
+                                    ON it.id=i.identity_type_id AND it.name=:target_identity_type
+                                    LEFT OUTER JOIN table_updates tu
+                                    ON tu.identity_id=i.id AND tu.table_name=:table_name
+                                    ORDER BY i.identity,tu.updated_at ) as t1
+                                INNER JOIN
+                                    (SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
+                                    FROM identities i
+                                    INNER JOIN identity_types it
+                                    ON it.id=i.identity_type_id AND it.name=:target_identity_type
+                                    LEFT OUTER JOIN table_updates tu
+                                    ON tu.identity_id=i.id AND tu.table_name=:table_name
+                                    GROUP BY i.identity,i.id,it.id ) AS t2
+                            ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
+                            AND ((NOT t1.success) OR t1.succ IS NULL)
+                            ORDER BY t1.itid,t1.identity
+                    ;""",
                         {
                             "target_identity_type": self.target_identity_type,
                             "table_name": items_name,
@@ -1402,26 +1402,26 @@ class GHGQLFiller(github_rest.GithubFiller):
                 else:
                     self.db.cursor.execute(
                         """
-							SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
-								(SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, json_extract(tu.info,'$.end_cursor') as end_cursor
-									FROM identities i
-									INNER JOIN identity_types it
-									ON it.id=i.identity_type_id AND it.name=:target_identity_type
-									LEFT OUTER JOIN table_updates tu
-									ON tu.identity_id=i.id AND tu.table_name=:table_name
-									ORDER BY i.identity,tu.updated_at ) as t1
-								INNER JOIN
-									(SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
-									FROM identities i
-									INNER JOIN identity_types it
-									ON it.id=i.identity_type_id AND it.name=:target_identity_type
-									LEFT OUTER JOIN table_updates tu
-									ON tu.identity_id=i.id AND tu.table_name=:table_name
-									GROUP BY i.identity,i.id,it.id ) AS t2
-							ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
-							AND t1.succ IS NULL
-							ORDER BY t1.itid,t1.identity
-					;""",
+                            SELECT t1.itid,t1.identity,t1.iid,t1.end_cursor FROM
+                                (SELECT it.id AS itid,i.identity as identity,i.id AS iid,tu.updated_at AS updated,tu.success AS succ, json_extract(tu.info,'$.end_cursor') as end_cursor
+                                    FROM identities i
+                                    INNER JOIN identity_types it
+                                    ON it.id=i.identity_type_id AND it.name=:target_identity_type
+                                    LEFT OUTER JOIN table_updates tu
+                                    ON tu.identity_id=i.id AND tu.table_name=:table_name
+                                    ORDER BY i.identity,tu.updated_at ) as t1
+                                INNER JOIN
+                                    (SELECT it.id AS itid,i.identity as identity,i.id AS iid,MAX(tu.updated_at) AS updated
+                                    FROM identities i
+                                    INNER JOIN identity_types it
+                                    ON it.id=i.identity_type_id AND it.name=:target_identity_type
+                                    LEFT OUTER JOIN table_updates tu
+                                    ON tu.identity_id=i.id AND tu.table_name=:table_name
+                                    GROUP BY i.identity,i.id,it.id ) AS t2
+                            ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.iid=t2.iid
+                            AND t1.succ IS NULL
+                            ORDER BY t1.itid,t1.identity
+                    ;""",
                         {
                             "target_identity_type": self.target_identity_type,
                             "table_name": items_name,
@@ -1433,10 +1433,10 @@ class GHGQLFiller(github_rest.GithubFiller):
                 # # specific to sqlite because no internal json parsing implemented in query
                 # self.elt_list = []
                 # for (identity_type_id,login,identity_id,end_cursor_info) in elt_list:
-                # 	try:
-                # 		self.elt_list.append((identity_type_id,login,identity_id,json.loads(end_cursor_info)['end_cursor']))
-                # 	except:
-                # 		self.elt_list.append((identity_type_id,login,identity_id,None))
+                #   try:
+                #       self.elt_list.append((identity_type_id,login,identity_id,json.loads(end_cursor_info)['end_cursor']))
+                #   except:
+                #       self.elt_list.append((identity_type_id,login,identity_id,None))
 
             if self.start_offset is not None:
                 self.elt_list = [r for r in self.elt_list if r[1] >= self.start_offset]
@@ -1464,23 +1464,23 @@ class StarsGQLFiller(GHGQLFiller):
         output: python-formatable string representing the graphql query
         """
         return """query {{
-					repository(owner:"{repo_owner}", name:"{repo_name}") {{
-						nameWithOwner
-						stargazers (first:{page_size}, orderBy: {{ field: STARRED_AT, direction: ASC }} {after_end_cursor} ){{
-						 totalCount
-						 pageInfo {{
-							endCursor
-							hasNextPage
-						 }}
-						 edges {{
-						 	starredAt
-							node {{
-								login
-							}}
-						 }}
-						}}
-					}}
-				}}"""
+                    repository(owner:"{repo_owner}", name:"{repo_name}") {{
+                        nameWithOwner
+                        stargazers (first:{page_size}, orderBy: {{ field: STARRED_AT, direction: ASC }} {after_end_cursor} ){{
+                         totalCount
+                         pageInfo {{
+                            endCursor
+                            hasNextPage
+                         }}
+                         edges {{
+                            starredAt
+                            node {{
+                                login
+                            }}
+                         }}
+                        }}
+                    }}
+                }}"""
 
     def parse_query_result(
         self,
@@ -1527,15 +1527,15 @@ class StarsGQLFiller(GHGQLFiller):
             extras.execute_batch(
                 db.cursor,
                 """
-				INSERT INTO stars(starred_at,login,repo_id,identity_type_id,identity_id)
-				VALUES(%s,
-						%s,
-						%s,
-						(SELECT id FROM identity_types WHERE name=%s),
-						(SELECT id FROM identities WHERE identity=%s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%s))
-					)
-				ON CONFLICT DO NOTHING
-				;""",
+                INSERT INTO stars(starred_at,login,repo_id,identity_type_id,identity_id)
+                VALUES(%s,
+                        %s,
+                        %s,
+                        (SELECT id FROM identity_types WHERE name=%s),
+                        (SELECT id FROM identities WHERE identity=%s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%s))
+                    )
+                ON CONFLICT DO NOTHING
+                ;""",
                 (
                     (
                         s["starred_at"],
@@ -1551,13 +1551,13 @@ class StarsGQLFiller(GHGQLFiller):
         else:
             db.cursor.executemany(
                 """
-					INSERT OR IGNORE INTO stars(starred_at,login,repo_id,identity_type_id,identity_id)
-					VALUES(?,
-							?,
-							?,
-							(SELECT id FROM identity_types WHERE name=?),
-							(SELECT id FROM identities WHERE identity=? AND identity_type_id=(SELECT id FROM identity_types WHERE name=?))
-						);""",
+                    INSERT OR IGNORE INTO stars(starred_at,login,repo_id,identity_type_id,identity_id)
+                    VALUES(?,
+                            ?,
+                            ?,
+                            (SELECT id FROM identity_types WHERE name=?),
+                            (SELECT id FROM identities WHERE identity=? AND identity_type_id=(SELECT id FROM identity_types WHERE name=?))
+                        );""",
                 (
                     (
                         s["starred_at"],
@@ -1599,22 +1599,22 @@ class WatchersGQLFiller(GHGQLFiller):
         output: python-formatable string representing the graphql query
         """
         return """query {{
-					repository(owner:"{repo_owner}", name:"{repo_name}") {{
-						nameWithOwner
-						watchers (first:{page_size} {after_end_cursor} ){{
-						 totalCount
-						 pageInfo {{
-							endCursor
-							hasNextPage
-						 }}
-						 edges {{
-							node {{
-								login
-							}}
-						 }}
-						}}
-					}}
-				}}"""
+                    repository(owner:"{repo_owner}", name:"{repo_name}") {{
+                        nameWithOwner
+                        watchers (first:{page_size} {after_end_cursor} ){{
+                         totalCount
+                         pageInfo {{
+                            endCursor
+                            hasNextPage
+                         }}
+                         edges {{
+                            node {{
+                                login
+                            }}
+                         }}
+                        }}
+                    }}
+                }}"""
 
     def parse_query_result(
         self,
@@ -1665,25 +1665,25 @@ class WatchersGQLFiller(GHGQLFiller):
             extras.execute_batch(
                 db.cursor,
                 """
-				INSERT INTO watchers(login,repo_id,identity_type_id,identity_id)
-				VALUES(%(watcher_login)s,
-						%(repo_id)s,
-						(SELECT id FROM identity_types WHERE name=%(identity_type)s),
-						(SELECT id FROM identities WHERE identity=%(watcher_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(identity_type)s))
-					)
-				ON CONFLICT DO NOTHING
-				;""",
+                INSERT INTO watchers(login,repo_id,identity_type_id,identity_id)
+                VALUES(%(watcher_login)s,
+                        %(repo_id)s,
+                        (SELECT id FROM identity_types WHERE name=%(identity_type)s),
+                        (SELECT id FROM identities WHERE identity=%(watcher_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(identity_type)s))
+                    )
+                ON CONFLICT DO NOTHING
+                ;""",
                 items_list,
             )
         else:
             db.cursor.executemany(
                 """
-					INSERT OR IGNORE INTO stars(login,repo_id,identity_type_id,identity_id)
-					VALUES(:watcher_login,
-							:repo_id,
-							(SELECT id FROM identity_types WHERE name=:identity_type),
-							(SELECT id FROM identities WHERE identity=:watcher_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:identity_type))
-						);""",
+                    INSERT OR IGNORE INTO stars(login,repo_id,identity_type_id,identity_id)
+                    VALUES(:watcher_login,
+                            :repo_id,
+                            (SELECT id FROM identity_types WHERE name=:identity_type),
+                            (SELECT id FROM identities WHERE identity=:watcher_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:identity_type))
+                        );""",
                 items_list,
             )
         if commit:
@@ -1723,22 +1723,24 @@ class ForksGQLFiller(GHGQLFiller):
         output: python-formatable string representing the graphql query
         """
         return """query {{
-					repository(owner:"{repo_owner}", name:"{repo_name}") {{
-						nameWithOwner
-						forks (first:{page_size}, orderBy: {{ field: CREATED_AT, direction: ASC }} {after_end_cursor} ){{
-						 totalCount
-						 pageInfo {{
-							endCursor
-							hasNextPage
-						 }}
-						 nodes {{
-						 		createdAt
-								nameWithOwner
-							}}
-						 
-						}}
-					}}
-				}}"""
+                    repository(owner:"{repo_owner}", name:"{repo_name}") {{
+                        nameWithOwner
+                        forks (first:{page_size}
+                        #, orderBy: {{ field: CREATED_AT, direction: ASC }} 
+                        {after_end_cursor} ){{
+                         totalCount
+                         pageInfo {{
+                            endCursor
+                            hasNextPage
+                         }}
+                         nodes {{
+                                createdAt
+                                nameWithOwner
+                            }}
+                         
+                        }}
+                    }}
+                }}"""
 
     def parse_query_result(
         self,
@@ -1790,16 +1792,16 @@ class ForksGQLFiller(GHGQLFiller):
             extras.execute_batch(
                 db.cursor,
                 """
-										INSERT INTO forks(forking_repo_id,forked_repo_id,forking_repo_url,forked_at)
-										VALUES((SELECT r.id FROM repositories r
-													INNER JOIN sources s
-													ON s.name=%(source)s AND s.id=r.source AND CONCAT(r.owner,'/',r.name)=%(fork_fullname)s)
-												,%(repo_id)s
-												,(SELECT CONCAT(s.url_root,'/',%(fork_fullname)s) FROM sources s
-													WHERE s.name=%(source)s)
-												,%(forked_at)s)
-										ON CONFLICT DO NOTHING
-										;""",
+                                        INSERT INTO forks(forking_repo_id,forked_repo_id,forking_repo_url,forked_at)
+                                        VALUES((SELECT r.id FROM repositories r
+                                                    INNER JOIN sources s
+                                                    ON s.name=%(source)s AND s.id=r.source AND CONCAT(r.owner,'/',r.name)=%(fork_fullname)s)
+                                                ,%(repo_id)s
+                                                ,(SELECT CONCAT(s.url_root,'/',%(fork_fullname)s) FROM sources s
+                                                    WHERE s.name=%(source)s)
+                                                ,%(forked_at)s)
+                                        ON CONFLICT DO NOTHING
+                                        ;""",
                 (
                     {
                         "source": s["source"],
@@ -1813,15 +1815,15 @@ class ForksGQLFiller(GHGQLFiller):
         else:
             db.cursor.executemany(
                 """
-										INSERT OR IGNORE INTO forks(forking_repo_id,forked_repo_id,forking_repo_url,forked_at)
-										VALUES((SELECT r.id FROM repositories r
-													INNER JOIN sources s
-													ON s.name=:source AND s.id=r.source AND r.owner || '/' || r.name=:fork_fullname)
-												,:repo_id
-												,(SELECT s.url_root || '/' || :fork_fullname FROM sources s
-													WHERE s.name=:source)
-												,:forked_at)
-										;""",
+                                        INSERT OR IGNORE INTO forks(forking_repo_id,forked_repo_id,forking_repo_url,forked_at)
+                                        VALUES((SELECT r.id FROM repositories r
+                                                    INNER JOIN sources s
+                                                    ON s.name=:source AND s.id=r.source AND r.owner || '/' || r.name=:fork_fullname)
+                                                ,:repo_id
+                                                ,(SELECT s.url_root || '/' || :fork_fullname FROM sources s
+                                                    WHERE s.name=:source)
+                                                ,:forked_at)
+                                        ;""",
                 (
                     {
                         "source": s["source"],
@@ -1861,36 +1863,36 @@ class SponsorsUserFiller(GHGQLFiller):
         output: python-formatable string representing the graphql query
         """
         return """query {{
-					user(login:"{user_login}") {{
-						login
-						sponsorsListing {{
-      						createdAt
-    							}}
-						sponsorshipsAsMaintainer (includePrivate:true, first:{page_size}{after_end_cursor} ){{
-							totalCount
-							pageInfo {{
-								endCursor
-								hasNextPage
-						 		}}
-						 	nodes {{
-								createdAt
-								privacyLevel
-								isOneTimePayment
-								id
-								tier {{
-									updatedAt
-									name
-									description
-									monthlyPriceInCents
-									monthlyPriceInDollars
-									}}
-								sponsor {{
-									login
-								}}
-							}}
-						}}
-					}}
-				}}"""
+                    user(login:"{user_login}") {{
+                        login
+                        sponsorsListing {{
+                            createdAt
+                                }}
+                        sponsorshipsAsMaintainer (includePrivate:true, first:{page_size}{after_end_cursor} ){{
+                            totalCount
+                            pageInfo {{
+                                endCursor
+                                hasNextPage
+                                }}
+                            nodes {{
+                                createdAt
+                                privacyLevel
+                                isOneTimePayment
+                                id
+                                tier {{
+                                    updatedAt
+                                    name
+                                    description
+                                    monthlyPriceInCents
+                                    monthlyPriceInDollars
+                                    }}
+                                sponsor {{
+                                    login
+                                }}
+                            }}
+                        }}
+                    }}
+                }}"""
 
     def parse_query_result(self, query_result, identity_id, identity_type_id, **kwargs):
         """
@@ -1946,18 +1948,18 @@ class SponsorsUserFiller(GHGQLFiller):
             extras.execute_batch(
                 db.cursor,
                 """
-				INSERT INTO sponsors_user(sponsored_id,sponsor_identity_type_id,sponsor_id,sponsor_login,created_at,external_id,tier,is_onetime_payment)
-				VALUES(%s,
-						%s,
-						(SELECT id FROM identities WHERE identity=%s AND identity_type_id=%s),
-						%s,
-						%s,
-						%s,
-						%s,
-						%s
-					)
-				ON CONFLICT DO NOTHING
-				;""",
+                INSERT INTO sponsors_user(sponsored_id,sponsor_identity_type_id,sponsor_id,sponsor_login,created_at,external_id,tier,is_onetime_payment)
+                VALUES(%s,
+                        %s,
+                        (SELECT id FROM identities WHERE identity=%s AND identity_type_id=%s),
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s
+                    )
+                ON CONFLICT DO NOTHING
+                ;""",
                 (
                     (
                         f["sponsored_id"],
@@ -1977,26 +1979,26 @@ class SponsorsUserFiller(GHGQLFiller):
             extras.execute_batch(
                 db.cursor,
                 """ INSERT INTO sponsors_listings(identity_type_id,login,created_at)
-													VALUES(%(identity_type_id)s,
-															%(sponsored_login)s,
-															%(sponsorsListing_createdat)s)
-													ON CONFLICT DO NOTHING;""",
+                                                    VALUES(%(identity_type_id)s,
+                                                            %(sponsored_login)s,
+                                                            %(sponsorsListing_createdat)s)
+                                                    ON CONFLICT DO NOTHING;""",
                 items_list,
             )
         else:
             db.cursor.executemany(
                 """
-				INSERT OR IGNORE INTO sponsors_user(sponsored_id,sponsor_identity_type_id,sponsor_id,sponsor_login,created_at,external_id,tier,is_onetime_payment)
-				VALUES(?,
-						?,
-						(SELECT id FROM identities WHERE identity=? AND identity_type_id=?),
-						?,
-						?,
-						?,
-						?,
-						?
-					)
-				;""",
+                INSERT OR IGNORE INTO sponsors_user(sponsored_id,sponsor_identity_type_id,sponsor_id,sponsor_login,created_at,external_id,tier,is_onetime_payment)
+                VALUES(?,
+                        ?,
+                        (SELECT id FROM identities WHERE identity=? AND identity_type_id=?),
+                        ?,
+                        ?,
+                        ?,
+                        ?,
+                        ?
+                    )
+                ;""",
                 (
                     (
                         f["sponsored_id"],
@@ -2015,10 +2017,10 @@ class SponsorsUserFiller(GHGQLFiller):
 
             db.cursor.executemany(
                 """ INSERT OR IGNORE INTO sponsors_listings(identity_type_id,login,created_at)
-													VALUES(:identity_type_id,
-															:sponsored_login,
-															:sponsorsListing_createdat)
-													;""",
+                                                    VALUES(:identity_type_id,
+                                                            :sponsored_login,
+                                                            :sponsorsListing_createdat)
+                                                    ;""",
                 items_list,
             )
 
@@ -2050,22 +2052,22 @@ class FollowersGQLFiller(GHGQLFiller):
         output: python-formatable string representing the graphql query
         """
         return """query {{
-					user(login:"{user_login}") {{
-						login
-						followers (first:{page_size} {after_end_cursor} ){{
-						 totalCount
-						 pageInfo {{
-							endCursor
-							hasNextPage
-						 }}
-						 edges {{
-							node {{
-								login
-							}}
-						 }}
-						}}
-					}}
-				}}"""
+                    user(login:"{user_login}") {{
+                        login
+                        followers (first:{page_size} {after_end_cursor} ){{
+                         totalCount
+                         pageInfo {{
+                            endCursor
+                            hasNextPage
+                         }}
+                         edges {{
+                            node {{
+                                login
+                            }}
+                         }}
+                        }}
+                    }}
+                }}"""
 
     def parse_query_result(self, query_result, identity_id, identity_type_id, **kwargs):
         """
@@ -2102,14 +2104,14 @@ class FollowersGQLFiller(GHGQLFiller):
             extras.execute_batch(
                 db.cursor,
                 """
-				INSERT INTO followers(follower_identity_type_id,follower_login,follower_id,followee_id)
-				VALUES(%s,
-						%s,
-						(SELECT id FROM identities WHERE identity=%s AND identity_type_id=%s),
-						%s
-					)
-				ON CONFLICT DO NOTHING
-				;""",
+                INSERT INTO followers(follower_identity_type_id,follower_login,follower_id,followee_id)
+                VALUES(%s,
+                        %s,
+                        (SELECT id FROM identities WHERE identity=%s AND identity_type_id=%s),
+                        %s
+                    )
+                ON CONFLICT DO NOTHING
+                ;""",
                 (
                     (
                         f["identity_type_id"],
@@ -2124,13 +2126,13 @@ class FollowersGQLFiller(GHGQLFiller):
         else:
             db.cursor.executemany(
                 """
-				INSERT OR IGNORE INTO followers(follower_identity_type_id,follower_login,follower_id,followee_id)
-				VALUES(?,
-						?,
-						(SELECT id FROM identities WHERE identity=? AND identity_type_id=?),
-						?
-					)
-				;""",
+                INSERT OR IGNORE INTO followers(follower_identity_type_id,follower_login,follower_id,followee_id)
+                VALUES(?,
+                        ?,
+                        (SELECT id FROM identities WHERE identity=? AND identity_type_id=?),
+                        ?
+                    )
+                ;""",
                 (
                     (
                         f["identity_type_id"],
@@ -2171,24 +2173,24 @@ class BackwardsSponsorsUserFiller(SponsorsUserFiller):
         output: python-formatable string representing the graphql query
         """
         return """query {{
-					user(login:"{user_login}") {{
-						login
-						sponsorshipsAsSponsor (first:{page_size}{after_end_cursor} ){{
-							totalCount
-							pageInfo {{
-								endCursor
-								hasNextPage
-						 		}}
-						 	nodes {{
-								sponsorable {{
-									sponsorsListing {{
-									name
-									}}
-								}}
-							}}
-						}}
-					}}
-				}}"""
+                    user(login:"{user_login}") {{
+                        login
+                        sponsorshipsAsSponsor (first:{page_size}{after_end_cursor} ){{
+                            totalCount
+                            pageInfo {{
+                                endCursor
+                                hasNextPage
+                                }}
+                            nodes {{
+                                sponsorable {{
+                                    sponsorsListing {{
+                                    name
+                                    }}
+                                }}
+                            }}
+                        }}
+                    }}
+                }}"""
 
     def parse_query_result(self, query_result, identity_id, identity_type_id, **kwargs):
         """
@@ -2231,17 +2233,17 @@ class BackwardsSponsorsUserFiller(SponsorsUserFiller):
             extras.execute_batch(
                 db.cursor,
                 """
-				INSERT INTO users(
-						creation_identity,
-						creation_identity_type_id)
-					SELECT %s,%s
-					WHERE NOT EXISTS (SELECT 1 FROM identities
-										WHERE identity_type_id=%s
-										AND identity=%s)
-				ON CONFLICT DO NOTHING
-				;
-				COMMIT;
-				""",
+                INSERT INTO users(
+                        creation_identity,
+                        creation_identity_type_id)
+                    SELECT %s,%s
+                    WHERE NOT EXISTS (SELECT 1 FROM identities
+                                        WHERE identity_type_id=%s
+                                        AND identity=%s)
+                ON CONFLICT DO NOTHING
+                ;
+                COMMIT;
+                """,
                 (
                     (
                         f["sponsored_login"],
@@ -2255,17 +2257,17 @@ class BackwardsSponsorsUserFiller(SponsorsUserFiller):
             extras.execute_batch(
                 db.cursor,
                 """
-				INSERT INTO identities(
-						identity_type_id,
-						identity,
-						user_id)
-					VALUES(%s,
-							%s,
-							(SELECT id FROM users u WHERE u.creation_identity=%s AND u.creation_identity_type_id=%s))
-					ON CONFLICT DO NOTHING
-				;
-				COMMIT;
-				""",
+                INSERT INTO identities(
+                        identity_type_id,
+                        identity,
+                        user_id)
+                    VALUES(%s,
+                            %s,
+                            (SELECT id FROM users u WHERE u.creation_identity=%s AND u.creation_identity_type_id=%s))
+                    ON CONFLICT DO NOTHING
+                ;
+                COMMIT;
+                """,
                 (
                     (
                         f["identity_type_id"],
@@ -2280,16 +2282,16 @@ class BackwardsSponsorsUserFiller(SponsorsUserFiller):
             for f in items_list:
                 db.cursor.execute(
                     """
-					INSERT INTO users(
-							creation_identity,
-							creation_identity_type_id)
-						SELECT ?,?
-						WHERE NOT EXISTS (SELECT 1 FROM identities
-											WHERE identity_type_id=?
-											AND identity=?)
-					ON CONFLICT DO NOTHING
-					;
-					""",
+                    INSERT INTO users(
+                            creation_identity,
+                            creation_identity_type_id)
+                        SELECT ?,?
+                        WHERE NOT EXISTS (SELECT 1 FROM identities
+                                            WHERE identity_type_id=?
+                                            AND identity=?)
+                    ON CONFLICT DO NOTHING
+                    ;
+                    """,
                     (
                         f["sponsored_login"],
                         f["identity_type_id"],
@@ -2300,16 +2302,16 @@ class BackwardsSponsorsUserFiller(SponsorsUserFiller):
                 db.connection.commit()
                 db.cursor.execute(
                     """
-					INSERT INTO identities(
-							identity_type_id,
-							identity,
-							user_id)
-						VALUES(?,
-								?,
-								(SELECT id FROM users u WHERE u.creation_identity=? AND u.creation_identity_type_id=?))
-						ON CONFLICT DO NOTHING
-					;
-					""",
+                    INSERT INTO identities(
+                            identity_type_id,
+                            identity,
+                            user_id)
+                        VALUES(?,
+                                ?,
+                                (SELECT id FROM users u WHERE u.creation_identity=? AND u.creation_identity_type_id=?))
+                        ON CONFLICT DO NOTHING
+                    ;
+                    """,
                     (
                         f["identity_type_id"],
                         f["sponsored_login"],
@@ -2346,23 +2348,23 @@ class ReleasesGQLFiller(GHGQLFiller):
         output: python-formatable string representing the graphql query
         """
         return """query {{
-  					repository(owner: "{repo_owner}", name: "{repo_name}") {{
-  							nameWithOwner
-    						id
-    						releases(first:{page_size} {after_end_cursor}) {{
-    							totalCount
-    							pageInfo {{
-									endCursor
-									hasNextPage
-						 			}}
-      							nodes {{
-        							createdAt
-        							tagName
-        							name
-      								}}
-    							}}
-  							}}
-						}}"""
+                    repository(owner: "{repo_owner}", name: "{repo_name}") {{
+                            nameWithOwner
+                            id
+                            releases(first:{page_size} {after_end_cursor}) {{
+                                totalCount
+                                pageInfo {{
+                                    endCursor
+                                    hasNextPage
+                                    }}
+                                nodes {{
+                                    createdAt
+                                    tagName
+                                    name
+                                    }}
+                                }}
+                            }}
+                        }}"""
 
     def parse_query_result(
         self,
@@ -2410,14 +2412,14 @@ class ReleasesGQLFiller(GHGQLFiller):
             extras.execute_batch(
                 db.cursor,
                 """
-				INSERT INTO releases(created_at,name,repo_id,tag_name)
-				VALUES(%s,
-						%s,
-						%s,
-						%s)
+                INSERT INTO releases(created_at,name,repo_id,tag_name)
+                VALUES(%s,
+                        %s,
+                        %s,
+                        %s)
 
-				ON CONFLICT DO NOTHING
-				;""",
+                ON CONFLICT DO NOTHING
+                ;""",
                 (
                     (s["released_at"], s["release_name"], s["repo_id"], s["tag_name"])
                     for s in items_list
@@ -2426,12 +2428,12 @@ class ReleasesGQLFiller(GHGQLFiller):
         else:
             db.cursor.executemany(
                 """
-					INSERT OR IGNORE INTO releases(created_at,name,repo_id,tag_name)
-					VALUES(?,
-							?,
-							?,
-							?)
-				;""",
+                    INSERT OR IGNORE INTO releases(created_at,name,repo_id,tag_name)
+                    VALUES(?,
+                            ?,
+                            ?,
+                            ?)
+                ;""",
                 (
                     (s["released_at"], s["release_name"], s["repo_id"], s["tag_name"])
                     for s in items_list
@@ -2482,23 +2484,23 @@ class LoginsGQLFiller(GHGQLFiller):
         output: python-formatable string representing the graphql query
         """
         return """query {{
-  					repository(owner: "{repo_owner}", name: "{repo_name}") {{
-  							nameWithOwner
-    						id
-    						object(oid:"{commit_sha}"){{
-    							... on Commit{{
+                    repository(owner: "{repo_owner}", name: "{repo_name}") {{
+                            nameWithOwner
+                            id
+                            object(oid:"{commit_sha}"){{
+                                ... on Commit{{
 
-    								oid
-    								actor:{actor} {{
-    									user {{
-    									login
-    									createdAt
-    										}}
-    								}}
-    							}}
-    							}}
-  							}}
-						}}"""
+                                    oid
+                                    actor:{actor} {{
+                                        user {{
+                                        login
+                                        createdAt
+                                            }}
+                                    }}
+                                }}
+                                }}
+                            }}
+                        }}"""
 
     def parse_query_result(self, query_result, identity_id, **kwargs):
         """
@@ -2560,9 +2562,9 @@ class LoginsGQLFiller(GHGQLFiller):
                 if login is not None:
                     db.cursor.execute(
                         """ INSERT INTO users(creation_identity_type_id,creation_identity) VALUES(
-												(SELECT id FROM identity_types WHERE name=%s),
-												%s
-												) ON CONFLICT DO NOTHING;""",
+                                                (SELECT id FROM identity_types WHERE name=%s),
+                                                %s
+                                                ) ON CONFLICT DO NOTHING;""",
                         (
                             self.target_identity_type,
                             login,
@@ -2571,12 +2573,12 @@ class LoginsGQLFiller(GHGQLFiller):
 
                     db.cursor.execute(
                         """ INSERT INTO identities(identity_type_id,user_id,identity)
-													VALUES((SELECT id FROM identity_types WHERE name=%s),
-															(SELECT id FROM users
-															WHERE creation_identity_type_id=(SELECT id FROM identity_types WHERE name=%s)
-																AND creation_identity=%s),
-															%s)
-													ON CONFLICT DO NOTHING;""",
+                                                    VALUES((SELECT id FROM identity_types WHERE name=%s),
+                                                            (SELECT id FROM users
+                                                            WHERE creation_identity_type_id=(SELECT id FROM identity_types WHERE name=%s)
+                                                                AND creation_identity=%s),
+                                                            %s)
+                                                    ON CONFLICT DO NOTHING;""",
                         (
                             self.target_identity_type,
                             self.target_identity_type,
@@ -2587,8 +2589,8 @@ class LoginsGQLFiller(GHGQLFiller):
 
                     db.cursor.execute(
                         """SELECT id FROM identities
-												WHERE identity_type_id=(SELECT id FROM identity_types WHERE name=%s)
-												AND identity=%s;""",
+                                                WHERE identity_type_id=(SELECT id FROM identity_types WHERE name=%s)
+                                                AND identity=%s;""",
                         (
                             self.target_identity_type,
                             login,
@@ -2609,9 +2611,9 @@ class LoginsGQLFiller(GHGQLFiller):
                 if login is not None:
                     db.cursor.execute(
                         """ INSERT OR IGNORE INTO users(creation_identity_type_id,creation_identity) VALUES(
-												(SELECT id FROM identity_types WHERE name=?),
-												?
-												);""",
+                                                (SELECT id FROM identity_types WHERE name=?),
+                                                ?
+                                                );""",
                         (
                             self.target_identity_type,
                             login,
@@ -2620,11 +2622,11 @@ class LoginsGQLFiller(GHGQLFiller):
 
                     db.cursor.execute(
                         """ INSERT OR IGNORE INTO identities(identity_type_id,user_id,identity)
-													VALUES((SELECT id FROM identity_types WHERE name=?),
-															(SELECT id FROM users
-															WHERE creation_identity_type_id=(SELECT id FROM identity_types WHERE name=?)
-																AND creation_identity=?),
-															?);""",
+                                                    VALUES((SELECT id FROM identity_types WHERE name=?),
+                                                            (SELECT id FROM users
+                                                            WHERE creation_identity_type_id=(SELECT id FROM identity_types WHERE name=?)
+                                                                AND creation_identity=?),
+                                                            ?);""",
                         (
                             self.target_identity_type,
                             self.target_identity_type,
@@ -2635,8 +2637,8 @@ class LoginsGQLFiller(GHGQLFiller):
 
                     db.cursor.execute(
                         """SELECT id FROM identities
-												WHERE identity_type_id=(SELECT id FROM identity_types WHERE name=?)
-												AND identity=?;""",
+                                                WHERE identity_type_id=(SELECT id FROM identity_types WHERE name=?)
+                                                AND identity=?;""",
                         (
                             self.target_identity_type,
                             login,
@@ -2680,24 +2682,24 @@ class LoginsGQLFiller(GHGQLFiller):
             if self.db.db_type == "postgres":
                 self.db.cursor.execute(
                     """
-					SELECT s.id,r.owner,r.name,c.repo_id,c.sha,i.identity,i.id,i.identity_type_id
-					FROM (	(SELECT i1.id,i1.identity,i1.identity_type_id FROM identities i1)
-								EXCEPT
-							(SELECT i2.id,i2.identity,i2.identity_type_id FROM identities i2
-								INNER JOIN identities i3
-								ON i3.user_id = i2.user_id
-								INNER JOIN identity_types it2
-								ON it2.id=i3.identity_type_id AND it2.name=%(target_identity_type)s)
-							) AS i
-				 	JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
-				 		WHERE (CASE %(actor)s WHEN 'committer' THEN cc.committer_id ELSE cc.author_id END) = i.id ORDER BY cc.created_at DESC LIMIT 1) AS c
-				 	ON true
-				 	INNER JOIN repositories r
-				 	ON c.repo_id=r.id
-				 	INNER JOIN sources s
-					ON s.id=r.source AND s.name=%(source_name)s
-					ORDER BY i.identity
-					;""",
+                    SELECT s.id,r.owner,r.name,c.repo_id,c.sha,i.identity,i.id,i.identity_type_id
+                    FROM (  (SELECT i1.id,i1.identity,i1.identity_type_id FROM identities i1)
+                                EXCEPT
+                            (SELECT i2.id,i2.identity,i2.identity_type_id FROM identities i2
+                                INNER JOIN identities i3
+                                ON i3.user_id = i2.user_id
+                                INNER JOIN identity_types it2
+                                ON it2.id=i3.identity_type_id AND it2.name=%(target_identity_type)s)
+                            ) AS i
+                    JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
+                        WHERE (CASE %(actor)s WHEN 'committer' THEN cc.committer_id ELSE cc.author_id END) = i.id ORDER BY cc.created_at DESC LIMIT 1) AS c
+                    ON true
+                    INNER JOIN repositories r
+                    ON c.repo_id=r.id
+                    INNER JOIN sources s
+                    ON s.id=r.source AND s.name=%(source_name)s
+                    ORDER BY i.identity
+                    ;""",
                     {
                         "target_identity_type": self.target_identity_type,
                         "source_name": self.source_name,
@@ -2707,24 +2709,24 @@ class LoginsGQLFiller(GHGQLFiller):
             else:
                 self.db.cursor.execute(
                     """
-					SELECT s.id,r.owner,r.name,c.repo_id,c.sha,i.identity,i.id,i.identity_type_id
-					FROM (	SELECT i1.id,i1.identity,i1.identity_type_id FROM identities i1
-								EXCEPT
-							SELECT i2.id,i2.identity,i2.identity_type_id FROM identities i2
-								INNER JOIN identities i3
-								ON i3.user_id = i2.user_id
-								INNER JOIN identity_types it2
-								ON it2.id=i3.identity_type_id AND it2.name=:target_identity_type
-							) AS i
-				 	JOIN commits c
-				 	ON c.id IN (SELECT cc.id FROM commits cc
-				 		WHERE (CASE :actor WHEN 'committer' THEN cc.committer_id ELSE cc.author_id END) = i.id ORDER BY cc.created_at DESC LIMIT 1)
-				 	INNER JOIN repositories r
-				 	ON c.repo_id=r.id
-				 	INNER JOIN sources s
-					ON s.id=r.source AND s.name=:source_name
-					ORDER BY i.identity
-					;""",
+                    SELECT s.id,r.owner,r.name,c.repo_id,c.sha,i.identity,i.id,i.identity_type_id
+                    FROM (  SELECT i1.id,i1.identity,i1.identity_type_id FROM identities i1
+                                EXCEPT
+                            SELECT i2.id,i2.identity,i2.identity_type_id FROM identities i2
+                                INNER JOIN identities i3
+                                ON i3.user_id = i2.user_id
+                                INNER JOIN identity_types it2
+                                ON it2.id=i3.identity_type_id AND it2.name=:target_identity_type
+                            ) AS i
+                    JOIN commits c
+                    ON c.id IN (SELECT cc.id FROM commits cc
+                        WHERE (CASE :actor WHEN 'committer' THEN cc.committer_id ELSE cc.author_id END) = i.id ORDER BY cc.created_at DESC LIMIT 1)
+                    INNER JOIN repositories r
+                    ON c.repo_id=r.id
+                    INNER JOIN sources s
+                    ON s.id=r.source AND s.name=:source_name
+                    ORDER BY i.identity
+                    ;""",
                     {
                         "target_identity_type": self.target_identity_type,
                         "source_name": self.source_name,
@@ -2735,27 +2737,27 @@ class LoginsGQLFiller(GHGQLFiller):
             if self.db.db_type == "postgres":
                 self.db.cursor.execute(
                     """
-					SELECT s.id,r.owner,r.name,c.repo_id,c.sha,i.identity,i.id,i.identity_type_id
-					FROM (
-						SELECT ii.id,ii.identity,ii.identity_type_id FROM
-					 		(SELECT iii.id,iii.identity,iii.identity_type_id FROM identities iii
-							WHERE (SELECT iiii.id FROM identities iiii
-								INNER JOIN identity_types iiiit
-								ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name=%(target_identity_type)s) IS NULL) AS ii
-							LEFT JOIN table_updates tu
-							ON tu.identity_id=ii.id AND tu.table_name='login'
-							GROUP BY ii.id,ii.identity,ii.identity_type_id,tu.identity_id
-							HAVING tu.identity_id IS NULL
-						) AS i
-					JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
-						WHERE (CASE %(actor)s WHEN 'committer' THEN cc.committer_id ELSE cc.author_id END) = i.id ORDER BY cc.created_at DESC LIMIT 1) AS c
-					ON true
-					INNER JOIN repositories r
-					ON r.id=c.repo_id
-				 	INNER JOIN sources s
-					ON s.id=r.source AND s.name=%(source_name)s
-					ORDER BY i.id
-					;""",
+                    SELECT s.id,r.owner,r.name,c.repo_id,c.sha,i.identity,i.id,i.identity_type_id
+                    FROM (
+                        SELECT ii.id,ii.identity,ii.identity_type_id FROM
+                            (SELECT iii.id,iii.identity,iii.identity_type_id FROM identities iii
+                            WHERE (SELECT iiii.id FROM identities iiii
+                                INNER JOIN identity_types iiiit
+                                ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name=%(target_identity_type)s) IS NULL) AS ii
+                            LEFT JOIN table_updates tu
+                            ON tu.identity_id=ii.id AND tu.table_name='login'
+                            GROUP BY ii.id,ii.identity,ii.identity_type_id,tu.identity_id
+                            HAVING tu.identity_id IS NULL
+                        ) AS i
+                    JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
+                        WHERE (CASE %(actor)s WHEN 'committer' THEN cc.committer_id ELSE cc.author_id END) = i.id ORDER BY cc.created_at DESC LIMIT 1) AS c
+                    ON true
+                    INNER JOIN repositories r
+                    ON r.id=c.repo_id
+                    INNER JOIN sources s
+                    ON s.id=r.source AND s.name=%(source_name)s
+                    ORDER BY i.id
+                    ;""",
                     {
                         "target_identity_type": self.target_identity_type,
                         "source_name": self.source_name,
@@ -2765,8 +2767,8 @@ class LoginsGQLFiller(GHGQLFiller):
             else:
                 self.db.cursor.execute(
                     """
-					DROP TABLE IF EXISTS temp_missing_logins
-					;""",
+                    DROP TABLE IF EXISTS temp_missing_logins
+                    ;""",
                     {
                         "target_identity_type": self.target_identity_type,
                         "source_name": self.source_name,
@@ -2776,8 +2778,8 @@ class LoginsGQLFiller(GHGQLFiller):
 
                 self.db.cursor.execute(
                     """
-					DROP TABLE IF EXISTS temp_missing_logins_commits
-					;""",
+                    DROP TABLE IF EXISTS temp_missing_logins_commits
+                    ;""",
                     {
                         "target_identity_type": self.target_identity_type,
                         "source_name": self.source_name,
@@ -2787,8 +2789,8 @@ class LoginsGQLFiller(GHGQLFiller):
 
                 self.db.cursor.execute(
                     """
-					DROP TABLE IF EXISTS temp_missing_logins_commit_times
-					;""",
+                    DROP TABLE IF EXISTS temp_missing_logins_commit_times
+                    ;""",
                     {
                         "target_identity_type": self.target_identity_type,
                         "source_name": self.source_name,
@@ -2798,12 +2800,12 @@ class LoginsGQLFiller(GHGQLFiller):
 
                 self.db.cursor.execute(
                     """
-					CREATE TEMPORARY TABLE temp_missing_logins(
-						id INTEGER PRIMARY KEY,
-						identity TEXT,
-						identity_type_id INTEGER
-						)	
-					;""",
+                    CREATE TEMPORARY TABLE temp_missing_logins(
+                        id INTEGER PRIMARY KEY,
+                        identity TEXT,
+                        identity_type_id INTEGER
+                        )   
+                    ;""",
                     {
                         "target_identity_type": self.target_identity_type,
                         "source_name": self.source_name,
@@ -2813,11 +2815,11 @@ class LoginsGQLFiller(GHGQLFiller):
 
                 self.db.cursor.execute(
                     """
-					CREATE TEMPORARY TABLE temp_missing_logins_commit_times(
-						id INTEGER PRIMARY KEY,
-						created_at TIMESTAMP
-						)	
-					;""",
+                    CREATE TEMPORARY TABLE temp_missing_logins_commit_times(
+                        id INTEGER PRIMARY KEY,
+                        created_at TIMESTAMP
+                        )   
+                    ;""",
                     {
                         "target_identity_type": self.target_identity_type,
                         "source_name": self.source_name,
@@ -2827,13 +2829,13 @@ class LoginsGQLFiller(GHGQLFiller):
 
                 self.db.cursor.execute(
                     """
-					CREATE TEMPORARY TABLE temp_missing_logins_commits(
-						id INTEGER,
-						sha TEXT,
-						repo_id INTEGER,
-						actor_id INTEGER PRIMARY KEY
-						)	
-					;""",
+                    CREATE TEMPORARY TABLE temp_missing_logins_commits(
+                        id INTEGER,
+                        sha TEXT,
+                        repo_id INTEGER,
+                        actor_id INTEGER PRIMARY KEY
+                        )   
+                    ;""",
                     {
                         "target_identity_type": self.target_identity_type,
                         "source_name": self.source_name,
@@ -2843,17 +2845,17 @@ class LoginsGQLFiller(GHGQLFiller):
 
                 self.db.cursor.execute(
                     """
-					INSERT INTO temp_missing_logins(id,identity,identity_type_id)
-						SELECT ii.id,ii.identity,ii.identity_type_id FROM
-					 		(SELECT iii.id,iii.identity,iii.identity_type_id FROM identities iii
-							WHERE (SELECT iiii.id FROM identities iiii
-								INNER JOIN identity_types iiiit
-								ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name=:target_identity_type) IS NULL) AS ii
-							LEFT JOIN table_updates tu
-							ON tu.identity_id=ii.id AND tu.table_name='login'
-							GROUP BY ii.id,ii.identity,ii.identity_type_id,tu.identity_id
-							HAVING tu.identity_id IS NULL
-					;""",
+                    INSERT INTO temp_missing_logins(id,identity,identity_type_id)
+                        SELECT ii.id,ii.identity,ii.identity_type_id FROM
+                            (SELECT iii.id,iii.identity,iii.identity_type_id FROM identities iii
+                            WHERE (SELECT iiii.id FROM identities iiii
+                                INNER JOIN identity_types iiiit
+                                ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name=:target_identity_type) IS NULL) AS ii
+                            LEFT JOIN table_updates tu
+                            ON tu.identity_id=ii.id AND tu.table_name='login'
+                            GROUP BY ii.id,ii.identity,ii.identity_type_id,tu.identity_id
+                            HAVING tu.identity_id IS NULL
+                    ;""",
                     {
                         "target_identity_type": self.target_identity_type,
                         "source_name": self.source_name,
@@ -2863,13 +2865,13 @@ class LoginsGQLFiller(GHGQLFiller):
 
                 self.db.cursor.execute(
                     """
-					INSERT INTO temp_missing_logins_commit_times(id,created_at)
-						SELECT i.id,max(cc.created_at)
-								FROM temp_missing_logins i
-								INNER JOIN commits cc
-									WHERE (CASE :actor WHEN 'committer' THEN cc.committer_id ELSE cc.author_id END) = i.id
-								GROUP BY i.id
-					;""",
+                    INSERT INTO temp_missing_logins_commit_times(id,created_at)
+                        SELECT i.id,max(cc.created_at)
+                                FROM temp_missing_logins i
+                                INNER JOIN commits cc
+                                    WHERE (CASE :actor WHEN 'committer' THEN cc.committer_id ELSE cc.author_id END) = i.id
+                                GROUP BY i.id
+                    ;""",
                     {
                         "target_identity_type": self.target_identity_type,
                         "source_name": self.source_name,
@@ -2879,13 +2881,13 @@ class LoginsGQLFiller(GHGQLFiller):
 
                 self.db.cursor.execute(
                     """
-					INSERT OR IGNORE INTO temp_missing_logins_commits(id,sha,repo_id,actor_id)
-							SELECT cc.id,cc.sha,cc.repo_id,ctime.id
-								FROM temp_missing_logins_commit_times ctime
-								INNER JOIN commits cc
-									ON (CASE :actor WHEN 'committer' THEN cc.committer_id ELSE cc.author_id END) = ctime.id
-									AND cc.created_at=ctime.created_at
-					;""",
+                    INSERT OR IGNORE INTO temp_missing_logins_commits(id,sha,repo_id,actor_id)
+                            SELECT cc.id,cc.sha,cc.repo_id,ctime.id
+                                FROM temp_missing_logins_commit_times ctime
+                                INNER JOIN commits cc
+                                    ON (CASE :actor WHEN 'committer' THEN cc.committer_id ELSE cc.author_id END) = ctime.id
+                                    AND cc.created_at=ctime.created_at
+                    ;""",
                     {
                         "target_identity_type": self.target_identity_type,
                         "source_name": self.source_name,
@@ -2895,16 +2897,16 @@ class LoginsGQLFiller(GHGQLFiller):
 
                 self.db.cursor.execute(
                     """
-					SELECT s.id,r.owner,r.name,c.repo_id,c.sha,i.identity,i.id,i.identity_type_id
-					FROM temp_missing_logins i
-					INNER JOIN temp_missing_logins_commits c
-						ON c.actor_id=i.id
-					INNER JOIN repositories r
-					ON r.id=c.repo_id
-					INNER JOIN sources s
-					ON s.id=r.source AND s.name=:source_name
-					ORDER BY i.id
-					;""",
+                    SELECT s.id,r.owner,r.name,c.repo_id,c.sha,i.identity,i.id,i.identity_type_id
+                    FROM temp_missing_logins i
+                    INNER JOIN temp_missing_logins_commits c
+                        ON c.actor_id=i.id
+                    INNER JOIN repositories r
+                    ON r.id=c.repo_id
+                    INNER JOIN sources s
+                    ON s.id=r.source AND s.name=:source_name
+                    ORDER BY i.id
+                    ;""",
                     {
                         "target_identity_type": self.target_identity_type,
                         "source_name": self.source_name,
@@ -2931,29 +2933,29 @@ class RandomCommitLoginsGQLFiller(LoginsGQLFiller):
             if self.db.db_type == "postgres":
                 self.db.cursor.execute(
                     """
-					SELECT s.id,r.owner,r.name,c.repo_id,c.sha,i.identity,i.id,i.identity_type_id
-					FROM (	(SELECT i1.id,i1.identity,i1.identity_type_id FROM identities i1)
-								EXCEPT
-							(SELECT i2.id,i2.identity,i2.identity_type_id FROM identities i2
-								INNER JOIN identities i3
-								ON i3.user_id = i2.user_id
-								INNER JOIN identity_types it2
-								ON it2.id=i3.identity_type_id AND it2.name=%(id_type)s)
-							) AS i
-				 	JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
-									INNER JOIN repositories r2
-									ON (CASE %(actor)s WHEN 'committer' THEN cc.committer_id ELSE cc.author_id END) = i.id
-									AND r2.id=cc.repo_id
-									INNER JOIN sources s2
-									ON s2.id=r2.source AND s2.name=%(s_name)s
-							ORDER BY RANDOM() LIMIT 1) AS c
-				 	ON true
-				 	INNER JOIN repositories r
-				 	ON c.repo_id=r.id
-				 	INNER JOIN sources s
-					ON s.id=r.source AND s.name=%(s_name)s
-					ORDER BY i.identity
-					;""",
+                    SELECT s.id,r.owner,r.name,c.repo_id,c.sha,i.identity,i.id,i.identity_type_id
+                    FROM (  (SELECT i1.id,i1.identity,i1.identity_type_id FROM identities i1)
+                                EXCEPT
+                            (SELECT i2.id,i2.identity,i2.identity_type_id FROM identities i2
+                                INNER JOIN identities i3
+                                ON i3.user_id = i2.user_id
+                                INNER JOIN identity_types it2
+                                ON it2.id=i3.identity_type_id AND it2.name=%(id_type)s)
+                            ) AS i
+                    JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
+                                    INNER JOIN repositories r2
+                                    ON (CASE %(actor)s WHEN 'committer' THEN cc.committer_id ELSE cc.author_id END) = i.id
+                                    AND r2.id=cc.repo_id
+                                    INNER JOIN sources s2
+                                    ON s2.id=r2.source AND s2.name=%(s_name)s
+                            ORDER BY RANDOM() LIMIT 1) AS c
+                    ON true
+                    INNER JOIN repositories r
+                    ON c.repo_id=r.id
+                    INNER JOIN sources s
+                    ON s.id=r.source AND s.name=%(s_name)s
+                    ORDER BY i.identity
+                    ;""",
                     {
                         "id_type": self.target_identity_type,
                         "s_name": self.source_name,
@@ -2963,29 +2965,29 @@ class RandomCommitLoginsGQLFiller(LoginsGQLFiller):
             else:
                 self.db.cursor.execute(
                     """
-					SELECT s.id,r.owner,r.name,c.repo_id,c.sha,i.identity,i.id,i.identity_type_id
-					FROM (	SELECT i1.id,i1.identity,i1.identity_type_id FROM identities i1
-								EXCEPT
-							SELECT i2.id,i2.identity,i2.identity_type_id FROM identities i2
-								INNER JOIN identities i3
-								ON i3.user_id = i2.user_id
-								INNER JOIN identity_types it2
-								ON it2.id=i3.identity_type_id AND it2.name=:id_type
-							) AS i
-				 	JOIN commits c
-				 	ON c.id IN (SELECT cc.id FROM commits cc
-									INNER JOIN repositories r2
-									ON (CASE :actor WHEN 'committer' THEN cc.committer_id ELSE cc.author_id END) = i.id
-									AND r2.id=cc.repo_id
-									INNER JOIN sources s2
-									ON s2.id=r2.source AND s2.name=:s_name
-							ORDER BY RANDOM() LIMIT 1)
-				 	INNER JOIN repositories r
-				 	ON c.repo_id=r.id
-				 	INNER JOIN sources s
-					ON s.id=r.source AND s.name=:s_name
-					ORDER BY i.identity
-					;""",
+                    SELECT s.id,r.owner,r.name,c.repo_id,c.sha,i.identity,i.id,i.identity_type_id
+                    FROM (  SELECT i1.id,i1.identity,i1.identity_type_id FROM identities i1
+                                EXCEPT
+                            SELECT i2.id,i2.identity,i2.identity_type_id FROM identities i2
+                                INNER JOIN identities i3
+                                ON i3.user_id = i2.user_id
+                                INNER JOIN identity_types it2
+                                ON it2.id=i3.identity_type_id AND it2.name=:id_type
+                            ) AS i
+                    JOIN commits c
+                    ON c.id IN (SELECT cc.id FROM commits cc
+                                    INNER JOIN repositories r2
+                                    ON (CASE :actor WHEN 'committer' THEN cc.committer_id ELSE cc.author_id END) = i.id
+                                    AND r2.id=cc.repo_id
+                                    INNER JOIN sources s2
+                                    ON s2.id=r2.source AND s2.name=:s_name
+                            ORDER BY RANDOM() LIMIT 1)
+                    INNER JOIN repositories r
+                    ON c.repo_id=r.id
+                    INNER JOIN sources s
+                    ON s.id=r.source AND s.name=:s_name
+                    ORDER BY i.identity
+                    ;""",
                     {
                         "id_type": self.target_identity_type,
                         "s_name": self.source_name,
@@ -2996,32 +2998,32 @@ class RandomCommitLoginsGQLFiller(LoginsGQLFiller):
             if self.db.db_type == "postgres":
                 self.db.cursor.execute(
                     """
-					SELECT s.id,r.owner,r.name,c.repo_id,c.sha,i.identity,i.id,i.identity_type_id
-					FROM (
-						SELECT ii.id,ii.identity,ii.identity_type_id FROM
-					 		(SELECT iii.id,iii.identity,iii.identity_type_id FROM identities iii
-							WHERE (SELECT iiii.id FROM identities iiii
-								INNER JOIN identity_types iiiit
-								ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name=%(id_type)s) IS NULL) AS ii
-							LEFT JOIN table_updates tu
-							ON tu.identity_id=ii.id AND tu.table_name='login'
-							GROUP BY ii.id,ii.identity,ii.identity_type_id,tu.identity_id
-							HAVING tu.identity_id IS NULL OR NOT BOOL_OR(tu.success)
-						) AS i
-					JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
-									INNER JOIN repositories r2
-									ON (CASE %(actor)s WHEN 'committer' THEN cc.committer_id ELSE cc.author_id END) = i.id
-									AND r2.id=cc.repo_id
-									INNER JOIN sources s2
-									ON s2.id=r2.source AND s2.name=%(s_name)s
-							ORDER BY RANDOM() LIMIT 1) AS c
-					ON true
-					INNER JOIN repositories r
-					ON r.id=c.repo_id
-				 	INNER JOIN sources s
-					ON s.id=r.source AND s.name=%(s_name)s
-					ORDER BY i.id
-					;""",
+                    SELECT s.id,r.owner,r.name,c.repo_id,c.sha,i.identity,i.id,i.identity_type_id
+                    FROM (
+                        SELECT ii.id,ii.identity,ii.identity_type_id FROM
+                            (SELECT iii.id,iii.identity,iii.identity_type_id FROM identities iii
+                            WHERE (SELECT iiii.id FROM identities iiii
+                                INNER JOIN identity_types iiiit
+                                ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name=%(id_type)s) IS NULL) AS ii
+                            LEFT JOIN table_updates tu
+                            ON tu.identity_id=ii.id AND tu.table_name='login'
+                            GROUP BY ii.id,ii.identity,ii.identity_type_id,tu.identity_id
+                            HAVING tu.identity_id IS NULL OR NOT BOOL_OR(tu.success)
+                        ) AS i
+                    JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
+                                    INNER JOIN repositories r2
+                                    ON (CASE %(actor)s WHEN 'committer' THEN cc.committer_id ELSE cc.author_id END) = i.id
+                                    AND r2.id=cc.repo_id
+                                    INNER JOIN sources s2
+                                    ON s2.id=r2.source AND s2.name=%(s_name)s
+                            ORDER BY RANDOM() LIMIT 1) AS c
+                    ON true
+                    INNER JOIN repositories r
+                    ON r.id=c.repo_id
+                    INNER JOIN sources s
+                    ON s.id=r.source AND s.name=%(s_name)s
+                    ORDER BY i.id
+                    ;""",
                     {
                         "id_type": self.target_identity_type,
                         "s_name": self.source_name,
@@ -3031,33 +3033,33 @@ class RandomCommitLoginsGQLFiller(LoginsGQLFiller):
             else:
                 self.db.cursor.execute(
                     """
-					SELECT s.id,r.owner,r.name,c.repo_id,c.sha,i.identity,i.id,i.identity_type_id
-					FROM (
-						SELECT ii.id,ii.identity,ii.identity_type_id FROM
-					 		(SELECT iii.id,iii.identity,iii.identity_type_id FROM identities iii
-							WHERE (SELECT iiii.id FROM identities iiii
-								INNER JOIN identity_types iiiit
-								ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name=:id_type) IS NULL) AS ii
-							LEFT JOIN table_updates tu
-							ON tu.identity_id=ii.id AND tu.table_name='login'
-							GROUP BY ii.id,ii.identity,ii.identity_type_id,tu.identity_id
-							HAVING tu.identity_id IS NULL OR NOT SUM(tu.success)
-						) AS i
-					JOIN commits c
-						ON
-						c.id IN (SELECT cc.id FROM commits cc
-									INNER JOIN repositories r2
-									ON (CASE :actor WHEN 'committer' THEN cc.committer_id ELSE cc.author_id END) = i.id
-									AND r2.id=cc.repo_id
-									INNER JOIN sources s2
-									ON s2.id=r2.source AND s2.name=:s_name
-							ORDER BY RANDOM() LIMIT 1)
-					INNER JOIN repositories r
-					ON r.id=c.repo_id
-					INNER JOIN sources s
-					ON s.id=r.source AND s.name=:s_name
-					ORDER BY i.id
-					;""",
+                    SELECT s.id,r.owner,r.name,c.repo_id,c.sha,i.identity,i.id,i.identity_type_id
+                    FROM (
+                        SELECT ii.id,ii.identity,ii.identity_type_id FROM
+                            (SELECT iii.id,iii.identity,iii.identity_type_id FROM identities iii
+                            WHERE (SELECT iiii.id FROM identities iiii
+                                INNER JOIN identity_types iiiit
+                                ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name=:id_type) IS NULL) AS ii
+                            LEFT JOIN table_updates tu
+                            ON tu.identity_id=ii.id AND tu.table_name='login'
+                            GROUP BY ii.id,ii.identity,ii.identity_type_id,tu.identity_id
+                            HAVING tu.identity_id IS NULL OR NOT SUM(tu.success)
+                        ) AS i
+                    JOIN commits c
+                        ON
+                        c.id IN (SELECT cc.id FROM commits cc
+                                    INNER JOIN repositories r2
+                                    ON (CASE :actor WHEN 'committer' THEN cc.committer_id ELSE cc.author_id END) = i.id
+                                    AND r2.id=cc.repo_id
+                                    INNER JOIN sources s2
+                                    ON s2.id=r2.source AND s2.name=:s_name
+                            ORDER BY RANDOM() LIMIT 1)
+                    INNER JOIN repositories r
+                    ON r.id=c.repo_id
+                    INNER JOIN sources s
+                    ON s.id=r.source AND s.name=:s_name
+                    ORDER BY i.id
+                    ;""",
                     {
                         "id_type": self.target_identity_type,
                         "s_name": self.source_name,
@@ -3094,12 +3096,12 @@ class CommitCommentReactionsGQLFiller(GHGQLFiller):
     def check_requirements(self):
         self.db.cursor.execute(
             """
-			SELECT update_type,updated_at FROM full_updates
-			WHERE update_type='commit_comments'
-			ORDER BY updated_at DESC
-			LIMIT 1
-			;
-			"""
+            SELECT update_type,updated_at FROM full_updates
+            WHERE update_type='commit_comments'
+            ORDER BY updated_at DESC
+            LIMIT 1
+            ;
+            """
         )
         ans = list(self.db.cursor.fetchall())
         if len(ans) == 0:
@@ -3116,35 +3118,35 @@ class CommitCommentReactionsGQLFiller(GHGQLFiller):
         output: python-formatable string representing the graphql query
         """
         return """query {{
-					repository(owner: "{repo_owner}", name: "{repo_name}") {{
-  							nameWithOwner
-    						id }}
-  					node(id:"{commit_comment_gql_id}") {{
-  					    ... on CommitComment {{
+                    repository(owner: "{repo_owner}", name: "{repo_name}") {{
+                            nameWithOwner
+                            id }}
+                    node(id:"{commit_comment_gql_id}") {{
+                        ... on CommitComment {{
 
-        							commit {{ oid }}
-									databaseId
-									id
-									author {{ login }}
-									bodyText
-									createdAt
-									reactions(first:{page_size}  {after_end_cursor}) {{
-										totalCount
-										pageInfo {{
-											hasNextPage
-											endCursor
-											}}
-										nodes {{
-											createdAt
-											user {{ login }}
-											content
-											id
-											}}
-      								}}
-    							
-    							}}
-  							}}
-						}}"""
+                                    commit {{ oid }}
+                                    databaseId
+                                    id
+                                    author {{ login }}
+                                    bodyText
+                                    createdAt
+                                    reactions(first:{page_size}  {after_end_cursor}) {{
+                                        totalCount
+                                        pageInfo {{
+                                            hasNextPage
+                                            endCursor
+                                            }}
+                                        nodes {{
+                                            createdAt
+                                            user {{ login }}
+                                            content
+                                            id
+                                            }}
+                                    }}
+                                
+                                }}
+                            }}
+                        }}"""
 
     def parse_query_result(
         self,
@@ -3256,39 +3258,39 @@ class CommitCommentsGQLFiller(GHGQLFiller):
         output: python-formatable string representing the graphql query
         """
         return """query {{
-  					repository(owner: "{repo_owner}", name: "{repo_name}") {{
-  							nameWithOwner
-    						id
-    						commitComments(first:{page_size} {after_end_cursor}) {{
-    							totalCount
-    							pageInfo {{
-									endCursor
-									hasNextPage
-						 			}}
-      							nodes {{
-        							commit {{ oid }}
-									databaseId
-									id
-									author {{ login }}
-									bodyText
-									createdAt
-									reactions(first:{secondary_page_size}) {{
-										totalCount
-										pageInfo {{
-											hasNextPage
-											endCursor
-											}}
-										nodes {{
-											createdAt
-											user {{ login }}
-											content
-											id
-											}}
-										}}
-      								}}
-    							}}
-  							}}
-						}}"""
+                    repository(owner: "{repo_owner}", name: "{repo_name}") {{
+                            nameWithOwner
+                            id
+                            commitComments(first:{page_size} {after_end_cursor}) {{
+                                totalCount
+                                pageInfo {{
+                                    endCursor
+                                    hasNextPage
+                                    }}
+                                nodes {{
+                                    commit {{ oid }}
+                                    databaseId
+                                    id
+                                    author {{ login }}
+                                    bodyText
+                                    createdAt
+                                    reactions(first:{secondary_page_size}) {{
+                                        totalCount
+                                        pageInfo {{
+                                            hasNextPage
+                                            endCursor
+                                            }}
+                                        nodes {{
+                                            createdAt
+                                            user {{ login }}
+                                            content
+                                            id
+                                            }}
+                                        }}
+                                    }}
+                                }}
+                            }}
+                        }}"""
 
     def parse_query_result(
         self,
@@ -3381,116 +3383,116 @@ class CommitCommentsGQLFiller(GHGQLFiller):
         if db.db_type == "postgres":
             db.cursor.execute(
                 f"""
-				CREATE TEMPORARY TABLE IF NOT EXISTS temp_commits (commit_sha TEXT PRIMARY KEY,repo_id BIGINT)
-				;""",
+                CREATE TEMPORARY TABLE IF NOT EXISTS temp_commits (commit_sha TEXT PRIMARY KEY,repo_id BIGINT)
+                ;""",
             )
             extras.execute_batch(
                 db.cursor,
                 """
-				INSERT INTO temp_commits(commit_sha,repo_id) SELECT %(commit_sha)s,%(repo_id)s WHERE NOT EXISTS (SELECT id FROM commits WHERE %(commit_sha)s=sha)
-				ON CONFLICT DO NOTHING
-				;""",
+                INSERT INTO temp_commits(commit_sha,repo_id) SELECT %(commit_sha)s,%(repo_id)s WHERE NOT EXISTS (SELECT id FROM commits WHERE %(commit_sha)s=sha)
+                ON CONFLICT DO NOTHING
+                ;""",
                 (i for i in items_list if i["element_type"] == "commit_comment"),
             )
             db.cursor.execute(
                 """
-				INSERT INTO commits(sha,repo_id) SELECT commit_sha,repo_id FROM temp_commits
-				ON CONFLICT DO NOTHING
-				;"""
+                INSERT INTO commits(sha,repo_id) SELECT commit_sha,repo_id FROM temp_commits
+                ON CONFLICT DO NOTHING
+                ;"""
             )
             db.cursor.execute(
                 """
-				INSERT INTO commit_repos(commit_id,repo_id) SELECT c.id,tc.repo_id FROM temp_commits tc
-				INNER JOIN commits c
-				ON c.sha=tc.commit_sha
-				ON CONFLICT DO NOTHING
-				;"""
+                INSERT INTO commit_repos(commit_id,repo_id) SELECT c.id,tc.repo_id FROM temp_commits tc
+                INNER JOIN commits c
+                ON c.sha=tc.commit_sha
+                ON CONFLICT DO NOTHING
+                ;"""
             )
             extras.execute_batch(
                 db.cursor,
                 """
-				WITH com_id AS (SELECT id FROM commits WHERE sha=%(commit_sha)s)
-				INSERT INTO commit_comments(created_at,repo_id,commit_id,comment_id,comment_text,author_login,author_id,identity_type_id)
-				VALUES(%(created_at)s,
-						%(repo_id)s,
-						(SELECT id FROM com_id),--COALESCE((SELECT id FROM commits WHERE sha=%(commit_sha)s),(INSERT INTO commits(sha,repo_id) SELECT %(commit_sha)s,%(repo_id)s RETURNING id)),
-						%(commit_comment_id)s,
-						%(comment_text)s,
-						%(author_login)s,
-						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
-						(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
-						)
-				ON CONFLICT DO NOTHING
-				;""",
+                WITH com_id AS (SELECT id FROM commits WHERE sha=%(commit_sha)s)
+                INSERT INTO commit_comments(created_at,repo_id,commit_id,comment_id,comment_text,author_login,author_id,identity_type_id)
+                VALUES(%(created_at)s,
+                        %(repo_id)s,
+                        (SELECT id FROM com_id),--COALESCE((SELECT id FROM commits WHERE sha=%(commit_sha)s),(INSERT INTO commits(sha,repo_id) SELECT %(commit_sha)s,%(repo_id)s RETURNING id)),
+                        %(commit_comment_id)s,
+                        %(comment_text)s,
+                        %(author_login)s,
+                        (SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
+                        (SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
+                        )
+                ON CONFLICT DO NOTHING
+                ;""",
                 (i for i in items_list if i["element_type"] == "commit_comment"),
             )
             # extras.execute_batch(db.cursor,'''
-            # 	CREATE OR REPLACE FUNCTION insert_commit_repo(sha TEXT,repo_id BIGINT) RETURNS BIGINT
-            # 	LANGUAGE plpgsql
-            # 	AS $$
-            # 	DECLARE cid BIGINT;
-            # 	BEGIN
-            # 	INSERT INTO commits(sha,repo_id) SELECT sha,repo_id ON CONFLICT Do NOTHING RETURNING id INTO cid;
-            # 	INSERT INTO commit_repos(commit_id,repo_id) SELECT cid,repo_id  ON CONFLICT Do NOTHING ;
-            # 	RETURN cid;
-            # 	END;
-            # 	$$;
-            # 	WITH com_id AS (SELECT id FROM commits WHERE sha=%(commit_sha)s),
-            # 		ins_com_id AS ( SELECT insert_commit_repo(%(commit_sha)s,%(repo_id)s) AS cid )
-            # 	INSERT INTO commit_comments(created_at,repo_id,commit_id,comment_id,comment_text,author_login,author_id,identity_type_id)
-            # 	VALUES(%(created_at)s,
-            # 			%(repo_id)s,
-            # 			(SELECT COALESCE((SELECT id FROM com_id),(SELECT cid FROM ins_com_id))),--COALESCE((SELECT id FROM commits WHERE sha=%(commit_sha)s),(INSERT INTO commits(sha,repo_id) SELECT %(commit_sha)s,%(repo_id)s RETURNING id)),
-            # 			%(commit_comment_id)s,
-            # 			%(comment_text)s,
-            # 			%(author_login)s,
-            # 			(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
-            # 			(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
-            # 			)
+            #   CREATE OR REPLACE FUNCTION insert_commit_repo(sha TEXT,repo_id BIGINT) RETURNS BIGINT
+            #   LANGUAGE plpgsql
+            #   AS $$
+            #   DECLARE cid BIGINT;
+            #   BEGIN
+            #   INSERT INTO commits(sha,repo_id) SELECT sha,repo_id ON CONFLICT Do NOTHING RETURNING id INTO cid;
+            #   INSERT INTO commit_repos(commit_id,repo_id) SELECT cid,repo_id  ON CONFLICT Do NOTHING ;
+            #   RETURN cid;
+            #   END;
+            #   $$;
+            #   WITH com_id AS (SELECT id FROM commits WHERE sha=%(commit_sha)s),
+            #       ins_com_id AS ( SELECT insert_commit_repo(%(commit_sha)s,%(repo_id)s) AS cid )
+            #   INSERT INTO commit_comments(created_at,repo_id,commit_id,comment_id,comment_text,author_login,author_id,identity_type_id)
+            #   VALUES(%(created_at)s,
+            #           %(repo_id)s,
+            #           (SELECT COALESCE((SELECT id FROM com_id),(SELECT cid FROM ins_com_id))),--COALESCE((SELECT id FROM commits WHERE sha=%(commit_sha)s),(INSERT INTO commits(sha,repo_id) SELECT %(commit_sha)s,%(repo_id)s RETURNING id)),
+            #           %(commit_comment_id)s,
+            #           %(comment_text)s,
+            #           %(author_login)s,
+            #           (SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
+            #           (SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
+            #           )
 
-            # 	ON CONFLICT DO NOTHING
-            # 	;''',(i for i in items_list if i['element_type']=='commit_comment'))
+            #   ON CONFLICT DO NOTHING
+            #   ;''',(i for i in items_list if i['element_type']=='commit_comment'))
         else:
             db.cursor.execute(
                 f"""
-				CREATE TEMPORARY TABLE IF NOT EXISTS temp_commits (commit_sha TEXT PRIMARY KEY,repo_id INTEGER)
-				;""",
+                CREATE TEMPORARY TABLE IF NOT EXISTS temp_commits (commit_sha TEXT PRIMARY KEY,repo_id INTEGER)
+                ;""",
             )
             db.cursor.executemany(
                 """
-				INSERT INTO temp_commits(commit_sha,repo_id) SELECT :commit_sha,:repo_id WHERE NOT EXISTS (SELECT id FROM commits WHERE :commit_sha=sha)
-				;""",
+                INSERT INTO temp_commits(commit_sha,repo_id) SELECT :commit_sha,:repo_id WHERE NOT EXISTS (SELECT id FROM commits WHERE :commit_sha=sha)
+                ;""",
                 (i for i in items_list if i["element_type"] == "commit_comment"),
             )
             # db.cursor.executemany('''
-            # 	INSERT INTO commits(sha,repo_id) SELECT :commit_sha,:repo_id WHERE NOT EXISTS (SELECT id FROM commits WHERE :commit_sha=sha)
-            # 	;''',(i for i in items_list if i['element_type']=='commit_comment'))
+            #   INSERT INTO commits(sha,repo_id) SELECT :commit_sha,:repo_id WHERE NOT EXISTS (SELECT id FROM commits WHERE :commit_sha=sha)
+            #   ;''',(i for i in items_list if i['element_type']=='commit_comment'))
             db.cursor.execute(
                 """
-				INSERT OR IGNORE INTO commits(sha,repo_id) SELECT commit_sha,repo_id FROM temp_commits
-				;"""
+                INSERT OR IGNORE INTO commits(sha,repo_id) SELECT commit_sha,repo_id FROM temp_commits
+                ;"""
             )
             db.cursor.execute(
                 """
-				INSERT OR IGNORE INTO commit_repos(commit_id,repo_id) SELECT c.id,tc.repo_id FROM temp_commits tc
-				INNER JOIN commits c
-				ON c.sha=tc.commit_sha
-				;"""
+                INSERT OR IGNORE INTO commit_repos(commit_id,repo_id) SELECT c.id,tc.repo_id FROM temp_commits tc
+                INNER JOIN commits c
+                ON c.sha=tc.commit_sha
+                ;"""
             )
             db.cursor.executemany(
                 """
-				INSERT OR IGNORE INTO commit_comments(created_at,repo_id,commit_id,comment_id,comment_text,author_login,author_id,identity_type_id)
-				SELECT :created_at,
-						:repo_id,
-						c.id,
-						:commit_comment_id,
-						:comment_text,
-						:author_login,
-						(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
-						(SELECT id FROM identity_types WHERE name=:target_identity_type)
-					FROM commits c
-					WHERE sha=:commit_sha
-				;""",
+                INSERT OR IGNORE INTO commit_comments(created_at,repo_id,commit_id,comment_id,comment_text,author_login,author_id,identity_type_id)
+                SELECT :created_at,
+                        :repo_id,
+                        c.id,
+                        :commit_comment_id,
+                        :comment_text,
+                        :author_login,
+                        (SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
+                        (SELECT id FROM identity_types WHERE name=:target_identity_type)
+                    FROM commits c
+                    WHERE sha=:commit_sha
+                ;""",
                 (i for i in items_list if i["element_type"] == "commit_comment"),
             )
             # ;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title'],s['issue_text'],s['author_login'],s['author_login'],self.target_identity_type,self.target_identity_type) for s in items_list))
@@ -3513,19 +3515,19 @@ class CommitCommentsGQLFiller(GHGQLFiller):
             extras.execute_batch(
                 db.cursor,
                 """
-				INSERT INTO commit_comment_reactions(created_at,repo_id,commit_id,comment_id,reaction,author_login,author_id,identity_type_id)
-				VALUES(%(created_at)s,
-						%(repo_id)s,
-						(SELECT id FROM commits WHERE sha=%(commit_sha)s),
-						%(commit_comment_id)s,
-						%(commit_comment_reaction)s,
-						%(author_login)s,
-						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
-						(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
-						)
+                INSERT INTO commit_comment_reactions(created_at,repo_id,commit_id,comment_id,reaction,author_login,author_id,identity_type_id)
+                VALUES(%(created_at)s,
+                        %(repo_id)s,
+                        (SELECT id FROM commits WHERE sha=%(commit_sha)s),
+                        %(commit_comment_id)s,
+                        %(commit_comment_reaction)s,
+                        %(author_login)s,
+                        (SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
+                        (SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
+                        )
 
-				ON CONFLICT DO NOTHING
-				;""",
+                ON CONFLICT DO NOTHING
+                ;""",
                 (
                     i
                     for i in items_list
@@ -3536,17 +3538,17 @@ class CommitCommentsGQLFiller(GHGQLFiller):
         else:
             db.cursor.executemany(
                 """
-					INSERT OR IGNORE INTO commit_comment_reactions(created_at,repo_id,commit_id,comment_id,reaction,author_login,author_id,identity_type_id)
-				VALUES(:created_at,
-						:repo_id,
-						(SELECT id FROM commits WHERE sha=:commit_sha),
-						:commit_comment_id,
-						:commit_comment_reaction,
-						:author_login,
-						(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
-						(SELECT id FROM identity_types WHERE name=:target_identity_type)
-						)
-				;""",
+                    INSERT OR IGNORE INTO commit_comment_reactions(created_at,repo_id,commit_id,comment_id,reaction,author_login,author_id,identity_type_id)
+                VALUES(:created_at,
+                        :repo_id,
+                        (SELECT id FROM commits WHERE sha=:commit_sha),
+                        :commit_comment_id,
+                        :commit_comment_reaction,
+                        :author_login,
+                        (SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
+                        (SELECT id FROM identity_types WHERE name=:target_identity_type)
+                        )
+                ;""",
                 (
                     i
                     for i in items_list
@@ -3578,7 +3580,7 @@ class CommitCommentsGQLFiller(GHGQLFiller):
                         info=update_info,
                     )
                 # else:
-                # 	success = True
+                #   success = True
                 # self.insert_update(db=db,repo_id=repo_id,success=success,info=update_info)
 
         if commit:
@@ -3609,26 +3611,26 @@ class IssuesGQLFiller(GHGQLFiller):
         output: python-formatable string representing the graphql query
         """
         return """query {{
-  					repository(owner: "{repo_owner}", name: "{repo_name}") {{
-  							nameWithOwner
-    						id
-    						issues(first:{page_size} {after_end_cursor}) {{
-    							totalCount
-    							pageInfo {{
-									endCursor
-									hasNextPage
-						 			}}
-      							nodes {{
-        							number
-									title
-									author {{ login }}
-									bodyText
-									createdAt
-									closedAt
-      								}}
-    							}}
-  							}}
-						}}"""
+                    repository(owner: "{repo_owner}", name: "{repo_name}") {{
+                            nameWithOwner
+                            id
+                            issues(first:{page_size} {after_end_cursor}) {{
+                                totalCount
+                                pageInfo {{
+                                    endCursor
+                                    hasNextPage
+                                    }}
+                                nodes {{
+                                    number
+                                    title
+                                    author {{ login }}
+                                    bodyText
+                                    createdAt
+                                    closedAt
+                                    }}
+                                }}
+                            }}
+                        }}"""
 
     def parse_query_result(
         self,
@@ -3687,38 +3689,38 @@ class IssuesGQLFiller(GHGQLFiller):
             extras.execute_batch(
                 db.cursor,
                 """
-				INSERT INTO issues(created_at,closed_at,repo_id,issue_number,issue_title,issue_text,author_login,author_id,identity_type_id)
-				VALUES(%(created_at)s,
-						%(closed_at)s,
-						%(repo_id)s,
-						%(issue_number)s,
-						%(issue_title)s,
-						%(issue_text)s,
-						%(author_login)s,
-						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
-						(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
-						)
+                INSERT INTO issues(created_at,closed_at,repo_id,issue_number,issue_title,issue_text,author_login,author_id,identity_type_id)
+                VALUES(%(created_at)s,
+                        %(closed_at)s,
+                        %(repo_id)s,
+                        %(issue_number)s,
+                        %(issue_title)s,
+                        %(issue_text)s,
+                        %(author_login)s,
+                        (SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
+                        (SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
+                        )
 
-				ON CONFLICT DO NOTHING
-				;""",
+                ON CONFLICT DO NOTHING
+                ;""",
                 items_list,
             )
             # ;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title'],s['issue_text'],s['author_login'],s['author_login'],self.target_identity_type,self.target_identity_type) for s in items_list))
         else:
             db.cursor.executemany(
                 """
-					INSERT OR IGNORE INTO issues(created_at,closed_at,repo_id,issue_number,issue_title,issue_text,author_login,author_id,identity_type_id)
-					VALUES(:created_at,
-						:closed_at,
-						:repo_id,
-						:issue_number,
-						:issue_title,
-						:issue_text,
-						:author_login,
-							(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
-							(SELECT id FROM identity_types WHERE name=:target_identity_type)
-							)
-				;""",
+                    INSERT OR IGNORE INTO issues(created_at,closed_at,repo_id,issue_number,issue_title,issue_text,author_login,author_id,identity_type_id)
+                    VALUES(:created_at,
+                        :closed_at,
+                        :repo_id,
+                        :issue_number,
+                        :issue_title,
+                        :issue_text,
+                        :author_login,
+                            (SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
+                            (SELECT id FROM identity_types WHERE name=:target_identity_type)
+                            )
+                ;""",
                 items_list,
             )
             # ;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title'],s['issue_text'],s['author_login'],s['author_login'],self.target_identity_type,self.target_identity_type) for s in items_list))
@@ -3751,28 +3753,28 @@ class PullRequestsGQLFiller(GHGQLFiller):
         output: python-formatable string representing the graphql query
         """
         return """query {{
-  					repository(owner: "{repo_owner}", name: "{repo_name}") {{
-  							nameWithOwner
-    						id
-    						pullRequests(first:{page_size} {after_end_cursor}) {{
-    							totalCount
-    							pageInfo {{
-									endCursor
-									hasNextPage
-						 			}}
-      							nodes {{
-        							number
-									title
-									author {{ login }}
-									bodyText
-									createdAt
-									mergedAt
-									closedAt
-									mergedBy {{ login }}
-      								}}
-    							}}
-  							}}
-						}}"""
+                    repository(owner: "{repo_owner}", name: "{repo_name}") {{
+                            nameWithOwner
+                            id
+                            pullRequests(first:{page_size} {after_end_cursor}) {{
+                                totalCount
+                                pageInfo {{
+                                    endCursor
+                                    hasNextPage
+                                    }}
+                                nodes {{
+                                    number
+                                    title
+                                    author {{ login }}
+                                    bodyText
+                                    createdAt
+                                    mergedAt
+                                    closedAt
+                                    mergedBy {{ login }}
+                                    }}
+                                }}
+                            }}
+                        }}"""
 
     def parse_query_result(
         self,
@@ -3836,44 +3838,44 @@ class PullRequestsGQLFiller(GHGQLFiller):
             extras.execute_batch(
                 db.cursor,
                 """
-				INSERT INTO pullrequests(created_at,closed_at,merged_at,repo_id,pullrequest_number,pullrequest_title,pullrequest_text,author_login,author_id,merger_login,merger_id,identity_type_id)
-				VALUES(%(created_at)s,
-						%(closed_at)s,
-						%(merged_at)s,
-						%(repo_id)s,
-						%(pullrequest_number)s,
-						%(pullrequest_title)s,
-						%(pullrequest_text)s,
-						%(author_login)s,
-						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
-						%(merger_login)s,
-						(SELECT id FROM identities WHERE identity=%(merger_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
-						(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
-						)
+                INSERT INTO pullrequests(created_at,closed_at,merged_at,repo_id,pullrequest_number,pullrequest_title,pullrequest_text,author_login,author_id,merger_login,merger_id,identity_type_id)
+                VALUES(%(created_at)s,
+                        %(closed_at)s,
+                        %(merged_at)s,
+                        %(repo_id)s,
+                        %(pullrequest_number)s,
+                        %(pullrequest_title)s,
+                        %(pullrequest_text)s,
+                        %(author_login)s,
+                        (SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
+                        %(merger_login)s,
+                        (SELECT id FROM identities WHERE identity=%(merger_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
+                        (SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
+                        )
 
-				ON CONFLICT DO NOTHING
-				;""",
+                ON CONFLICT DO NOTHING
+                ;""",
                 items_list,
             )
             # ;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title'],s['issue_text'],s['author_login'],s['author_login'],self.target_identity_type,self.target_identity_type) for s in items_list))
         else:
             db.cursor.executemany(
                 """
-					INSERT OR IGNORE INTO pullrequests(created_at,closed_at,merged_at,repo_id,pullrequest_number,pullrequest_title,pullrequest_text,author_login,author_id,merger_login,merger_id,identity_type_id)
-				VALUES(:created_at,
-						:closed_at,
-						:merged_at,
-						:repo_id,
-						:pullrequest_number,
-						:pullrequest_title,
-						:pullrequest_text,
-						:author_login,
-						(SELECT id FROM identities WHERE identity=:merger_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
-						:merger_login,
-						(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
-						(SELECT id FROM identity_types WHERE name=:target_identity_type)
-						)
-				;""",
+                    INSERT OR IGNORE INTO pullrequests(created_at,closed_at,merged_at,repo_id,pullrequest_number,pullrequest_title,pullrequest_text,author_login,author_id,merger_login,merger_id,identity_type_id)
+                VALUES(:created_at,
+                        :closed_at,
+                        :merged_at,
+                        :repo_id,
+                        :pullrequest_number,
+                        :pullrequest_title,
+                        :pullrequest_text,
+                        :author_login,
+                        (SELECT id FROM identities WHERE identity=:merger_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
+                        :merger_login,
+                        (SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
+                        (SELECT id FROM identity_types WHERE name=:target_identity_type)
+                        )
+                ;""",
                 items_list,
             )
 
@@ -3922,81 +3924,81 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
         output: python-formatable string representing the graphql query
         """
         return """query {{
-  					repository(owner: "{repo_owner}", name: "{repo_name}") {{
-  							nameWithOwner
-    						id
-    						issues(first:{page_size} {after_end_cursor}) {{
-    							totalCount
-    							pageInfo {{
-									endCursor
-									hasNextPage
-						 			}}
-      							nodes {{
-        							number
-									title
-									id
-									author {{ login }}
-									bodyText
-									createdAt
-									closedAt
-									comments(first:{secondary_page_size}) {{
-										totalCount
-										pageInfo {{
-											endCursor
-											hasNextPage
-											}}
-										nodes {{
-											id
-											createdAt
-											author {{ login }}
-											bodyText
-											databaseId
+                    repository(owner: "{repo_owner}", name: "{repo_name}") {{
+                            nameWithOwner
+                            id
+                            issues(first:{page_size} {after_end_cursor}) {{
+                                totalCount
+                                pageInfo {{
+                                    endCursor
+                                    hasNextPage
+                                    }}
+                                nodes {{
+                                    number
+                                    title
+                                    id
+                                    author {{ login }}
+                                    bodyText
+                                    createdAt
+                                    closedAt
+                                    comments(first:{secondary_page_size}) {{
+                                        totalCount
+                                        pageInfo {{
+                                            endCursor
+                                            hasNextPage
+                                            }}
+                                        nodes {{
+                                            id
+                                            createdAt
+                                            author {{ login }}
+                                            bodyText
+                                            databaseId
 
-											reactions(first:{secondary_page_size}) {{
-												totalCount
-												pageInfo {{
-													endCursor
-													hasNextPage
-													}}
-												nodes {{
-													user {{ login }}
-													createdAt
-													content
-													id
-													}}
-												}}
-											}}
-										}}
+                                            reactions(first:{secondary_page_size}) {{
+                                                totalCount
+                                                pageInfo {{
+                                                    endCursor
+                                                    hasNextPage
+                                                    }}
+                                                nodes {{
+                                                    user {{ login }}
+                                                    createdAt
+                                                    content
+                                                    id
+                                                    }}
+                                                }}
+                                            }}
+                                        }}
 
-									labels(first:{secondary_page_size}) {{
-										totalCount
-										pageInfo {{
-											endCursor
-											hasNextPage
-											}}
-										nodes {{
-											name
-											createdAt
-											}}
-										}}
+                                    labels(first:{secondary_page_size}) {{
+                                        totalCount
+                                        pageInfo {{
+                                            endCursor
+                                            hasNextPage
+                                            }}
+                                        nodes {{
+                                            name
+                                            createdAt
+                                            }}
+                                        }}
 
-									reactions(first:{secondary_page_size}) {{
-										totalCount
-										pageInfo {{
-											endCursor
-											hasNextPage
-											}}
-										nodes {{
-											user {{ login }}
-											createdAt
-											content
-											id
-											}}
-										}}
-      								}}
-    							}}
-  							}}
-						}}"""
+                                    reactions(first:{secondary_page_size}) {{
+                                        totalCount
+                                        pageInfo {{
+                                            endCursor
+                                            hasNextPage
+                                            }}
+                                        nodes {{
+                                            user {{ login }}
+                                            createdAt
+                                            content
+                                            id
+                                            }}
+                                        }}
+                                    }}
+                                }}
+                            }}
+                        }}"""
 
     def parse_query_result(
         self,
@@ -4065,9 +4067,9 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
                             # r['created_at'] = ee['createdAt']
                             r["issue_label"] = ee["name"]
                             # try:
-                            # 	r['author_login'] = ee['user']['login']
+                            #   r['author_login'] = ee['user']['login']
                             # except:
-                            # 	r['author_login'] = None
+                            #   r['author_login'] = None
                         except (KeyError, TypeError) as err:
                             self.logger.info(
                                 "Result triggering error: {} \nError when parsing issue_labels for {}/{}: {}".format(
@@ -4184,38 +4186,38 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
             extras.execute_batch(
                 db.cursor,
                 """
-				INSERT INTO issues(created_at,closed_at,repo_id,issue_number,issue_title,issue_text,author_login,author_id,identity_type_id)
-				VALUES(%(created_at)s,
-						%(closed_at)s,
-						%(repo_id)s,
-						%(issue_number)s,
-						%(issue_title)s,
-						%(issue_text)s,
-						%(author_login)s,
-						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
-						(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
-						)
+                INSERT INTO issues(created_at,closed_at,repo_id,issue_number,issue_title,issue_text,author_login,author_id,identity_type_id)
+                VALUES(%(created_at)s,
+                        %(closed_at)s,
+                        %(repo_id)s,
+                        %(issue_number)s,
+                        %(issue_title)s,
+                        %(issue_text)s,
+                        %(author_login)s,
+                        (SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
+                        (SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
+                        )
 
-				ON CONFLICT DO NOTHING
-				;""",
+                ON CONFLICT DO NOTHING
+                ;""",
                 (i for i in items_list if i["element_type"] == "issue"),
             )
             # ;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title'],s['issue_text'],s['author_login'],s['author_login'],self.target_identity_type,self.target_identity_type) for s in items_list))
         else:
             db.cursor.executemany(
                 """
-					INSERT OR IGNORE INTO issues(created_at,closed_at,repo_id,issue_number,issue_title,issue_text,author_login,author_id,identity_type_id)
-					VALUES(:created_at,
-						:closed_at,
-						:repo_id,
-						:issue_number,
-						:issue_title,
-						:issue_text,
-						:author_login,
-							(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
-							(SELECT id FROM identity_types WHERE name=:target_identity_type)
-							)
-				;""",
+                    INSERT OR IGNORE INTO issues(created_at,closed_at,repo_id,issue_number,issue_title,issue_text,author_login,author_id,identity_type_id)
+                    VALUES(:created_at,
+                        :closed_at,
+                        :repo_id,
+                        :issue_number,
+                        :issue_title,
+                        :issue_text,
+                        :author_login,
+                            (SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
+                            (SELECT id FROM identity_types WHERE name=:target_identity_type)
+                            )
+                ;""",
                 (i for i in items_list if i["element_type"] == "issue"),
             )
             # ;''',((s['created_at'],s['closed_at'],s['repo_id'],s['issue_number'],s['issue_title'],s['issue_text'],s['author_login'],s['author_login'],self.target_identity_type,self.target_identity_type) for s in items_list))
@@ -4249,34 +4251,34 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
             extras.execute_batch(
                 db.cursor,
                 """
-				INSERT INTO issue_reactions(created_at,repo_id,issue_number,reaction,author_login,author_id,identity_type_id)
-				VALUES(%(created_at)s,
-						%(repo_id)s,
-						%(issue_number)s,
-						%(issue_reaction)s,
-						%(author_login)s,
-						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
-						(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
-						)
+                INSERT INTO issue_reactions(created_at,repo_id,issue_number,reaction,author_login,author_id,identity_type_id)
+                VALUES(%(created_at)s,
+                        %(repo_id)s,
+                        %(issue_number)s,
+                        %(issue_reaction)s,
+                        %(author_login)s,
+                        (SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
+                        (SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
+                        )
 
-				ON CONFLICT DO NOTHING
-				;""",
+                ON CONFLICT DO NOTHING
+                ;""",
                 (i for i in items_list if i["element_type"] == "issue_reaction"),
             )
 
         else:
             db.cursor.executemany(
                 """
-					INSERT OR IGNORE INTO issue_reactions(created_at,repo_id,issue_number,reaction,author_login,author_id,identity_type_id)
-				VALUES(:created_at,
-						:repo_id,
-						:issue_number,
-						:issue_reaction,
-						:author_login,
-						(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
-						(SELECT id FROM identity_types WHERE name=:target_identity_type)
-						)
-				;""",
+                    INSERT OR IGNORE INTO issue_reactions(created_at,repo_id,issue_number,reaction,author_login,author_id,identity_type_id)
+                VALUES(:created_at,
+                        :repo_id,
+                        :issue_number,
+                        :issue_reaction,
+                        :author_login,
+                        (SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
+                        (SELECT id FROM identity_types WHERE name=:target_identity_type)
+                        )
+                ;""",
                 (i for i in items_list if i["element_type"] == "issue_reaction"),
             )
 
@@ -4290,19 +4292,19 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
             extras.execute_batch(
                 db.cursor,
                 """
-				INSERT INTO issue_comment_reactions(created_at,repo_id,issue_number,comment_id,reaction,author_login,author_id,identity_type_id)
-				VALUES(%(created_at)s,
-						%(repo_id)s,
-						%(issue_number)s,
-						%(issue_comment_id)s,
-						%(issue_comment_reaction)s,
-						%(author_login)s,
-						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
-						(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
-						)
+                INSERT INTO issue_comment_reactions(created_at,repo_id,issue_number,comment_id,reaction,author_login,author_id,identity_type_id)
+                VALUES(%(created_at)s,
+                        %(repo_id)s,
+                        %(issue_number)s,
+                        %(issue_comment_id)s,
+                        %(issue_comment_reaction)s,
+                        %(author_login)s,
+                        (SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
+                        (SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
+                        )
 
-				ON CONFLICT DO NOTHING
-				;""",
+                ON CONFLICT DO NOTHING
+                ;""",
                 (
                     i
                     for i in items_list
@@ -4313,17 +4315,17 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
         else:
             db.cursor.executemany(
                 """
-					INSERT OR IGNORE INTO issue_comment_reactions(created_at,repo_id,issue_number,comment_id,reaction,author_login,author_id,identity_type_id)
-				VALUES(:created_at,
-						:repo_id,
-						:issue_number,
-						:issue_comment_id,
-						:issue_comment_reaction,
-						:author_login,
-						(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
-						(SELECT id FROM identity_types WHERE name=:target_identity_type)
-						)
-				;""",
+                    INSERT OR IGNORE INTO issue_comment_reactions(created_at,repo_id,issue_number,comment_id,reaction,author_login,author_id,identity_type_id)
+                VALUES(:created_at,
+                        :repo_id,
+                        :issue_number,
+                        :issue_comment_id,
+                        :issue_comment_reaction,
+                        :author_login,
+                        (SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
+                        (SELECT id FROM identity_types WHERE name=:target_identity_type)
+                        )
+                ;""",
                 (
                     i
                     for i in items_list
@@ -4341,36 +4343,36 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
             extras.execute_batch(
                 db.cursor,
                 """
-				INSERT INTO issue_comments(created_at,repo_id,issue_number,comment_id,comment_text,author_login,author_id,identity_type_id)
-				VALUES(%(created_at)s,
-						%(repo_id)s,
-						%(issue_number)s,
-						%(issue_comment_id)s,
-						%(issue_comment_text)s,
-						%(author_login)s,
-						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
-						(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
-						)
+                INSERT INTO issue_comments(created_at,repo_id,issue_number,comment_id,comment_text,author_login,author_id,identity_type_id)
+                VALUES(%(created_at)s,
+                        %(repo_id)s,
+                        %(issue_number)s,
+                        %(issue_comment_id)s,
+                        %(issue_comment_text)s,
+                        %(author_login)s,
+                        (SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
+                        (SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
+                        )
 
-				ON CONFLICT DO NOTHING
-				;""",
+                ON CONFLICT DO NOTHING
+                ;""",
                 (i for i in items_list if i["element_type"] == "issue_comment"),
             )
 
         else:
             db.cursor.executemany(
                 """
-					INSERT OR IGNORE INTO issue_comments(created_at,repo_id,issue_number,comment_id,comment_text,author_login,author_id,identity_type_id)
-				VALUES(:created_at,
-						:repo_id,
-						:issue_number,
-						:issue_comment_id,
-						:issue_comment_text,
-						:author_login,
-						(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
-						(SELECT id FROM identity_types WHERE name=:target_identity_type)
-						)
-				;""",
+                    INSERT OR IGNORE INTO issue_comments(created_at,repo_id,issue_number,comment_id,comment_text,author_login,author_id,identity_type_id)
+                VALUES(:created_at,
+                        :repo_id,
+                        :issue_number,
+                        :issue_comment_id,
+                        :issue_comment_text,
+                        :author_login,
+                        (SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
+                        (SELECT id FROM identity_types WHERE name=:target_identity_type)
+                        )
+                ;""",
                 (i for i in items_list if i["element_type"] == "issue_comment"),
             )
 
@@ -4384,26 +4386,26 @@ class CompleteIssuesGQLFiller(IssuesGQLFiller):
             extras.execute_batch(
                 db.cursor,
                 """
-				INSERT INTO issue_labels(repo_id,issue_number,label)
-				VALUES(%(repo_id)s,
-						%(issue_number)s,
-						%(issue_label)s
-						)
+                INSERT INTO issue_labels(repo_id,issue_number,label)
+                VALUES(%(repo_id)s,
+                        %(issue_number)s,
+                        %(issue_label)s
+                        )
 
-				ON CONFLICT DO NOTHING
-				;""",
+                ON CONFLICT DO NOTHING
+                ;""",
                 (i for i in items_list if i["element_type"] == "issue_label"),
             )
 
         else:
             db.cursor.executemany(
                 """
-					INSERT OR IGNORE INTO issue_labels(repo_id,issue_number,label)
-				VALUES(:repo_id,
-						:issue_number,
-						:issue_label
-						)
-				;""",
+                    INSERT OR IGNORE INTO issue_labels(repo_id,issue_number,label)
+                VALUES(:repo_id,
+                        :issue_number,
+                        :issue_label
+                        )
+                ;""",
                 (i for i in items_list if i["element_type"] == "issue_label"),
             )
 
@@ -4516,12 +4518,12 @@ class IssueReactionsGQLFiller(GHGQLFiller):
     def check_requirements(self):
         self.db.cursor.execute(
             """
-			SELECT update_type,updated_at FROM full_updates
-			WHERE update_type='complete_issues'
-			ORDER BY updated_at DESC
-			LIMIT 1
-			;
-			"""
+            SELECT update_type,updated_at FROM full_updates
+            WHERE update_type='complete_issues'
+            ORDER BY updated_at DESC
+            LIMIT 1
+            ;
+            """
         )
         ans = list(self.db.cursor.fetchall())
         if len(ans) == 0:
@@ -4538,31 +4540,31 @@ class IssueReactionsGQLFiller(GHGQLFiller):
         output: python-formatable string representing the graphql query
         """
         return """query {{
-					repository(owner: "{repo_owner}", name: "{repo_name}") {{
-  							nameWithOwner
-    						id }}
-  					node(id:"{issue_gql_id}") {{
-  					    ... on Issue {{
+                    repository(owner: "{repo_owner}", name: "{repo_name}") {{
+                            nameWithOwner
+                            id }}
+                    node(id:"{issue_gql_id}") {{
+                        ... on Issue {{
 
-									id
-									number
-									reactions(first:{page_size}  {after_end_cursor}) {{
-										totalCount
-										pageInfo {{
-											hasNextPage
-											endCursor
-											}}
-										nodes {{
-											createdAt
-											user {{ login }}
-											content
-											id
-											}}
-      								}}
-    							
-    							}}
-  							}}
-						}}"""
+                                    id
+                                    number
+                                    reactions(first:{page_size}  {after_end_cursor}) {{
+                                        totalCount
+                                        pageInfo {{
+                                            hasNextPage
+                                            endCursor
+                                            }}
+                                        nodes {{
+                                            createdAt
+                                            user {{ login }}
+                                            content
+                                            id
+                                            }}
+                                    }}
+                                
+                                }}
+                            }}
+                        }}"""
 
     def parse_query_result(
         self,
@@ -4657,12 +4659,12 @@ class IssueCommentsGQLFiller(GHGQLFiller):
     def check_requirements(self):
         self.db.cursor.execute(
             """
-			SELECT update_type,updated_at FROM full_updates
-			WHERE update_type='complete_issues'
-			ORDER BY updated_at DESC
-			LIMIT 1
-			;
-			"""
+            SELECT update_type,updated_at FROM full_updates
+            WHERE update_type='complete_issues'
+            ORDER BY updated_at DESC
+            LIMIT 1
+            ;
+            """
         )
         ans = list(self.db.cursor.fetchall())
         if len(ans) == 0:
@@ -4679,46 +4681,46 @@ class IssueCommentsGQLFiller(GHGQLFiller):
         output: python-formatable string representing the graphql query
         """
         return """query {{
-					repository(owner: "{repo_owner}", name: "{repo_name}") {{
-  							nameWithOwner
-    						id }}
-  					node(id:"{issue_gql_id}") {{
-  					    ... on Issue {{
+                    repository(owner: "{repo_owner}", name: "{repo_name}") {{
+                            nameWithOwner
+                            id }}
+                    node(id:"{issue_gql_id}") {{
+                        ... on Issue {{
 
-									id
-									number
-									comments(first:{page_size} {after_end_cursor}) {{
-										totalCount
-										pageInfo {{
-											endCursor
-											hasNextPage
-											}}
-										nodes {{
-											id
-											createdAt
-											author {{ login }}
-											bodyText
-											databaseId
+                                    id
+                                    number
+                                    comments(first:{page_size} {after_end_cursor}) {{
+                                        totalCount
+                                        pageInfo {{
+                                            endCursor
+                                            hasNextPage
+                                            }}
+                                        nodes {{
+                                            id
+                                            createdAt
+                                            author {{ login }}
+                                            bodyText
+                                            databaseId
 
-											reactions(first:{secondary_page_size}) {{
-												totalCount
-												pageInfo {{
-													endCursor
-													hasNextPage
-													}}
-												nodes {{
-													user {{ login }}
-													createdAt
-													content
-													id
-													}}
-												}}
-											}}
-										}}
-    							
-    							}}
-  							}}
-						}}"""
+                                            reactions(first:{secondary_page_size}) {{
+                                                totalCount
+                                                pageInfo {{
+                                                    endCursor
+                                                    hasNextPage
+                                                    }}
+                                                nodes {{
+                                                    user {{ login }}
+                                                    createdAt
+                                                    content
+                                                    id
+                                                    }}
+                                                }}
+                                            }}
+                                        }}
+                                
+                                }}
+                            }}
+                        }}"""
 
     def parse_query_result(
         self,
@@ -4858,12 +4860,12 @@ class IssueCommentReactionsGQLFiller(GHGQLFiller):
     def check_requirements(self):
         self.db.cursor.execute(
             """
-			SELECT update_type,updated_at FROM full_updates
-			WHERE update_type='complete_issues'
-			ORDER BY updated_at DESC
-			LIMIT 1
-			;
-			"""
+            SELECT update_type,updated_at FROM full_updates
+            WHERE update_type='complete_issues'
+            ORDER BY updated_at DESC
+            LIMIT 1
+            ;
+            """
         )
         ans = list(self.db.cursor.fetchall())
         if len(ans) == 0:
@@ -4874,12 +4876,12 @@ class IssueCommentReactionsGQLFiller(GHGQLFiller):
 
         self.db.cursor.execute(
             """
-			SELECT update_type,updated_at FROM full_updates
-			WHERE update_type='issue_comments'
-			ORDER BY updated_at DESC
-			LIMIT 1
-			;
-			"""
+            SELECT update_type,updated_at FROM full_updates
+            WHERE update_type='issue_comments'
+            ORDER BY updated_at DESC
+            LIMIT 1
+            ;
+            """
         )
         ans = list(self.db.cursor.fetchall())
         if len(ans) == 0:
@@ -4896,31 +4898,31 @@ class IssueCommentReactionsGQLFiller(GHGQLFiller):
         output: python-formatable string representing the graphql query
         """
         return """query {{
-					repository(owner: "{repo_owner}", name: "{repo_name}") {{
-  							nameWithOwner
-    						id }}
-  					node(id:"{issue_comment_gql_id}") {{
-  					    ... on IssueComment {{
-  					    			issue {{ number }}
-									id
-									databaseId
-									reactions(first:{page_size}  {after_end_cursor}) {{
-										totalCount
-										pageInfo {{
-											hasNextPage
-											endCursor
-											}}
-										nodes {{
-											createdAt
-											user {{ login }}
-											content
-											id
-											}}
-      								}}
-    							
-    							}}
-  							}}
-						}}"""
+                    repository(owner: "{repo_owner}", name: "{repo_name}") {{
+                            nameWithOwner
+                            id }}
+                    node(id:"{issue_comment_gql_id}") {{
+                        ... on IssueComment {{
+                                    issue {{ number }}
+                                    id
+                                    databaseId
+                                    reactions(first:{page_size}  {after_end_cursor}) {{
+                                        totalCount
+                                        pageInfo {{
+                                            hasNextPage
+                                            endCursor
+                                            }}
+                                        nodes {{
+                                            createdAt
+                                            user {{ login }}
+                                            content
+                                            id
+                                            }}
+                                    }}
+                                
+                                }}
+                            }}
+                        }}"""
 
     def parse_query_result(
         self,
@@ -5019,12 +5021,12 @@ class IssueLabelsGQLFiller(GHGQLFiller):
     def check_requirements(self):
         self.db.cursor.execute(
             """
-			SELECT update_type,updated_at FROM full_updates
-			WHERE update_type='complete_issues'
-			ORDER BY updated_at DESC
-			LIMIT 1
-			;
-			"""
+            SELECT update_type,updated_at FROM full_updates
+            WHERE update_type='complete_issues'
+            ORDER BY updated_at DESC
+            LIMIT 1
+            ;
+            """
         )
         ans = list(self.db.cursor.fetchall())
         if len(ans) == 0:
@@ -5041,30 +5043,30 @@ class IssueLabelsGQLFiller(GHGQLFiller):
         output: python-formatable string representing the graphql query
         """
         return """query {{
-					repository(owner: "{repo_owner}", name: "{repo_name}") {{
-  							nameWithOwner
-    						id }}
-  					node(id:"{issue_gql_id}") {{
-  					    ... on Issue {{
+                    repository(owner: "{repo_owner}", name: "{repo_name}") {{
+                            nameWithOwner
+                            id }}
+                    node(id:"{issue_gql_id}") {{
+                        ... on Issue {{
 
-									id
-									number
-									
-									labels(first:{page_size} {after_end_cursor}) {{
-										totalCount
-										pageInfo {{
-											endCursor
-											hasNextPage
-											}}
-										nodes {{
-											name
-											createdAt
-											}}
-										}}
-    							
-    							}}
-  							}}
-						}}"""
+                                    id
+                                    number
+                                    
+                                    labels(first:{page_size} {after_end_cursor}) {{
+                                        totalCount
+                                        pageInfo {{
+                                            endCursor
+                                            hasNextPage
+                                            }}
+                                        nodes {{
+                                            name
+                                            createdAt
+                                            }}
+                                        }}
+                                
+                                }}
+                            }}
+                        }}"""
 
     def parse_query_result(
         self,
@@ -5121,9 +5123,9 @@ class IssueLabelsGQLFiller(GHGQLFiller):
                             # r['created_at'] = ee['createdAt']
                             r["issue_label"] = ee["name"]
                             # try:
-                            # 	r['author_login'] = ee['user']['login']
+                            #   r['author_login'] = ee['user']['login']
                             # except:
-                            # 	r['author_login'] = None
+                            #   r['author_login'] = None
                         except (KeyError, TypeError) as err:
                             self.logger.info(
                                 "Result triggering error: {} \nError when parsing issue_labels for {}/{}: {}".format(
@@ -5178,83 +5180,83 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
         output: python-formatable string representing the graphql query
         """
         return """query {{
-  					repository(owner: "{repo_owner}", name: "{repo_name}") {{
-  							nameWithOwner
-    						id
-    						pullRequests(first:{page_size} {after_end_cursor}) {{
-    							totalCount
-    							pageInfo {{
-									endCursor
-									hasNextPage
-						 			}}
-      							nodes {{
-        							number
-									title
-									id
-									author {{ login }}
-									bodyText
-									createdAt
-									mergedAt
-									closedAt
-									mergedBy {{ login }}
-									comments(first:{secondary_page_size}) {{
-										totalCount
-										pageInfo {{
-											endCursor
-											hasNextPage
-											}}
-										nodes {{
-											id
-											createdAt
-											author {{ login }}
-											bodyText
-											databaseId
+                    repository(owner: "{repo_owner}", name: "{repo_name}") {{
+                            nameWithOwner
+                            id
+                            pullRequests(first:{page_size} {after_end_cursor}) {{
+                                totalCount
+                                pageInfo {{
+                                    endCursor
+                                    hasNextPage
+                                    }}
+                                nodes {{
+                                    number
+                                    title
+                                    id
+                                    author {{ login }}
+                                    bodyText
+                                    createdAt
+                                    mergedAt
+                                    closedAt
+                                    mergedBy {{ login }}
+                                    comments(first:{secondary_page_size}) {{
+                                        totalCount
+                                        pageInfo {{
+                                            endCursor
+                                            hasNextPage
+                                            }}
+                                        nodes {{
+                                            id
+                                            createdAt
+                                            author {{ login }}
+                                            bodyText
+                                            databaseId
 
-											reactions(first:{secondary_page_size}) {{
-												totalCount
-												pageInfo {{
-													endCursor
-													hasNextPage
-													}}
-												nodes {{
-													user {{ login }}
-													createdAt
-													content
-													id
-													}}
-												}}
-											}}
-										}}
+                                            reactions(first:{secondary_page_size}) {{
+                                                totalCount
+                                                pageInfo {{
+                                                    endCursor
+                                                    hasNextPage
+                                                    }}
+                                                nodes {{
+                                                    user {{ login }}
+                                                    createdAt
+                                                    content
+                                                    id
+                                                    }}
+                                                }}
+                                            }}
+                                        }}
 
-									labels(first:{secondary_page_size}) {{
-										totalCount
-										pageInfo {{
-											endCursor
-											hasNextPage
-											}}
-										nodes {{
-											name
-											createdAt
-											}}
-										}}
+                                    labels(first:{secondary_page_size}) {{
+                                        totalCount
+                                        pageInfo {{
+                                            endCursor
+                                            hasNextPage
+                                            }}
+                                        nodes {{
+                                            name
+                                            createdAt
+                                            }}
+                                        }}
 
-									reactions(first:{secondary_page_size}) {{
-										totalCount
-										pageInfo {{
-											endCursor
-											hasNextPage
-											}}
-										nodes {{
-											user {{ login }}
-											createdAt
-											content
-											id
-											}}
-										}}
-      								}}
-    							}}
-  							}}
-						}}"""
+                                    reactions(first:{secondary_page_size}) {{
+                                        totalCount
+                                        pageInfo {{
+                                            endCursor
+                                            hasNextPage
+                                            }}
+                                        nodes {{
+                                            user {{ login }}
+                                            createdAt
+                                            content
+                                            id
+                                            }}
+                                        }}
+                                    }}
+                                }}
+                            }}
+                        }}"""
 
     def parse_query_result(
         self,
@@ -5328,9 +5330,9 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
                             # r['created_at'] = ee['createdAt']
                             r["pullrequest_label"] = ee["name"]
                             # try:
-                            # 	r['author_login'] = ee['user']['login']
+                            #   r['author_login'] = ee['user']['login']
                             # except:
-                            # 	r['author_login'] = None
+                            #   r['author_login'] = None
                         except (KeyError, TypeError) as err:
                             self.logger.info(
                                 "Result triggering error: {} \nError when parsing pullrequest_labels for {}/{}: {}".format(
@@ -5446,44 +5448,44 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
             extras.execute_batch(
                 db.cursor,
                 """
-				INSERT INTO pullrequests(created_at,closed_at,merged_at,repo_id,pullrequest_number,pullrequest_title,pullrequest_text,author_login,author_id,merger_login,merger_id,identity_type_id)
-				VALUES(%(created_at)s,
-						%(closed_at)s,
-						%(merged_at)s,
-						%(repo_id)s,
-						%(pullrequest_number)s,
-						%(pullrequest_title)s,
-						%(pullrequest_text)s,
-						%(author_login)s,
-						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
-						%(merger_login)s,
-						(SELECT id FROM identities WHERE identity=%(merger_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
-						(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
-						)
+                INSERT INTO pullrequests(created_at,closed_at,merged_at,repo_id,pullrequest_number,pullrequest_title,pullrequest_text,author_login,author_id,merger_login,merger_id,identity_type_id)
+                VALUES(%(created_at)s,
+                        %(closed_at)s,
+                        %(merged_at)s,
+                        %(repo_id)s,
+                        %(pullrequest_number)s,
+                        %(pullrequest_title)s,
+                        %(pullrequest_text)s,
+                        %(author_login)s,
+                        (SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
+                        %(merger_login)s,
+                        (SELECT id FROM identities WHERE identity=%(merger_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
+                        (SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
+                        )
 
-				ON CONFLICT DO NOTHING
-				;""",
+                ON CONFLICT DO NOTHING
+                ;""",
                 (i for i in items_list if i["element_type"] == "pullrequest"),
             )
             # ;''',((s['created_at'],s['closed_at'],s['repo_id'],s['pullrequest_number'],s['pullrequest_title'],s['pullrequest_text'],s['author_login'],s['author_login'],self.target_identity_type,self.target_identity_type) for s in items_list))
         else:
             db.cursor.executemany(
                 """
-					INSERT OR IGNORE INTO pullrequests(created_at,closed_at,merged_at,repo_id,pullrequest_number,pullrequest_title,pullrequest_text,author_login,author_id,merger_login,merger_id,identity_type_id)
-				VALUES(:created_at,
-						:closed_at,
-						:merged_at,
-						:repo_id,
-						:pullrequest_number,
-						:pullrequest_title,
-						:pullrequest_text,
-						:author_login,
-						(SELECT id FROM identities WHERE identity=:merger_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
-						:merger_login,
-						(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
-						(SELECT id FROM identity_types WHERE name=:target_identity_type)
-						)
-				;""",
+                    INSERT OR IGNORE INTO pullrequests(created_at,closed_at,merged_at,repo_id,pullrequest_number,pullrequest_title,pullrequest_text,author_login,author_id,merger_login,merger_id,identity_type_id)
+                VALUES(:created_at,
+                        :closed_at,
+                        :merged_at,
+                        :repo_id,
+                        :pullrequest_number,
+                        :pullrequest_title,
+                        :pullrequest_text,
+                        :author_login,
+                        (SELECT id FROM identities WHERE identity=:merger_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
+                        :merger_login,
+                        (SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
+                        (SELECT id FROM identity_types WHERE name=:target_identity_type)
+                        )
+                ;""",
                 (i for i in items_list if i["element_type"] == "pullrequest"),
             )
 
@@ -5519,34 +5521,34 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
             extras.execute_batch(
                 db.cursor,
                 """
-				INSERT INTO pullrequest_reactions(created_at,repo_id,pullrequest_number,reaction,author_login,author_id,identity_type_id)
-				VALUES(%(created_at)s,
-						%(repo_id)s,
-						%(pullrequest_number)s,
-						%(pullrequest_reaction)s,
-						%(author_login)s,
-						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
-						(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
-						)
+                INSERT INTO pullrequest_reactions(created_at,repo_id,pullrequest_number,reaction,author_login,author_id,identity_type_id)
+                VALUES(%(created_at)s,
+                        %(repo_id)s,
+                        %(pullrequest_number)s,
+                        %(pullrequest_reaction)s,
+                        %(author_login)s,
+                        (SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
+                        (SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
+                        )
 
-				ON CONFLICT DO NOTHING
-				;""",
+                ON CONFLICT DO NOTHING
+                ;""",
                 (i for i in items_list if i["element_type"] == "pullrequest_reaction"),
             )
 
         else:
             db.cursor.executemany(
                 """
-					INSERT OR IGNORE INTO pullrequest_reactions(created_at,repo_id,pullrequest_number,reaction,author_login,author_id,identity_type_id)
-				VALUES(:created_at,
-						:repo_id,
-						:pullrequest_number,
-						:pullrequest_reaction,
-						:author_login,
-						(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
-						(SELECT id FROM identity_types WHERE name=:target_identity_type)
-						)
-				;""",
+                    INSERT OR IGNORE INTO pullrequest_reactions(created_at,repo_id,pullrequest_number,reaction,author_login,author_id,identity_type_id)
+                VALUES(:created_at,
+                        :repo_id,
+                        :pullrequest_number,
+                        :pullrequest_reaction,
+                        :author_login,
+                        (SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
+                        (SELECT id FROM identity_types WHERE name=:target_identity_type)
+                        )
+                ;""",
                 (i for i in items_list if i["element_type"] == "pullrequest_reaction"),
             )
 
@@ -5560,19 +5562,19 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
             extras.execute_batch(
                 db.cursor,
                 """
-				INSERT INTO pullrequest_comment_reactions(created_at,repo_id,pullrequest_number,comment_id,reaction,author_login,author_id,identity_type_id)
-				VALUES(%(created_at)s,
-						%(repo_id)s,
-						%(pullrequest_number)s,
-						%(pullrequest_comment_id)s,
-						%(pullrequest_comment_reaction)s,
-						%(author_login)s,
-						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
-						(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
-						)
+                INSERT INTO pullrequest_comment_reactions(created_at,repo_id,pullrequest_number,comment_id,reaction,author_login,author_id,identity_type_id)
+                VALUES(%(created_at)s,
+                        %(repo_id)s,
+                        %(pullrequest_number)s,
+                        %(pullrequest_comment_id)s,
+                        %(pullrequest_comment_reaction)s,
+                        %(author_login)s,
+                        (SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
+                        (SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
+                        )
 
-				ON CONFLICT DO NOTHING
-				;""",
+                ON CONFLICT DO NOTHING
+                ;""",
                 (
                     i
                     for i in items_list
@@ -5583,17 +5585,17 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
         else:
             db.cursor.executemany(
                 """
-					INSERT OR IGNORE INTO pullrequest_comment_reactions(created_at,repo_id,pullrequest_number,comment_id,reaction,author_login,author_id,identity_type_id)
-				VALUES(:created_at,
-						:repo_id,
-						:pullrequest_number,
-						:pullrequest_comment_id,
-						:pullrequest_comment_reaction,
-						:author_login,
-						(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
-						(SELECT id FROM identity_types WHERE name=:target_identity_type)
-						)
-				;""",
+                    INSERT OR IGNORE INTO pullrequest_comment_reactions(created_at,repo_id,pullrequest_number,comment_id,reaction,author_login,author_id,identity_type_id)
+                VALUES(:created_at,
+                        :repo_id,
+                        :pullrequest_number,
+                        :pullrequest_comment_id,
+                        :pullrequest_comment_reaction,
+                        :author_login,
+                        (SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
+                        (SELECT id FROM identity_types WHERE name=:target_identity_type)
+                        )
+                ;""",
                 (
                     i
                     for i in items_list
@@ -5611,36 +5613,36 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
             extras.execute_batch(
                 db.cursor,
                 """
-				INSERT INTO pullrequest_comments(created_at,repo_id,pullrequest_number,comment_id,comment_text,author_login,author_id,identity_type_id)
-				VALUES(%(created_at)s,
-						%(repo_id)s,
-						%(pullrequest_number)s,
-						%(pullrequest_comment_id)s,
-						%(pullrequest_comment_text)s,
-						%(author_login)s,
-						(SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
-						(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
-						)
+                INSERT INTO pullrequest_comments(created_at,repo_id,pullrequest_number,comment_id,comment_text,author_login,author_id,identity_type_id)
+                VALUES(%(created_at)s,
+                        %(repo_id)s,
+                        %(pullrequest_number)s,
+                        %(pullrequest_comment_id)s,
+                        %(pullrequest_comment_text)s,
+                        %(author_login)s,
+                        (SELECT id FROM identities WHERE identity=%(author_login)s AND identity_type_id=(SELECT id FROM identity_types WHERE name=%(target_identity_type)s)),
+                        (SELECT id FROM identity_types WHERE name=%(target_identity_type)s)
+                        )
 
-				ON CONFLICT DO NOTHING
-				;""",
+                ON CONFLICT DO NOTHING
+                ;""",
                 (i for i in items_list if i["element_type"] == "pullrequest_comment"),
             )
 
         else:
             db.cursor.executemany(
                 """
-					INSERT OR IGNORE INTO pullrequest_comments(created_at,repo_id,pullrequest_number,comment_id,comment_text,author_login,author_id,identity_type_id)
-				VALUES(:created_at,
-						:repo_id,
-						:pullrequest_number,
-						:pullrequest_comment_id,
-						:pullrequest_comment_text,
-						:author_login,
-						(SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
-						(SELECT id FROM identity_types WHERE name=:target_identity_type)
-						)
-				;""",
+                    INSERT OR IGNORE INTO pullrequest_comments(created_at,repo_id,pullrequest_number,comment_id,comment_text,author_login,author_id,identity_type_id)
+                VALUES(:created_at,
+                        :repo_id,
+                        :pullrequest_number,
+                        :pullrequest_comment_id,
+                        :pullrequest_comment_text,
+                        :author_login,
+                        (SELECT id FROM identities WHERE identity=:author_login AND identity_type_id=(SELECT id FROM identity_types WHERE name=:target_identity_type)),
+                        (SELECT id FROM identity_types WHERE name=:target_identity_type)
+                        )
+                ;""",
                 (i for i in items_list if i["element_type"] == "pullrequest_comment"),
             )
 
@@ -5654,26 +5656,26 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
             extras.execute_batch(
                 db.cursor,
                 """
-				INSERT INTO pullrequest_labels(repo_id,pullrequest_number,label)
-				VALUES(%(repo_id)s,
-						%(pullrequest_number)s,
-						%(pullrequest_label)s
-						)
+                INSERT INTO pullrequest_labels(repo_id,pullrequest_number,label)
+                VALUES(%(repo_id)s,
+                        %(pullrequest_number)s,
+                        %(pullrequest_label)s
+                        )
 
-				ON CONFLICT DO NOTHING
-				;""",
+                ON CONFLICT DO NOTHING
+                ;""",
                 (i for i in items_list if i["element_type"] == "pullrequest_label"),
             )
 
         else:
             db.cursor.executemany(
                 """
-					INSERT OR IGNORE INTO pullrequest_labels(repo_id,pullrequest_number,label)
-				VALUES(:repo_id,
-						:pullrequest_number,
-						:pullrequest_label
-						)
-				;""",
+                    INSERT OR IGNORE INTO pullrequest_labels(repo_id,pullrequest_number,label)
+                VALUES(:repo_id,
+                        :pullrequest_number,
+                        :pullrequest_label
+                        )
+                ;""",
                 (i for i in items_list if i["element_type"] == "pullrequest_label"),
             )
 
@@ -5786,12 +5788,12 @@ class PRReactionsGQLFiller(GHGQLFiller):
     def check_requirements(self):
         self.db.cursor.execute(
             """
-			SELECT update_type,updated_at FROM full_updates
-			WHERE update_type='complete_pullrequests'
-			ORDER BY updated_at DESC
-			LIMIT 1
-			;
-			"""
+            SELECT update_type,updated_at FROM full_updates
+            WHERE update_type='complete_pullrequests'
+            ORDER BY updated_at DESC
+            LIMIT 1
+            ;
+            """
         )
         ans = list(self.db.cursor.fetchall())
         if len(ans) == 0:
@@ -5808,31 +5810,31 @@ class PRReactionsGQLFiller(GHGQLFiller):
         output: python-formatable string representing the graphql query
         """
         return """query {{
-					repository(owner: "{repo_owner}", name: "{repo_name}") {{
-  							nameWithOwner
-    						id }}
-  					node(id:"{pullrequest_gql_id}") {{
-  					    ... on PullRequest {{
+                    repository(owner: "{repo_owner}", name: "{repo_name}") {{
+                            nameWithOwner
+                            id }}
+                    node(id:"{pullrequest_gql_id}") {{
+                        ... on PullRequest {{
 
-									id
-									number
-									reactions(first:{page_size}  {after_end_cursor}) {{
-										totalCount
-										pageInfo {{
-											hasNextPage
-											endCursor
-											}}
-										nodes {{
-											createdAt
-											user {{ login }}
-											content
-											id
-											}}
-      								}}
-    							
-    							}}
-  							}}
-						}}"""
+                                    id
+                                    number
+                                    reactions(first:{page_size}  {after_end_cursor}) {{
+                                        totalCount
+                                        pageInfo {{
+                                            hasNextPage
+                                            endCursor
+                                            }}
+                                        nodes {{
+                                            createdAt
+                                            user {{ login }}
+                                            content
+                                            id
+                                            }}
+                                    }}
+                                
+                                }}
+                            }}
+                        }}"""
 
     def parse_query_result(
         self,
@@ -5927,12 +5929,12 @@ class PRCommentsGQLFiller(GHGQLFiller):
     def check_requirements(self):
         self.db.cursor.execute(
             """
-			SELECT update_type,updated_at FROM full_updates
-			WHERE update_type='complete_pullrequests'
-			ORDER BY updated_at DESC
-			LIMIT 1
-			;
-			"""
+            SELECT update_type,updated_at FROM full_updates
+            WHERE update_type='complete_pullrequests'
+            ORDER BY updated_at DESC
+            LIMIT 1
+            ;
+            """
         )
         ans = list(self.db.cursor.fetchall())
         if len(ans) == 0:
@@ -5949,46 +5951,46 @@ class PRCommentsGQLFiller(GHGQLFiller):
         output: python-formatable string representing the graphql query
         """
         return """query {{
-					repository(owner: "{repo_owner}", name: "{repo_name}") {{
-  							nameWithOwner
-    						id }}
-  					node(id:"{pullrequest_gql_id}") {{
-  					    ... on PullRequest {{
+                    repository(owner: "{repo_owner}", name: "{repo_name}") {{
+                            nameWithOwner
+                            id }}
+                    node(id:"{pullrequest_gql_id}") {{
+                        ... on PullRequest {{
 
-									id
-									number
-									comments(first:{page_size} {after_end_cursor}) {{
-										totalCount
-										pageInfo {{
-											endCursor
-											hasNextPage
-											}}
-										nodes {{
-											id
-											createdAt
-											author {{ login }}
-											bodyText
-											databaseId
+                                    id
+                                    number
+                                    comments(first:{page_size} {after_end_cursor}) {{
+                                        totalCount
+                                        pageInfo {{
+                                            endCursor
+                                            hasNextPage
+                                            }}
+                                        nodes {{
+                                            id
+                                            createdAt
+                                            author {{ login }}
+                                            bodyText
+                                            databaseId
 
-											reactions(first:{secondary_page_size}) {{
-												totalCount
-												pageInfo {{
-													endCursor
-													hasNextPage
-													}}
-												nodes {{
-													user {{ login }}
-													createdAt
-													content
-													id
-													}}
-												}}
-											}}
-										}}
-    							
-    							}}
-  							}}
-						}}"""
+                                            reactions(first:{secondary_page_size}) {{
+                                                totalCount
+                                                pageInfo {{
+                                                    endCursor
+                                                    hasNextPage
+                                                    }}
+                                                nodes {{
+                                                    user {{ login }}
+                                                    createdAt
+                                                    content
+                                                    id
+                                                    }}
+                                                }}
+                                            }}
+                                        }}
+                                
+                                }}
+                            }}
+                        }}"""
 
     def parse_query_result(
         self,
@@ -6130,12 +6132,12 @@ class PRCommentReactionsGQLFiller(GHGQLFiller):
     def check_requirements(self):
         self.db.cursor.execute(
             """
-			SELECT update_type,updated_at FROM full_updates
-			WHERE update_type='complete_pullrequests'
-			ORDER BY updated_at DESC
-			LIMIT 1
-			;
-			"""
+            SELECT update_type,updated_at FROM full_updates
+            WHERE update_type='complete_pullrequests'
+            ORDER BY updated_at DESC
+            LIMIT 1
+            ;
+            """
         )
         ans = list(self.db.cursor.fetchall())
         if len(ans) == 0:
@@ -6146,12 +6148,12 @@ class PRCommentReactionsGQLFiller(GHGQLFiller):
 
         self.db.cursor.execute(
             """
-			SELECT update_type,updated_at FROM full_updates
-			WHERE update_type='pullrequest_comments'
-			ORDER BY updated_at DESC
-			LIMIT 1
-			;
-			"""
+            SELECT update_type,updated_at FROM full_updates
+            WHERE update_type='pullrequest_comments'
+            ORDER BY updated_at DESC
+            LIMIT 1
+            ;
+            """
         )
         ans = list(self.db.cursor.fetchall())
         if len(ans) == 0:
@@ -6168,31 +6170,31 @@ class PRCommentReactionsGQLFiller(GHGQLFiller):
         output: python-formatable string representing the graphql query
         """
         return """query {{
-					repository(owner: "{repo_owner}", name: "{repo_name}") {{
-  							nameWithOwner
-    						id }}
-  					node(id:"{pullrequest_comment_gql_id}") {{
-  					    ... on IssueComment {{
-  					    			pullRequest {{ number }}
-									id
-									databaseId
-									reactions(first:{page_size}  {after_end_cursor}) {{
-										totalCount
-										pageInfo {{
-											hasNextPage
-											endCursor
-											}}
-										nodes {{
-											createdAt
-											user {{ login }}
-											content
-											id
-											}}
-      								}}
-    							
-    							}}
-  							}}
-						}}"""
+                    repository(owner: "{repo_owner}", name: "{repo_name}") {{
+                            nameWithOwner
+                            id }}
+                    node(id:"{pullrequest_comment_gql_id}") {{
+                        ... on IssueComment {{
+                                    pullRequest {{ number }}
+                                    id
+                                    databaseId
+                                    reactions(first:{page_size}  {after_end_cursor}) {{
+                                        totalCount
+                                        pageInfo {{
+                                            hasNextPage
+                                            endCursor
+                                            }}
+                                        nodes {{
+                                            createdAt
+                                            user {{ login }}
+                                            content
+                                            id
+                                            }}
+                                    }}
+                                
+                                }}
+                            }}
+                        }}"""
 
     def parse_query_result(
         self,
@@ -6291,12 +6293,12 @@ class PRLabelsGQLFiller(GHGQLFiller):
     def check_requirements(self):
         self.db.cursor.execute(
             """
-			SELECT update_type,updated_at FROM full_updates
-			WHERE update_type='complete_pullrequests'
-			ORDER BY updated_at DESC
-			LIMIT 1
-			;
-			"""
+            SELECT update_type,updated_at FROM full_updates
+            WHERE update_type='complete_pullrequests'
+            ORDER BY updated_at DESC
+            LIMIT 1
+            ;
+            """
         )
         ans = list(self.db.cursor.fetchall())
         if len(ans) == 0:
@@ -6313,30 +6315,30 @@ class PRLabelsGQLFiller(GHGQLFiller):
         output: python-formatable string representing the graphql query
         """
         return """query {{
-					repository(owner: "{repo_owner}", name: "{repo_name}") {{
-  							nameWithOwner
-    						id }}
-  					node(id:"{pullrequest_gql_id}") {{
-  					    ... on PullRequest {{
+                    repository(owner: "{repo_owner}", name: "{repo_name}") {{
+                            nameWithOwner
+                            id }}
+                    node(id:"{pullrequest_gql_id}") {{
+                        ... on PullRequest {{
 
-									id
-									number
-									
-									labels(first:{page_size} {after_end_cursor}) {{
-										totalCount
-										pageInfo {{
-											endCursor
-											hasNextPage
-											}}
-										nodes {{
-											name
-											createdAt
-											}}
-										}}
-    							
-    							}}
-  							}}
-						}}"""
+                                    id
+                                    number
+                                    
+                                    labels(first:{page_size} {after_end_cursor}) {{
+                                        totalCount
+                                        pageInfo {{
+                                            endCursor
+                                            hasNextPage
+                                            }}
+                                        nodes {{
+                                            name
+                                            createdAt
+                                            }}
+                                        }}
+                                
+                                }}
+                            }}
+                        }}"""
 
     def parse_query_result(
         self,
@@ -6393,9 +6395,9 @@ class PRLabelsGQLFiller(GHGQLFiller):
                             # r['created_at'] = ee['createdAt']
                             r["pullrequest_label"] = ee["name"]
                             # try:
-                            # 	r['author_login'] = ee['user']['login']
+                            #   r['author_login'] = ee['user']['login']
                             # except:
-                            # 	r['author_login'] = None
+                            #   r['author_login'] = None
                         except (KeyError, TypeError) as err:
                             self.logger.info(
                                 "Result triggering error: {} \nError when parsing pullrequest_labels for {}/{}: {}".format(
@@ -6435,23 +6437,23 @@ class SponsorablesGQLFiller(GHGQLFiller):
         output: python-formatable string representing the graphql query
         """
         return """query {{
-  					sponsorables(first:{page_size} {after_end_cursor}) {{
-  						totalCount
-  						pageInfo{{
-  							hasNextPage
-  							endCursor
-  							}}
-  						nodes{{
-  							__typename
-  							... on User{{
-  								login
-  								sponsorsListing{{
-  										createdAt
-  									}}
-  								}}
-  							}}
-  						}}
-					}}"""
+                    sponsorables(first:{page_size} {after_end_cursor}) {{
+                        totalCount
+                        pageInfo{{
+                            hasNextPage
+                            endCursor
+                            }}
+                        nodes{{
+                            __typename
+                            ... on User{{
+                                login
+                                sponsorsListing{{
+                                        createdAt
+                                    }}
+                                }}
+                            }}
+                        }}
+                    }}"""
 
     def parse_query_result(self, query_result, **kwargs):
         """
@@ -6488,9 +6490,9 @@ class SponsorablesGQLFiller(GHGQLFiller):
             extras.execute_batch(
                 db.cursor,
                 """ INSERT INTO users(creation_identity_type_id,creation_identity) VALUES(
-												(SELECT id FROM identity_types WHERE name=%s),
-												%s
-												) ON CONFLICT DO NOTHING;""",
+                                                (SELECT id FROM identity_types WHERE name=%s),
+                                                %s
+                                                ) ON CONFLICT DO NOTHING;""",
                 (
                     (
                         self.target_identity_type,
@@ -6503,12 +6505,12 @@ class SponsorablesGQLFiller(GHGQLFiller):
             extras.execute_batch(
                 db.cursor,
                 """ INSERT INTO identities(identity_type_id,user_id,identity)
-													VALUES((SELECT id FROM identity_types WHERE name=%s),
-															(SELECT id FROM users
-															WHERE creation_identity_type_id=(SELECT id FROM identity_types WHERE name=%s)
-																AND creation_identity=%s),
-															%s)
-													ON CONFLICT DO NOTHING;""",
+                                                    VALUES((SELECT id FROM identity_types WHERE name=%s),
+                                                            (SELECT id FROM users
+                                                            WHERE creation_identity_type_id=(SELECT id FROM identity_types WHERE name=%s)
+                                                                AND creation_identity=%s),
+                                                            %s)
+                                                    ON CONFLICT DO NOTHING;""",
                 (
                     (
                         self.target_identity_type,
@@ -6523,19 +6525,19 @@ class SponsorablesGQLFiller(GHGQLFiller):
             extras.execute_batch(
                 db.cursor,
                 """ INSERT INTO sponsors_listings(identity_type_id,login,created_at)
-													VALUES((SELECT id FROM identity_types WHERE name=%(identity_type)s),
-															%(login)s,
-															%(sponsorsListing_createdat)s)
-													ON CONFLICT DO NOTHING;""",
+                                                    VALUES((SELECT id FROM identity_types WHERE name=%(identity_type)s),
+                                                            %(login)s,
+                                                            %(sponsorsListing_createdat)s)
+                                                    ON CONFLICT DO NOTHING;""",
                 items_list,
             )
 
         else:
             db.cursor.executemany(
                 """ INSERT OR IGNORE INTO users(creation_identity_type_id,creation_identity) VALUES(
-												(SELECT id FROM identity_types WHERE name=?),
-												?
-												);""",
+                                                (SELECT id FROM identity_types WHERE name=?),
+                                                ?
+                                                );""",
                 (
                     (
                         self.target_identity_type,
@@ -6547,11 +6549,11 @@ class SponsorablesGQLFiller(GHGQLFiller):
 
             db.cursor.executemany(
                 """ INSERT OR IGNORE INTO identities(identity_type_id,user_id,identity)
-													VALUES((SELECT id FROM identity_types WHERE name=?),
-															(SELECT id FROM users
-															WHERE creation_identity_type_id=(SELECT id FROM identity_types WHERE name=?)
-																AND creation_identity=?),
-															?);""",
+                                                    VALUES((SELECT id FROM identity_types WHERE name=?),
+                                                            (SELECT id FROM users
+                                                            WHERE creation_identity_type_id=(SELECT id FROM identity_types WHERE name=?)
+                                                                AND creation_identity=?),
+                                                            ?);""",
                 (
                     (
                         self.target_identity_type,
@@ -6565,10 +6567,10 @@ class SponsorablesGQLFiller(GHGQLFiller):
 
             db.cursor.executemany(
                 """ INSERT OR IGNORE INTO sponsors_listings(identity_type_id,login,created_at)
-													VALUES((SELECT id FROM identity_types WHERE name=:identity_type),
-															:login,
-															:sponsorsListing_createdat)
-													;""",
+                                                    VALUES((SELECT id FROM identity_types WHERE name=:identity_type),
+                                                            :login,
+                                                            :sponsorsListing_createdat)
+                                                    ;""",
                 items_list,
             )
 
@@ -6591,14 +6593,14 @@ class SponsorablesGQLFiller(GHGQLFiller):
             if self.force:
                 self.db.cursor.execute(
                     """
-						SELECT DISTINCT
- 							FIRST_VALUE(tu.info->> 'end_cursor') OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS end_cursor
-							,FIRST_VALUE(tu.updated_at) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS updated_at
-							,FIRST_VALUE(tu.table_name) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS table_name
-							,FIRST_VALUE(tu.success) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS success
-						FROM table_updates tu
-						WHERE table_name=%(table_name)s
-				;""",
+                        SELECT DISTINCT
+                            FIRST_VALUE(tu.info->> 'end_cursor') OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS end_cursor
+                            ,FIRST_VALUE(tu.updated_at) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS updated_at
+                            ,FIRST_VALUE(tu.table_name) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS table_name
+                            ,FIRST_VALUE(tu.success) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS success
+                        FROM table_updates tu
+                        WHERE table_name=%(table_name)s
+                ;""",
                     {"table_name": self.items_name},
                 )
 
@@ -6614,14 +6616,14 @@ class SponsorablesGQLFiller(GHGQLFiller):
             else:
                 self.db.cursor.execute(
                     """
-						SELECT DISTINCT
- 							FIRST_VALUE(tu.info->> 'end_cursor') OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS end_cursor
-							,FIRST_VALUE(tu.updated_at) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS updated_at
-							,FIRST_VALUE(tu.table_name) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS table_name
-							,FIRST_VALUE(tu.success) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS success
-						FROM table_updates tu
-						WHERE table_name=%(table_name)s
-				;""",
+                        SELECT DISTINCT
+                            FIRST_VALUE(tu.info->> 'end_cursor') OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS end_cursor
+                            ,FIRST_VALUE(tu.updated_at) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS updated_at
+                            ,FIRST_VALUE(tu.table_name) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS table_name
+                            ,FIRST_VALUE(tu.success) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS success
+                        FROM table_updates tu
+                        WHERE table_name=%(table_name)s
+                ;""",
                     {"table_name": self.items_name},
                 )
 
@@ -6639,14 +6641,14 @@ class SponsorablesGQLFiller(GHGQLFiller):
             if self.force:
                 self.db.cursor.execute(
                     """
-						SELECT DISTINCT
- 							FIRST_VALUE(tu.info) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS end_cursor
-							,FIRST_VALUE(tu.updated_at) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS updated_at
-							,FIRST_VALUE(tu.table_name) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS table_name
-							,FIRST_VALUE(tu.success) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS success
-						FROM table_updates tu
-						WHERE table_name=:table_name
-				;""",
+                        SELECT DISTINCT
+                            FIRST_VALUE(tu.info) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS end_cursor
+                            ,FIRST_VALUE(tu.updated_at) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS updated_at
+                            ,FIRST_VALUE(tu.table_name) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS table_name
+                            ,FIRST_VALUE(tu.success) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS success
+                        FROM table_updates tu
+                        WHERE table_name=:table_name
+                ;""",
                     {"table_name": self.items_name},
                 )
 
@@ -6664,14 +6666,14 @@ class SponsorablesGQLFiller(GHGQLFiller):
             else:
                 self.db.cursor.execute(
                     """
-						SELECT DISTINCT
- 							FIRST_VALUE(tu.info) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS end_cursor
-							,FIRST_VALUE(tu.updated_at) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS updated_at
-							,FIRST_VALUE(tu.table_name) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS table_name
-							,FIRST_VALUE(tu.success) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS success
-						FROM table_updates tu
-						WHERE table_name=:table_name
-				;""",
+                        SELECT DISTINCT
+                            FIRST_VALUE(tu.info) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS end_cursor
+                            ,FIRST_VALUE(tu.updated_at) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS updated_at
+                            ,FIRST_VALUE(tu.table_name) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS table_name
+                            ,FIRST_VALUE(tu.success) OVER (PARTITION BY tu.table_name,tu.success ORDER BY tu.updated_at DESC) AS success
+                        FROM table_updates tu
+                        WHERE table_name=:table_name
+                ;""",
                     {"table_name": self.items_name},
                 )
 
@@ -6851,38 +6853,38 @@ class RepoLanguagesGQLFiller(GHGQLFiller):
         if self.reset_shares:
             self.db.cursor.execute(
                 """
-				UPDATE repo_languages SET share=NULL;
-				;"""
+                UPDATE repo_languages SET share=NULL;
+                ;"""
             )
 
         if self.db.db_type == "postgres":
             self.db.cursor.execute(
                 """
-				WITH repo_list AS (SELECT DISTINCT repo_id FROM repo_languages WHERE share IS NULL),
-					shares AS (SELECT r.repo_id,rl.language,rl.size::DOUBLE PRECISION /(SUM(rl.size::DOUBLE PRECISION ) OVER (PARTITION BY r.repo_id)) AS share FROM repo_list r
-								INNER JOIN repo_languages rl
-								ON rl.repo_id=r.repo_id
-								)
-				UPDATE repo_languages
-				SET share=s.share
-				FROM shares s
-				WHERE s.repo_id=repo_languages.repo_id AND s.language=repo_languages.language
-				;"""
+                WITH repo_list AS (SELECT DISTINCT repo_id FROM repo_languages WHERE share IS NULL),
+                    shares AS (SELECT r.repo_id,rl.language,rl.size::DOUBLE PRECISION /(SUM(rl.size::DOUBLE PRECISION ) OVER (PARTITION BY r.repo_id)) AS share FROM repo_list r
+                                INNER JOIN repo_languages rl
+                                ON rl.repo_id=r.repo_id
+                                )
+                UPDATE repo_languages
+                SET share=s.share
+                FROM shares s
+                WHERE s.repo_id=repo_languages.repo_id AND s.language=repo_languages.language
+                ;"""
             )
         else:
             self.db.cursor.execute(
                 """
-				WITH repo_list AS (SELECT DISTINCT repo_id FROM repo_languages WHERE share IS NULL),
-					shares AS (SELECT r.repo_id,rl.language,rl.size*1.0/(SUM(rl.size*1.0) OVER (PARTITION BY r.repo_id)) AS share FROM repo_list r
-								INNER JOIN repo_languages rl
-								ON rl.repo_id=r.repo_id
-								)
-				UPDATE repo_languages
-				SET share= (SELECT s.share FROM shares s
-							WHERE s.repo_id=repo_languages.repo_id AND s.language=repo_languages.language)
-				WHERE EXISTS (SELECT s.share FROM shares s
-							WHERE s.repo_id=repo_languages.repo_id AND s.language=repo_languages.language)
-				;"""
+                WITH repo_list AS (SELECT DISTINCT repo_id FROM repo_languages WHERE share IS NULL),
+                    shares AS (SELECT r.repo_id,rl.language,rl.size*1.0/(SUM(rl.size*1.0) OVER (PARTITION BY r.repo_id)) AS share FROM repo_list r
+                                INNER JOIN repo_languages rl
+                                ON rl.repo_id=r.repo_id
+                                )
+                UPDATE repo_languages
+                SET share= (SELECT s.share FROM shares s
+                            WHERE s.repo_id=repo_languages.repo_id AND s.language=repo_languages.language)
+                WHERE EXISTS (SELECT s.share FROM shares s
+                            WHERE s.repo_id=repo_languages.repo_id AND s.language=repo_languages.language)
+                ;"""
             )
 
     def query_string(self, **kwargs):
@@ -6891,24 +6893,24 @@ class RepoLanguagesGQLFiller(GHGQLFiller):
         output: python-formatable string representing the graphql query
         """
         return """query {{
-  					repository(owner: "{repo_owner}", name: "{repo_name}") {{
-  							nameWithOwner
-    						id
-    						languages(first:{page_size} {after_end_cursor},orderBy:{{field:SIZE,direction:DESC}}) {{
-    							totalCount
-    							pageInfo {{
-									endCursor
-									hasNextPage
-						 			}}
-      							edges {{
-        							size
-									node {{
-										name
-										}}
-									}}
-    							}}
-  							}}
-						}}"""
+                    repository(owner: "{repo_owner}", name: "{repo_name}") {{
+                            nameWithOwner
+                            id
+                            languages(first:{page_size} {after_end_cursor},orderBy:{{field:SIZE,direction:DESC}}) {{
+                                totalCount
+                                pageInfo {{
+                                    endCursor
+                                    hasNextPage
+                                    }}
+                                edges {{
+                                    size
+                                    node {{
+                                        name
+                                        }}
+                                    }}
+                                }}
+                            }}
+                        }}"""
 
     def parse_query_result(
         self,
@@ -6955,14 +6957,14 @@ class RepoLanguagesGQLFiller(GHGQLFiller):
             extras.execute_batch(
                 db.cursor,
                 """
-				INSERT INTO repo_languages(repo_id,language,size)
-				VALUES(%s,
-						%s,
-						%s
-						)
+                INSERT INTO repo_languages(repo_id,language,size)
+                VALUES(%s,
+                        %s,
+                        %s
+                        )
 
-				ON CONFLICT DO NOTHING
-				;""",
+                ON CONFLICT DO NOTHING
+                ;""",
                 (
                     (s["repo_id"], s["language_name"], s["language_size"])
                     for s in items_list
@@ -6971,12 +6973,12 @@ class RepoLanguagesGQLFiller(GHGQLFiller):
         else:
             db.cursor.executemany(
                 """
-					INSERT OR IGNORE INTO repo_languages(repo_id,language,size)
-					VALUES(?,
-							?,
-							?
-							)
-				;""",
+                    INSERT OR IGNORE INTO repo_languages(repo_id,language,size)
+                    VALUES(?,
+                            ?,
+                            ?
+                            )
+                ;""",
                 (
                     (s["repo_id"], s["language_name"], s["language_size"])
                     for s in items_list
@@ -7011,11 +7013,11 @@ class RepoCreatedAtGQLFiller(GHGQLFiller):
         output: python-formatable string representing the graphql query
         """
         return """query {{
-					repository(owner:"{repo_owner}", name:"{repo_name}") {{
-						nameWithOwner
-						createdAt
-					}}
-				}}"""
+                    repository(owner:"{repo_owner}", name:"{repo_name}") {{
+                        nameWithOwner
+                        createdAt
+                    }}
+                }}"""
 
     def parse_query_result(
         self,
@@ -7059,17 +7061,17 @@ class RepoCreatedAtGQLFiller(GHGQLFiller):
             extras.execute_batch(
                 db.cursor,
                 """
-				UPDATE repositories SET created_at=%(created_at)s
-				WHERE id=%(repo_id)s
-				;""",
+                UPDATE repositories SET created_at=%(created_at)s
+                WHERE id=%(repo_id)s
+                ;""",
                 (s for s in items_list),
             )
         else:
             db.cursor.executemany(
                 """
-					UPDATE repositories SET created_at=date(:created_at)
-				WHERE id=:repo_id
-						;""",
+                    UPDATE repositories SET created_at=date(:created_at)
+                WHERE id=:repo_id
+                        ;""",
                 (s for s in items_list),
             )
 
@@ -7101,11 +7103,11 @@ class UserCreatedAtGQLFiller(GHGQLFiller):
         output: python-formatable string representing the graphql query
         """
         return """query {{
-					user(login:"{user_login}") {{
-						login
-						createdAt
-					}}
-				}}"""
+                    user(login:"{user_login}") {{
+                        login
+                        createdAt
+                    }}
+                }}"""
 
     def parse_query_result(self, query_result, identity_id, identity_type_id, **kwargs):
         """
@@ -7140,19 +7142,19 @@ class UserCreatedAtGQLFiller(GHGQLFiller):
             extras.execute_batch(
                 db.cursor,
                 """
-				UPDATE identities SET created_at=%(created_at)s
-				WHERE id=%(identity_id)s
-				AND identity_type_id=%(identity_type_id)s
-				;""",
+                UPDATE identities SET created_at=%(created_at)s
+                WHERE id=%(identity_id)s
+                AND identity_type_id=%(identity_type_id)s
+                ;""",
                 (s for s in items_list),
             )
         else:
             db.cursor.executemany(
                 """
-					UPDATE identities SET created_at=date(:created_at)
-				WHERE id=:identity_id
-				AND identity_type_id=:identity_type_id
-						;""",
+                    UPDATE identities SET created_at=date(:created_at)
+                WHERE id=:identity_id
+                AND identity_type_id=:identity_type_id
+                        ;""",
                 (s for s in items_list),
             )
 
@@ -7186,18 +7188,18 @@ class UserInfoGQLFiller(GHGQLFiller):
         output: python-formatable string representing the graphql query
         """
         return """query {{
-					user(login:"{user_login}") {{
-						login
-						avatarUrl
-						bio
-						createdAt
-						location
-						twitterUsername
-						status {{message emoji}}
-						name
-						{additional_data_query}
-					}}
-				}}"""
+                    user(login:"{user_login}") {{
+                        login
+                        avatarUrl
+                        bio
+                        createdAt
+                        location
+                        twitterUsername
+                        status {{message emoji}}
+                        name
+                        {additional_data_query}
+                    }}
+                }}"""
 
     def parse_query_result(self, query_result, identity_id, identity_type_id, **kwargs):
         """
@@ -7265,58 +7267,58 @@ class UserInfoGQLFiller(GHGQLFiller):
             extras.execute_batch(
                 db.cursor,
                 """
-				UPDATE identities SET created_at=%(created_at)s, attributes=%(user_info)s
-				WHERE id=%(identity_id)s
-				AND identity_type_id=%(identity_type_id)s
-				;""",
+                UPDATE identities SET created_at=%(created_at)s, attributes=%(user_info)s
+                WHERE id=%(identity_id)s
+                AND identity_type_id=%(identity_type_id)s
+                ;""",
                 (s for s in items_list),
             )
         else:
             db.cursor.executemany(
                 """
-					UPDATE identities SET created_at=date(:created_at), attributes=:user_info
-				WHERE id=:identity_id
-				AND identity_type_id=:identity_type_id
-						;""",
+                    UPDATE identities SET created_at=date(:created_at), attributes=:user_info
+                WHERE id=:identity_id
+                AND identity_type_id=:identity_type_id
+                        ;""",
                 (s for s in items_list),
             )
 
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				INSERT INTO identity_types(name) SELECT 'twitter_login' WHERE NOT EXISTS (SELECT 1 FROM identity_types WHERE name='twitter_login')
-				ON CONFLICT DO NOTHING
-				;"""
+                INSERT INTO identity_types(name) SELECT 'twitter_login' WHERE NOT EXISTS (SELECT 1 FROM identity_types WHERE name='twitter_login')
+                ON CONFLICT DO NOTHING
+                ;"""
             )
         else:
             db.cursor.execute(
                 """
-				INSERT OR IGNORE INTO identity_types(name) SELECT 'twitter_login' WHERE NOT EXISTS (SELECT 1 FROM identity_types WHERE name='twitter_login')
-				;"""
+                INSERT OR IGNORE INTO identity_types(name) SELECT 'twitter_login' WHERE NOT EXISTS (SELECT 1 FROM identity_types WHERE name='twitter_login')
+                ;"""
             )
 
         if db.db_type == "postgres":
             extras.execute_batch(
                 db.cursor,
                 """
-				INSERT INTO identities(identity,identity_type_id,user_id)
-				SELECT %(twitter)s,it.id,i.user_id FROM identity_types it
-				INNER JOIN identities i
-				ON it.name='twitter_login'
-				AND i.id=%(identity_id)s
-				ON CONFLICT DO NOTHING
-				;""",
+                INSERT INTO identities(identity,identity_type_id,user_id)
+                SELECT %(twitter)s,it.id,i.user_id FROM identity_types it
+                INNER JOIN identities i
+                ON it.name='twitter_login'
+                AND i.id=%(identity_id)s
+                ON CONFLICT DO NOTHING
+                ;""",
                 (s for s in items_list if s["twitter"] is not None),
             )
         else:
             db.cursor.executemany(
                 """
-				INSERT OR IGNORE INTO identities(identity,identity_type_id,user_id)
-				SELECT :twitter,it.id,i.user_id FROM identity_types it
-				INNER JOIN identities i
-				ON it.name='twitter_login'
-				AND i.id=:identity_id
-				;""",
+                INSERT OR IGNORE INTO identities(identity,identity_type_id,user_id)
+                SELECT :twitter,it.id,i.user_id FROM identity_types it
+                INNER JOIN identities i
+                ON it.name='twitter_login'
+                AND i.id=:identity_id
+                ;""",
                 (s for s in items_list if s["twitter"] is not None),
             )
 
@@ -7326,23 +7328,23 @@ class UserInfoGQLFiller(GHGQLFiller):
                 if db.db_type == "postgres":
                     db.cursor.execute(
                         """
-						SELECT i.id FROM identities i
-						INNER JOIN identity_types it
-						ON it.name='twitter_login'
-						AND it.id=i.identity_type_id
-						AND i.identity=%(twitter)s
-						;""",
+                        SELECT i.id FROM identities i
+                        INNER JOIN identity_types it
+                        ON it.name='twitter_login'
+                        AND it.id=i.identity_type_id
+                        AND i.identity=%(twitter)s
+                        ;""",
                         s,
                     )
                 else:
                     db.cursor.execute(
                         """
-						SELECT i.id FROM identities i
-						INNER JOIN identity_types it
-						ON it.name='twitter_login'
-						AND it.id=i.identity_type_id
-						AND i.identity=:twitter
-						;""",
+                        SELECT i.id FROM identities i
+                        INNER JOIN identity_types it
+                        ON it.name='twitter_login'
+                        AND it.id=i.identity_type_id
+                        AND i.identity=:twitter
+                        ;""",
                         s,
                     )
                 id_tw = db.cursor.fetchone()[0]
@@ -7387,22 +7389,22 @@ class UserOrgsGQLFiller(GHGQLFiller):
         output: python-formatable string representing the graphql query
         """
         return """query {{
-					user(login:"{user_login}") {{
-						login
-						organizations(first:{page_size} {after_end_cursor}) {{
-							pageInfo {{ endCursor hasNextPage }}
-							totalCount
-							edges {{
-								node {{ 
-									login
-									name
-									description
-									id
-									createdAt }}
-								}}
-						}}
-					}}
-				}}"""
+                    user(login:"{user_login}") {{
+                        login
+                        organizations(first:{page_size} {after_end_cursor}) {{
+                            pageInfo {{ endCursor hasNextPage }}
+                            totalCount
+                            edges {{
+                                node {{ 
+                                    login
+                                    name
+                                    description
+                                    id
+                                    createdAt }}
+                                }}
+                        }}
+                    }}
+                }}"""
 
     def parse_query_result(self, query_result, identity_id, identity_type_id, **kwargs):
         """
@@ -7444,37 +7446,37 @@ class UserOrgsGQLFiller(GHGQLFiller):
             extras.execute_batch(
                 db.cursor,
                 """
-				INSERT INTO organizations(name,login,description,created_at,source)
-				SELECT %(name)s,%(login)s,%(description)s,%(created_at)s,(SELECT id FROM sources WHERE name=%(source)s) 
-				WHERE NOT EXISTS (SELECT o.id FROM organizations o INNER JOIN sources s ON s.name=%(source)s AND s.id=o.source AND o.login=%(login)s)
-				;""",
+                INSERT INTO organizations(name,login,description,created_at,source)
+                SELECT %(name)s,%(login)s,%(description)s,%(created_at)s,(SELECT id FROM sources WHERE name=%(source)s) 
+                WHERE NOT EXISTS (SELECT o.id FROM organizations o INNER JOIN sources s ON s.name=%(source)s AND s.id=o.source AND o.login=%(login)s)
+                ;""",
                 (s for s in items_list),
             )
             extras.execute_batch(
                 db.cursor,
                 """
-				INSERT INTO org_memberships(member,org_id)
-				SELECT %(identity_id)s,o.id
-				FROM organizations o INNER JOIN sources s ON s.name=%(source)s AND s.id=o.source AND o.login=%(login)s
-				ON CONFLICT DO NOTHING
-				;""",
+                INSERT INTO org_memberships(member,org_id)
+                SELECT %(identity_id)s,o.id
+                FROM organizations o INNER JOIN sources s ON s.name=%(source)s AND s.id=o.source AND o.login=%(login)s
+                ON CONFLICT DO NOTHING
+                ;""",
                 (s for s in items_list),
             )
         else:
             db.cursor.executemany(
                 """
-				INSERT INTO organizations(name,login,description,created_at,source)
-				SELECT :name,:login,:description,:created_at,(SELECT id FROM sources WHERE name=:source)
-				WHERE NOT EXISTS (SELECT o.id FROM organizations o INNER JOIN sources s ON s.name=:source AND s.id=o.source AND o.login=:login)
-				;""",
+                INSERT INTO organizations(name,login,description,created_at,source)
+                SELECT :name,:login,:description,:created_at,(SELECT id FROM sources WHERE name=:source)
+                WHERE NOT EXISTS (SELECT o.id FROM organizations o INNER JOIN sources s ON s.name=:source AND s.id=o.source AND o.login=:login)
+                ;""",
                 (s for s in items_list),
             )
             db.cursor.executemany(
                 """
-				INSERT OR IGNORE INTO org_memberships(member,org_id)
-				SELECT :identity_id,o.id
-				FROM organizations o INNER JOIN sources s ON s.name=:source AND s.id=o.source AND o.login=:login
-				;""",
+                INSERT OR IGNORE INTO org_memberships(member,org_id)
+                SELECT :identity_id,o.id
+                FROM organizations o INNER JOIN sources s ON s.name=:source AND s.id=o.source AND o.login=:login
+                ;""",
                 (s for s in items_list),
             )
 
@@ -7509,38 +7511,38 @@ class SingleQueryUserLanguagesGQLFiller(GHGQLFiller):
         if self.reset_shares:
             self.db.cursor.execute(
                 """
-				UPDATE user_languages SET share=NULL;
-				;"""
+                UPDATE user_languages SET share=NULL;
+                ;"""
             )
 
         if self.db.db_type == "postgres":
             self.db.cursor.execute(
                 """
-				WITH user_list AS (SELECT DISTINCT user_identity FROM user_languages WHERE share IS NULL),
-					shares AS (SELECT r.user_identity,rl.language,rl.size::DOUBLE PRECISION /(SUM(rl.size::DOUBLE PRECISION) OVER (PARTITION BY r.user_identity)) AS share FROM user_list r
-								INNER JOIN user_languages rl
-								ON rl.user_identity=r.user_identity
-								)
-				UPDATE user_languages
-				SET share=s.share
-				FROM shares s
-				WHERE s.user_identity=user_languages.user_identity AND s.language=user_languages.language
-				;"""
+                WITH user_list AS (SELECT DISTINCT user_identity FROM user_languages WHERE share IS NULL),
+                    shares AS (SELECT r.user_identity,rl.language,rl.size::DOUBLE PRECISION /(SUM(rl.size::DOUBLE PRECISION) OVER (PARTITION BY r.user_identity)) AS share FROM user_list r
+                                INNER JOIN user_languages rl
+                                ON rl.user_identity=r.user_identity
+                                )
+                UPDATE user_languages
+                SET share=s.share
+                FROM shares s
+                WHERE s.user_identity=user_languages.user_identity AND s.language=user_languages.language
+                ;"""
             )
         else:
             self.db.cursor.execute(
                 """
-				WITH user_list AS (SELECT DISTINCT user_identity FROM user_languages WHERE share IS NULL),
-					shares AS (SELECT r.user_identity,rl.language,rl.size*1./(SUM(rl.size) OVER (PARTITION BY r.user_identity)) AS share FROM user_list r
-								INNER JOIN user_languages rl
-								ON rl.user_identity=r.user_identity
-								)
-				UPDATE user_languages
-				SET share= (SELECT s.share FROM shares s
-							WHERE s.user_identity=user_languages.user_identity AND s.language=user_languages.language)
-				WHERE EXISTS (SELECT s.share FROM shares s
-							WHERE s.user_identity=user_languages.user_identity AND s.language=user_languages.language)
-				;"""
+                WITH user_list AS (SELECT DISTINCT user_identity FROM user_languages WHERE share IS NULL),
+                    shares AS (SELECT r.user_identity,rl.language,rl.size*1./(SUM(rl.size) OVER (PARTITION BY r.user_identity)) AS share FROM user_list r
+                                INNER JOIN user_languages rl
+                                ON rl.user_identity=r.user_identity
+                                )
+                UPDATE user_languages
+                SET share= (SELECT s.share FROM shares s
+                            WHERE s.user_identity=user_languages.user_identity AND s.language=user_languages.language)
+                WHERE EXISTS (SELECT s.share FROM shares s
+                            WHERE s.user_identity=user_languages.user_identity AND s.language=user_languages.language)
+                ;"""
             )
 
     def query_string(self, **kwargs):
@@ -7549,29 +7551,29 @@ class SingleQueryUserLanguagesGQLFiller(GHGQLFiller):
         output: python-formatable string representing the graphql query
         """
         return """query {{
-  					user(login: "{user_login}") {{
-  							login
-  							contributionsCollection {{
-      							totalCommitContributions
-      							commitContributionsByRepository {{
-        							contributions{{
-        								totalCount
-        								}}
-       								repository{{
-       									nameWithOwner
-      									languages(first:{page_size}){{
-      										totalSize
-        									edges{{
-        										size
-        										node {{
-        											name}}
-        										}}
-        									}}
-        								}}
-        							}}
-        						}}
-  							}}
-						}}"""
+                    user(login: "{user_login}") {{
+                            login
+                            contributionsCollection {{
+                                totalCommitContributions
+                                commitContributionsByRepository {{
+                                    contributions{{
+                                        totalCount
+                                        }}
+                                    repository{{
+                                        nameWithOwner
+                                        languages(first:{page_size}){{
+                                            totalSize
+                                            edges{{
+                                                size
+                                                node {{
+                                                    name}}
+                                                }}
+                                            }}
+                                        }}
+                                    }}
+                                }}
+                            }}
+                        }}"""
 
     def parse_query_result(self, query_result, identity_id, identity_type_id, **kwargs):
         """
@@ -7626,14 +7628,14 @@ class SingleQueryUserLanguagesGQLFiller(GHGQLFiller):
             extras.execute_batch(
                 db.cursor,
                 """
-				INSERT INTO user_languages(user_identity,language,size)
-				VALUES(%s,
-						%s,
-						%s
-						)
+                INSERT INTO user_languages(user_identity,language,size)
+                VALUES(%s,
+                        %s,
+                        %s
+                        )
 
-				ON CONFLICT DO NOTHING
-				;""",
+                ON CONFLICT DO NOTHING
+                ;""",
                 (
                     (s["user_identity"], s["language_name"], s["language_size"])
                     for s in items_list
@@ -7642,12 +7644,12 @@ class SingleQueryUserLanguagesGQLFiller(GHGQLFiller):
         else:
             db.cursor.executemany(
                 """
-					INSERT OR IGNORE INTO user_languages(user_identity,language,size)
-					VALUES(?,
-							?,
-							?
-							)
-				;""",
+                    INSERT OR IGNORE INTO user_languages(user_identity,language,size)
+                    VALUES(?,
+                            ?,
+                            ?
+                            )
+                ;""",
                 (
                     (s["user_identity"], s["language_name"], s["language_size"])
                     for s in items_list
@@ -7739,27 +7741,27 @@ class UserLanguagesGQLFiller(SingleQueryUserLanguagesGQLFiller):
 
     def query_string_element(self, query_name, time_window_info, **kwargs):
         return """{query_name}:user(login: "{user_login}") {{
-  							login
-  							contributionsCollection{time_window_info} {{
-      							totalCommitContributions
-      							commitContributionsByRepository {{
-        							contributions{{
-        								totalCount
-        								}}
-       								repository{{
-       									nameWithOwner
-      									languages(first:{page_size}){{
-      										totalSize
-        									edges{{
-        										size
-        										node {{
-        											name}}
-        										}}
-        									}}
-        								}}
-        							}}
-        						}}
-  							}}
+                            login
+                            contributionsCollection{time_window_info} {{
+                                totalCommitContributions
+                                commitContributionsByRepository {{
+                                    contributions{{
+                                        totalCount
+                                        }}
+                                    repository{{
+                                        nameWithOwner
+                                        languages(first:{page_size}){{
+                                            totalSize
+                                            edges{{
+                                                size
+                                                node {{
+                                                    name}}
+                                                }}
+                                            }}
+                                        }}
+                                    }}
+                                }}
+                            }}
 """.replace(
             "{query_name}", query_name
         ).replace(

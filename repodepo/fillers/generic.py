@@ -172,13 +172,13 @@ got: {}""".format(
                 if self.db.db_type == "postgres":
                     self.db.cursor.execute(
                         """SELECT insource_id FROM packages WHERE source_id=%s
-						ORDER BY ctid DESC LIMIT 1;""",
+                        ORDER BY ctid DESC LIMIT 1;""",
                         (self.source_id,),
                     )
                 else:
                     self.db.cursor.execute(
                         """SELECT insource_id FROM packages WHERE source_id=?
-						ORDER BY rowid DESC LIMIT 1;""",
+                        ORDER BY rowid DESC LIMIT 1;""",
                         (self.source_id,),
                     )
                 sample_package = self.db.cursor.fetchone()
@@ -193,10 +193,10 @@ got: {}""".format(
             self.logger.info("Filling packages from {}".format(source))
             self.db.register_source(source)
             # if isinstance(self.package_list,list):
-            # 	self.db.register_urls(source=source,url_list=[p[3] for p in package_list if p[3] is not None])
-            # 	self.logger.info('Filled URLs')
-            # 	self.db.register_packages(source=source,package_list=package_list)
-            # 	self.logger.info('Filled packages')
+            #   self.db.register_urls(source=source,url_list=[p[3] for p in package_list if p[3] is not None])
+            #   self.logger.info('Filled URLs')
+            #   self.db.register_packages(source=source,package_list=package_list)
+            #   self.logger.info('Filled packages')
             # else:
             if offset_package is not None:
                 self.logger.info(f"Searching for offset package {offset_package}")
@@ -275,13 +275,13 @@ got: {}""".format(
                 if self.db.db_type == "postgres":
                     self.db.cursor.execute(
                         """SELECT p.insource_id,pv.version_str FROM package_versions pv INNER JOIN packages p ON p.source_id=%s AND pv.package_id=p.id
-						ORDER BY pv.ctid DESC LIMIT 1;""",
+                        ORDER BY pv.ctid DESC LIMIT 1;""",
                         (self.source_id,),
                     )
                 else:
                     self.db.cursor.execute(
                         """SELECT p.insource_id,pv.version_str FROM package_versions pv INNER JOIN packages p ON p.source_id=? AND pv.package_id=p.id
-						ORDER BY pv.rowid DESC LIMIT 1;""",
+                        ORDER BY pv.rowid DESC LIMIT 1;""",
                         (self.source_id,),
                     )
                 sample_package = self.db.cursor.fetchone()
@@ -314,13 +314,13 @@ got: {}""".format(
                         extras.execute_batch(
                             self.db.cursor,
                             """
-							INSERT INTO package_versions(package_id,version_str,created_at)
-							-- SELECT p.id,%(version_str)s,%(created_at)s
-							-- FROM packages p
-							-- WHERE p.source_id=%(package_source_id)s
-							VALUES((SELECT id FROM packages WHERE source_id=%(package_source_id)s AND insource_id=%(package_insource_id)s),%(version_str)s,%(created_at)s)
-							ON CONFLICT DO NOTHING
-							;""",
+                            INSERT INTO package_versions(package_id,version_str,created_at)
+                            -- SELECT p.id,%(version_str)s,%(created_at)s
+                            -- FROM packages p
+                            -- WHERE p.source_id=%(package_source_id)s
+                            VALUES((SELECT id FROM packages WHERE source_id=%(package_source_id)s AND insource_id=%(package_insource_id)s),%(version_str)s,%(created_at)s)
+                            ON CONFLICT DO NOTHING
+                            ;""",
                             (
                                 {
                                     "version_str": v_str,
@@ -335,12 +335,12 @@ got: {}""".format(
                     else:
                         self.db.cursor.executemany(
                             """
-							INSERT OR IGNORE INTO package_versions(package_id,version_str,created_at)
-							VALUES((SELECT id FROM packages WHERE source_id=:package_source_id
-								AND insource_id=:package_insource_id)
-							,:version_str,
-							:created_at)
-							;""",
+                            INSERT OR IGNORE INTO package_versions(package_id,version_str,created_at)
+                            VALUES((SELECT id FROM packages WHERE source_id=:package_source_id
+                                AND insource_id=:package_insource_id)
+                            ,:version_str,
+                            :created_at)
+                            ;""",
                             (
                                 {
                                     "version_str": v_str,
@@ -372,15 +372,15 @@ got: {}""".format(
             if self.db.db_type == "postgres":
                 self.db.cursor.execute(
                     """
-					SELECT id FROM sources WHERE name=%s
-						;""",
+                    SELECT id FROM sources WHERE name=%s
+                        ;""",
                     (self.source,),
                 )
             else:
                 self.db.cursor.execute(
                     """
-					SELECT id FROM sources WHERE name=?
-						;""",
+                    SELECT id FROM sources WHERE name=?
+                        ;""",
                     (self.source,),
                 )
             self.source_id = self.db.cursor.fetchone()[0]
@@ -426,17 +426,17 @@ got: {}""".format(
                 if self.db.db_type == "postgres":
                     self.db.cursor.execute(
                         """SELECT p.insource_id,pv.version_str,pd.downloaded_at FROM package_version_downloads pd
-						INNER JOIN package_versions pv ON pv.id=pd.package_version
-						INNER JOIN packages p ON p.source_id=%s AND p.id=pv.package_id
-						ORDER BY pd.ctid DESC LIMIT 1;""",
+                        INNER JOIN package_versions pv ON pv.id=pd.package_version
+                        INNER JOIN packages p ON p.source_id=%s AND p.id=pv.package_id
+                        ORDER BY pd.ctid DESC LIMIT 1;""",
                         (self.source_id,),
                     )
                 else:
                     self.db.cursor.execute(
                         """SELECT p.insource_id,pv.version_str,pd.downloaded_at FROM package_version_downloads pd
-						INNER JOIN package_versions pv ON pv.id=pd.package_version
-						INNER JOIN packages p ON p.source_id=? AND p.id=pv.package_id
-						ORDER BY pd.rowid DESC LIMIT 1;""",
+                        INNER JOIN package_versions pv ON pv.id=pd.package_version
+                        INNER JOIN packages p ON p.source_id=? AND p.id=pv.package_id
+                        ORDER BY pd.rowid DESC LIMIT 1;""",
                         (self.source_id,),
                     )
                 sample_package = self.db.cursor.fetchone()
@@ -474,28 +474,28 @@ got: {}""".format(
                         extras.execute_batch(
                             self.db.cursor,
                             """
-							WITH p_version AS (SELECT (CASE WHEN %(version_str)s IS NOT NULL THEN (SELECT v.id FROM package_versions v
-									INNER JOIN packages p
-									ON p.source_id=%(package_source_id)s AND p.insource_id=%(package_insource_id)s
-									AND p.id=v.package_id AND v.version_str=%(version_str)s)
-								ELSE
-									(SELECT pv.id FROM package_versions pv
-									INNER JOIN packages p
-									ON p.insource_id = %(package_insource_id)s
-									AND p.source_id = %(package_source_id)s
-									AND p.id=pv.package_id
-									-- AND pv.created_at::date <= %(downloaded_at)s::date
-									ORDER BY (pv.created_at::date <= %(downloaded_at)s::date) DESC, GREATEST(pv.created_at-%(downloaded_at)s::date,%(downloaded_at)s::date-pv.created_at) ASC
-									LIMIT 1)
+                            WITH p_version AS (SELECT (CASE WHEN %(version_str)s IS NOT NULL THEN (SELECT v.id FROM package_versions v
+                                    INNER JOIN packages p
+                                    ON p.source_id=%(package_source_id)s AND p.insource_id=%(package_insource_id)s
+                                    AND p.id=v.package_id AND v.version_str=%(version_str)s)
+                                ELSE
+                                    (SELECT pv.id FROM package_versions pv
+                                    INNER JOIN packages p
+                                    ON p.insource_id = %(package_insource_id)s
+                                    AND p.source_id = %(package_source_id)s
+                                    AND p.id=pv.package_id
+                                    -- AND pv.created_at::date <= %(downloaded_at)s::date
+                                    ORDER BY (pv.created_at::date <= %(downloaded_at)s::date) DESC, GREATEST(pv.created_at-%(downloaded_at)s::date,%(downloaded_at)s::date-pv.created_at) ASC
+                                    LIMIT 1)
 
-								END) AS pv)
-							INSERT INTO package_version_downloads(package_version,downloaded_at,downloads)
-							SELECT  p_version.pv
-								,%(downloaded_at)s,%(nb_downloads)s FROM p_version
-							WHERE EXISTS (SELECT id FROM packages WHERE insource_id=%(package_insource_id)s AND source_id=%(package_source_id)s)
-								AND p_version.pv IS NOT NULL
-							ON CONFLICT DO NOTHING
-							;""",
+                                END) AS pv)
+                            INSERT INTO package_version_downloads(package_version,downloaded_at,downloads)
+                            SELECT  p_version.pv
+                                ,%(downloaded_at)s,%(nb_downloads)s FROM p_version
+                            WHERE EXISTS (SELECT id FROM packages WHERE insource_id=%(package_insource_id)s AND source_id=%(package_source_id)s)
+                                AND p_version.pv IS NOT NULL
+                            ON CONFLICT DO NOTHING
+                            ;""",
                             (
                                 {
                                     "version_str": v_str,
@@ -512,39 +512,39 @@ got: {}""".format(
                     else:
                         self.db.cursor.executemany(
                             """
-							INSERT OR IGNORE INTO package_version_downloads(package_version,downloaded_at,downloads)
-							SELECT
-								(CASE WHEN :version_str IS NOT NULL THEN (SELECT v.id FROM package_versions v
-									INNER JOIN packages p
-									ON p.source_id=:package_source_id AND p.insource_id=:package_insource_id
-									AND p.id=v.package_id AND v.version_str=:version_str)
-								ELSE
-									(SELECT pv.id FROM package_versions pv
-									INNER JOIN packages p
-									ON p.insource_id = :package_insource_id
-									AND p.source_id = :package_source_id
-									AND p.id=pv.package_id
-									-- AND pv.created_at <= :downloaded_at
-									ORDER BY (pv.created_at <= :downloaded_at) DESC, MAX(pv.created_at-:downloaded_at,:downloaded_at-pv.created_at) ASC
-									LIMIT 1)
-								END)
-								,:downloaded_at,:nb_downloads
-							WHERE EXISTS (SELECT id FROM packages WHERE insource_id=:package_insource_id AND source_id=:package_source_id)
-								AND EXISTS (SELECT CASE WHEN :version_str IS NOT NULL THEN (SELECT v.id FROM package_versions v
-									INNER JOIN packages p
-									ON p.source_id=:package_source_id AND p.insource_id=:package_insource_id
-									AND p.id=v.package_id AND v.version_str=:version_str)
-								ELSE
-									(SELECT pv.id FROM package_versions pv
-									INNER JOIN packages p
-									ON p.insource_id = :package_insource_id
-									AND p.source_id = :package_source_id
-									AND p.id=pv.package_id
-									-- AND pv.created_at <= :downloaded_at
-									ORDER BY (pv.created_at <= :downloaded_at) DESC, MAX(pv.created_at-:downloaded_at,:downloaded_at-pv.created_at) ASC
-									LIMIT 1)
-								END)
-							;""",
+                            INSERT OR IGNORE INTO package_version_downloads(package_version,downloaded_at,downloads)
+                            SELECT
+                                (CASE WHEN :version_str IS NOT NULL THEN (SELECT v.id FROM package_versions v
+                                    INNER JOIN packages p
+                                    ON p.source_id=:package_source_id AND p.insource_id=:package_insource_id
+                                    AND p.id=v.package_id AND v.version_str=:version_str)
+                                ELSE
+                                    (SELECT pv.id FROM package_versions pv
+                                    INNER JOIN packages p
+                                    ON p.insource_id = :package_insource_id
+                                    AND p.source_id = :package_source_id
+                                    AND p.id=pv.package_id
+                                    -- AND pv.created_at <= :downloaded_at
+                                    ORDER BY (pv.created_at <= :downloaded_at) DESC, MAX(pv.created_at-:downloaded_at,:downloaded_at-pv.created_at) ASC
+                                    LIMIT 1)
+                                END)
+                                ,:downloaded_at,:nb_downloads
+                            WHERE EXISTS (SELECT id FROM packages WHERE insource_id=:package_insource_id AND source_id=:package_source_id)
+                                AND EXISTS (SELECT CASE WHEN :version_str IS NOT NULL THEN (SELECT v.id FROM package_versions v
+                                    INNER JOIN packages p
+                                    ON p.source_id=:package_source_id AND p.insource_id=:package_insource_id
+                                    AND p.id=v.package_id AND v.version_str=:version_str)
+                                ELSE
+                                    (SELECT pv.id FROM package_versions pv
+                                    INNER JOIN packages p
+                                    ON p.insource_id = :package_insource_id
+                                    AND p.source_id = :package_source_id
+                                    AND p.id=pv.package_id
+                                    -- AND pv.created_at <= :downloaded_at
+                                    ORDER BY (pv.created_at <= :downloaded_at) DESC, MAX(pv.created_at-:downloaded_at,:downloaded_at-pv.created_at) ASC
+                                    LIMIT 1)
+                                END)
+                            ;""",
                             (
                                 {
                                     "version_str": v_str,
@@ -612,17 +612,17 @@ got: {}""".format(
                 if self.db.db_type == "postgres":
                     self.db.cursor.execute(
                         """SELECT p.insource_id,pv.version_str FROM package_dependencies pd
-						INNER JOIN package_versions pv ON pv.id=pd.depending_version
-						INNER JOIN packages p ON p.source_id=%s AND p.id=pv.package_id
-						ORDER BY pd.ctid DESC LIMIT 1;""",
+                        INNER JOIN package_versions pv ON pv.id=pd.depending_version
+                        INNER JOIN packages p ON p.source_id=%s AND p.id=pv.package_id
+                        ORDER BY pd.ctid DESC LIMIT 1;""",
                         (self.source_id,),
                     )
                 else:
                     self.db.cursor.execute(
                         """SELECT p.insource_id,pv.version_str FROM package_dependencies pd
-						INNER JOIN package_versions pv ON pv.id=pd.depending_version
-						INNER JOIN packages p ON p.source_id=? AND p.id=pv.package_id
-						ORDER BY pd.rowid DESC LIMIT 1;""",
+                        INNER JOIN package_versions pv ON pv.id=pd.depending_version
+                        INNER JOIN packages p ON p.source_id=? AND p.id=pv.package_id
+                        ORDER BY pd.rowid DESC LIMIT 1;""",
                         (self.source_id,),
                     )
                 sample_package = self.db.cursor.fetchone()
@@ -657,21 +657,21 @@ got: {}""".format(
                         extras.execute_batch(
                             self.db.cursor,
                             """
-							INSERT INTO package_dependencies(depending_version,depending_on_package,semver_str)
-							SELECT
-								(SELECT v.id FROM package_versions v
-									INNER JOIN packages p
-									ON p.source_id=%(package_source_id)s AND p.insource_id=%(version_package_id)s
-									AND p.id=v.package_id AND v.version_str=%(version_str)s),
-								(SELECT id FROM packages WHERE source_id=%(package_source_id)s AND insource_id=%(depending_on_package)s),
-								%(semver_str)s
-							WHERE EXISTS (SELECT id FROM packages WHERE source_id=%(package_source_id)s AND insource_id=%(depending_on_package)s)
-								AND EXISTS (SELECT v.id FROM package_versions v
-									INNER JOIN packages p
-									ON p.source_id=%(package_source_id)s AND p.insource_id=%(version_package_id)s
-									AND p.id=v.package_id AND v.version_str=%(version_str)s)
-							ON CONFLICT DO NOTHING
-							;""",
+                            INSERT INTO package_dependencies(depending_version,depending_on_package,semver_str)
+                            SELECT
+                                (SELECT v.id FROM package_versions v
+                                    INNER JOIN packages p
+                                    ON p.source_id=%(package_source_id)s AND p.insource_id=%(version_package_id)s
+                                    AND p.id=v.package_id AND v.version_str=%(version_str)s),
+                                (SELECT id FROM packages WHERE source_id=%(package_source_id)s AND insource_id=%(depending_on_package)s),
+                                %(semver_str)s
+                            WHERE EXISTS (SELECT id FROM packages WHERE source_id=%(package_source_id)s AND insource_id=%(depending_on_package)s)
+                                AND EXISTS (SELECT v.id FROM package_versions v
+                                    INNER JOIN packages p
+                                    ON p.source_id=%(package_source_id)s AND p.insource_id=%(version_package_id)s
+                                    AND p.id=v.package_id AND v.version_str=%(version_str)s)
+                            ON CONFLICT DO NOTHING
+                            ;""",
                             (
                                 {
                                     "version_package_id": str(vp_id),
@@ -688,17 +688,17 @@ got: {}""".format(
                         for dep_p, dep_on_p in self.deps_to_delete:
                             self.db.cursor.execute(
                                 """
-								DELETE FROM package_dependencies WHERE
-									depending_version IN
-										(SELECT pv.id FROM packages p
-											INNER JOIN package_versions pv
-											ON pv.package_id=p.id AND p.name=%(dep_p)s
-											AND p.source_id=%(package_source_id)s)
-									AND depending_on_package IN
-										(SELECT p.id FROM packages p
-											WHERE p.name=%(dep_on_p)s
-											AND p.source_id=%(package_source_id)s)
-							;""",
+                                DELETE FROM package_dependencies WHERE
+                                    depending_version IN
+                                        (SELECT pv.id FROM packages p
+                                            INNER JOIN package_versions pv
+                                            ON pv.package_id=p.id AND p.name=%(dep_p)s
+                                            AND p.source_id=%(package_source_id)s)
+                                    AND depending_on_package IN
+                                        (SELECT p.id FROM packages p
+                                            WHERE p.name=%(dep_on_p)s
+                                            AND p.source_id=%(package_source_id)s)
+                            ;""",
                                 {
                                     "dep_p": dep_p,
                                     "dep_on_p": dep_on_p,
@@ -708,20 +708,20 @@ got: {}""".format(
                     else:
                         self.db.cursor.executemany(
                             """
-							INSERT OR IGNORE INTO package_dependencies(depending_version,depending_on_package,semver_str)
-							SELECT
-								(SELECT v.id FROM package_versions v
-									INNER JOIN packages p
-									ON p.source_id=:package_source_id AND p.insource_id=:version_package_id
-									AND p.id=v.package_id AND v.version_str=:version_str),
-								(SELECT id FROM packages WHERE source_id=:package_source_id AND insource_id=:depending_on_package),
-								:semver_str
-							WHERE EXISTS (SELECT id FROM packages WHERE source_id=:package_source_id AND insource_id=:depending_on_package)
-								AND EXISTS (SELECT v.id FROM package_versions v
-									INNER JOIN packages p
-									ON p.source_id=:package_source_id AND p.insource_id=:version_package_id
-									AND p.id=v.package_id AND v.version_str=:version_str)
-							;""",
+                            INSERT OR IGNORE INTO package_dependencies(depending_version,depending_on_package,semver_str)
+                            SELECT
+                                (SELECT v.id FROM package_versions v
+                                    INNER JOIN packages p
+                                    ON p.source_id=:package_source_id AND p.insource_id=:version_package_id
+                                    AND p.id=v.package_id AND v.version_str=:version_str),
+                                (SELECT id FROM packages WHERE source_id=:package_source_id AND insource_id=:depending_on_package),
+                                :semver_str
+                            WHERE EXISTS (SELECT id FROM packages WHERE source_id=:package_source_id AND insource_id=:depending_on_package)
+                                AND EXISTS (SELECT v.id FROM package_versions v
+                                    INNER JOIN packages p
+                                    ON p.source_id=:package_source_id AND p.insource_id=:version_package_id
+                                    AND p.id=v.package_id AND v.version_str=:version_str)
+                            ;""",
                             (
                                 {
                                     "version_package_id": str(vp_id),
@@ -738,17 +738,17 @@ got: {}""".format(
                     for dep_p, dep_on_p in self.deps_to_delete:
                         self.db.cursor.execute(
                             """
-							DELETE FROM package_dependencies WHERE
-								depending_version IN
-									(SELECT pv.id FROM packages p
-										INNER JOIN package_versions pv
-										ON pv.package_id=p.id AND p.name=:dep_p
-										AND p.source_id=:package_source_id)
-								AND depending_on_package IN
-									(SELECT p.id FROM packages p
-										WHERE p.name=:dep_on_p
-										AND p.source_id=:package_source_id)
-						;""",
+                            DELETE FROM package_dependencies WHERE
+                                depending_version IN
+                                    (SELECT pv.id FROM packages p
+                                        INNER JOIN package_versions pv
+                                        ON pv.package_id=p.id AND p.name=:dep_p
+                                        AND p.source_id=:package_source_id)
+                                AND depending_on_package IN
+                                    (SELECT p.id FROM packages p
+                                        WHERE p.name=:dep_on_p
+                                        AND p.source_id=:package_source_id)
+                        ;""",
                             {
                                 "dep_p": dep_p,
                                 "dep_on_p": dep_on_p,
@@ -889,11 +889,11 @@ class RepositoriesFiller(fillers.Filler):
         else:
             self.db.cursor.execute(
                 """
-					SELECT u.url FROM urls u
-					LEFT OUTER JOIN repositories r
-					ON r.url_id=u.id
-					WHERE r.url_id IS NULL AND (u.id=u.cleaned_url OR u.cleaned_url IS NULL)
-					;"""
+                    SELECT u.url FROM urls u
+                    LEFT OUTER JOIN repositories r
+                    ON r.url_id=u.id
+                    WHERE r.url_id IS NULL AND (u.id=u.cleaned_url OR u.cleaned_url IS NULL)
+                    ;"""
             )
         self.urls = list(
             set([(u[0], *self.clean_url(u[0])) for u in self.db.cursor.fetchall()])
@@ -958,12 +958,12 @@ class RepositoriesFiller(fillers.Filler):
         if len(self.repo_info_list):
             self.db.cursor.execute(
                 """
-				UPDATE packages SET repo_id=(SELECT r.id FROM repositories r
-									INNER JOIN urls u
-									ON r.url_id=u.id
-									INNER JOIN urls u2
-									ON u2.cleaned_url=u.id AND u2.id=packages.url_id)
-				;"""
+                UPDATE packages SET repo_id=(SELECT r.id FROM repositories r
+                                    INNER JOIN urls u
+                                    ON r.url_id=u.id
+                                    INNER JOIN urls u2
+                                    ON u2.cleaned_url=u.id AND u2.id=packages.url_id)
+                ;"""
             )
         self.db.connection.commit()
 
@@ -1168,6 +1168,7 @@ class ClonesFiller(fillers.Filler):
         update=True,
         failed=False,
         ssh_sources=None,
+        bare=True,
         ssh_key=os.path.join(os.environ[homepath()], ".ssh", "id_rsa"),
         sources=None,
         rm_first=False,
@@ -1202,6 +1203,7 @@ class ClonesFiller(fillers.Filler):
                 ssh_key = v
             keypair = pygit2.Keypair("git", ssh_key + ".pub", ssh_key, "")
             self.callbacks[k] = pygit2.RemoteCallbacks(credentials=keypair)
+        self.bare = bare
         fillers.Filler.__init__(self, **kwargs)
 
     def prepare(self):
@@ -1220,13 +1222,13 @@ class ClonesFiller(fillers.Filler):
         if self.precheck_cloned:
             self.db.cursor.execute(
                 """
-				SELECT s.name,r.owner,r.name,r.id
-				FROM repositories r
-				INNER JOIN sources s
-				ON s.id=r.source
-				AND r.cloned
-				ORDER BY s.name,r.owner,r.name
-				;"""
+                SELECT s.name,r.owner,r.name,r.id
+                FROM repositories r
+                INNER JOIN sources s
+                ON s.id=r.source
+                AND r.cloned
+                ORDER BY s.name,r.owner,r.name
+                ;"""
             )
             repo_ids_to_update = []
             for (
@@ -1312,39 +1314,39 @@ class ClonesFiller(fillers.Filler):
         if self.force:  # or self.update:
             self.db.cursor.execute(
                 """
-				SELECT s.name,s.url_root,r.owner,r.name
-				FROM repositories r
-				INNER JOIN sources s
-				ON s.id=r.source
-				ORDER BY s.name,r.owner,r.name
-				;"""
+                SELECT s.name,s.url_root,r.owner,r.name
+                FROM repositories r
+                INNER JOIN sources s
+                ON s.id=r.source
+                ORDER BY s.name,r.owner,r.name
+                ;"""
             )
             return list(self.db.cursor.fetchall())
         elif self.failed:
             self.db.cursor.execute(
                 """
-				SELECT s.name,s.url_root,r.owner,r.name
-				FROM repositories r
-				INNER JOIN sources s
-				ON s.id=r.source AND NOT r.cloned
-				ORDER BY s.name,r.owner,r.name
-				;"""
+                SELECT s.name,s.url_root,r.owner,r.name
+                FROM repositories r
+                INNER JOIN sources s
+                ON s.id=r.source AND NOT r.cloned
+                ORDER BY s.name,r.owner,r.name
+                ;"""
             )
             return list(self.db.cursor.fetchall())
         else:
             self.db.cursor.execute(
                 """
-				SELECT s.name,s.url_root,r.owner,r.name
-				FROM repositories r
-				INNER JOIN sources s
-				ON s.id=r.source
-				LEFT JOIN table_updates tu
-				ON tu.repo_id=r.id AND tu.table_name='clones'
-				GROUP BY s.name,s.url_root,r.owner,r.name
-				HAVING COUNT(tu.repo_id)=0
-				ORDER BY s.name,r.owner,r.name
+                SELECT s.name,s.url_root,r.owner,r.name
+                FROM repositories r
+                INNER JOIN sources s
+                ON s.id=r.source
+                LEFT JOIN table_updates tu
+                ON tu.repo_id=r.id AND tu.table_name='clones'
+                GROUP BY s.name,s.url_root,r.owner,r.name
+                HAVING COUNT(tu.repo_id)=0
+                ORDER BY s.name,r.owner,r.name
 
-				;"""
+                ;"""
             )
             return list(self.db.cursor.fetchall())
 
@@ -1394,6 +1396,7 @@ class ClonesFiller(fillers.Filler):
         update=False,
         db=None,
         clean_symlinks=False,
+        bare=None,
     ):
         """
         Cloning one repo.
@@ -1401,6 +1404,8 @@ class ClonesFiller(fillers.Filler):
         Executing update_repo if repo already exists and update is True
 
         """
+        if bare is None:
+            bare = self.bare
         os.environ["GIT_SSL_NO_VERIFY"] = "1"
         os.environ["GIT_SSH_COMMAND"] = "ssh -o StrictHostKeyChecking=no"
         if db is None:
@@ -1411,11 +1416,19 @@ class ClonesFiller(fillers.Filler):
                 self.logger.info("Removing folder {}/{}/{}".format(source, owner, name))
                 shutil.rmtree(repo_folder)
                 self.clone(
-                    source=source, name=name, owner=owner, source_urlroot=source_urlroot
+                    source=source,
+                    name=name,
+                    owner=owner,
+                    source_urlroot=source_urlroot,
+                    bare=bare,
                 )
             elif update:
                 self.update_repo(
-                    source=source, name=name, owner=owner, source_urlroot=source_urlroot
+                    source=source,
+                    name=name,
+                    owner=owner,
+                    source_urlroot=source_urlroot,
+                    bare=bare,
                 )
             else:
                 self.logger.info(
@@ -1436,9 +1449,9 @@ class ClonesFiller(fillers.Filler):
                     raise OSError(err_txt)
             repo_id = self.db.get_repo_id(source=source, name=name, owner=owner)
             # if self.db.db_type == 'postgres':
-            # 	self.db.cursor.execute('SELECT * FROM download_attempts WHERE repo_id=%s LIMIT 1;',(repo_id,))
+            #   self.db.cursor.execute('SELECT * FROM download_attempts WHERE repo_id=%s LIMIT 1;',(repo_id,))
             # else:
-            # 	self.db.cursor.execute('SELECT * FROM download_attempts WHERE repo_id=? LIMIT 1;',(repo_id,))
+            #   self.db.cursor.execute('SELECT * FROM download_attempts WHERE repo_id=? LIMIT 1;',(repo_id,))
 
             # if (self.db.cursor.fetchone() is None) or force:
             self.logger.info("Cloning repo {}/{}/{}".format(source, owner, name))
@@ -1449,6 +1462,10 @@ class ClonesFiller(fillers.Filler):
                 except KeyError:
                     callbacks = None
                     ssh_mode = False
+                if bare:
+                    repo_path = os.path.join(repo_folder, ".git")
+                else:
+                    repo_path = repo_folder
                 pygit2.clone_repository(
                     url=self.build_url(
                         source_urlroot=source_urlroot,
@@ -1456,7 +1473,8 @@ class ClonesFiller(fillers.Filler):
                         owner=owner,
                         ssh_mode=ssh_mode,
                     ),
-                    path=repo_folder,
+                    bare=bare,
+                    path=repo_path,
                     callbacks=callbacks,
                 )
                 success = True
@@ -1484,13 +1502,15 @@ class ClonesFiller(fillers.Filler):
                 success=success, source=source, repo=name, owner=owner
             )
             # else:
-            # 	self.logger.info('Skipping repo {}/{}/{}, already failed to download'.format(source,owner,name))
+            #   self.logger.info('Skipping repo {}/{}/{}, already failed to download'.format(source,owner,name))
 
-    def update_repo(self, name, source, source_urlroot, owner):
+    def update_repo(self, name, source, source_urlroot, owner, bare=None):
         """
         git fetch on repo
         cloning if folder not existing
         """
+        if bare is None:
+            bare = self.bare
         self.logger.info("Updating repo {}/{}/{}".format(source, owner, name))
         repo_folder = os.path.join(self.clone_folder, source, owner, name)
 
@@ -1513,10 +1533,11 @@ class ClonesFiller(fillers.Filler):
                 cmd.split(" "), cwd=repo_folder, env=sub_env
             )
             try:
-                cmd2 = "git pull --force --all"
-                cmd_output2 = subprocess.check_output(
-                    cmd2.split(" "), cwd=repo_folder, env=sub_env
-                )
+                if not bare:
+                    cmd2 = "git pull --force --all"
+                    cmd_output2 = subprocess.check_output(
+                        cmd2.split(" "), cwd=repo_folder, env=sub_env
+                    )
             except subprocess.CalledProcessError as e:
                 err_txt = (
                     "Git pull Error (fetch worked) for repo {}/{}/{}: {}, {}".format(
@@ -1588,19 +1609,19 @@ class RepoCommitOwnershipFiller(fillers.Filler):
             )
             self.db.cursor.execute(
                 """
-						UPDATE commit_repos SET is_orig_repo=true
-							WHERE is_orig_repo IS NULL
-								AND repo_id = (SELECT ccp.repo_id
-									FROM commit_repos ccp
-									INNER JOIN repositories r
-									ON ccp.commit_id=commit_repos.commit_id AND r.id=ccp.repo_id
-									LEFT OUTER JOIN packages p
-									ON p.repo_id=r.id
-									AND p.created_at IS NOT NULL
-									ORDER BY p.created_at ASC
-									LIMIT 1
-									)
-						;"""
+                        UPDATE commit_repos SET is_orig_repo=true
+                            WHERE is_orig_repo IS NULL
+                                AND repo_id = (SELECT ccp.repo_id
+                                    FROM commit_repos ccp
+                                    INNER JOIN repositories r
+                                    ON ccp.commit_id=commit_repos.commit_id AND r.id=ccp.repo_id
+                                    LEFT OUTER JOIN packages p
+                                    ON p.repo_id=r.id
+                                    AND p.created_at IS NOT NULL
+                                    ORDER BY p.created_at ASC
+                                    LIMIT 1
+                                    )
+                        ;"""
             )
 
             self.logger.info(
@@ -1615,14 +1636,14 @@ class RepoCommitOwnershipFiller(fillers.Filler):
             )
             self.db.cursor.execute(
                 """
-						UPDATE commit_repos SET is_orig_repo=NULL
-							WHERE commit_id IN (
-								SELECT cr.commit_id FROM commit_repos cr
-								WHERE cr.is_orig_repo
-								GROUP BY cr.commit_id
-								HAVING COUNT(*)>=2
-									)
-						;"""
+                        UPDATE commit_repos SET is_orig_repo=NULL
+                            WHERE commit_id IN (
+                                SELECT cr.commit_id FROM commit_repos cr
+                                WHERE cr.is_orig_repo
+                                GROUP BY cr.commit_id
+                                HAVING COUNT(*)>=2
+                                    )
+                        ;"""
             )
             self.logger.info(
                 "Detected {} commit origin conflicts".format(self.db.cursor.rowcount)
@@ -1634,19 +1655,19 @@ class RepoCommitOwnershipFiller(fillers.Filler):
                 )
                 self.db.cursor.execute(
                     """
-						UPDATE commit_repos SET is_orig_repo=true
-							WHERE is_orig_repo IS NULL
-								AND repo_id = (SELECT ccp.repo_id
-									FROM commit_repos ccp
-									INNER JOIN repositories r
-									ON ccp.commit_id=commit_repos.commit_id AND r.id=ccp.repo_id
-									LEFT OUTER JOIN packages p
-									ON p.repo_id=r.id
-									AND p.created_at IS NOT NULL
-									ORDER BY p.created_at ASC
-									LIMIT 1
-									)
-						;"""
+                        UPDATE commit_repos SET is_orig_repo=true
+                            WHERE is_orig_repo IS NULL
+                                AND repo_id = (SELECT ccp.repo_id
+                                    FROM commit_repos ccp
+                                    INNER JOIN repositories r
+                                    ON ccp.commit_id=commit_repos.commit_id AND r.id=ccp.repo_id
+                                    LEFT OUTER JOIN packages p
+                                    ON p.repo_id=r.id
+                                    AND p.created_at IS NOT NULL
+                                    ORDER BY p.created_at ASC
+                                    LIMIT 1
+                                    )
+                        ;"""
                 )
 
                 self.logger.info(
@@ -1660,12 +1681,12 @@ class RepoCommitOwnershipFiller(fillers.Filler):
             )
             self.db.cursor.execute(
                 """
-					UPDATE commits SET repo_id=(
-							SELECT cp.repo_id FROM commit_repos cp
-								WHERE cp.commit_id=commits.id
-								AND cp.is_orig_repo)
-					;
-					"""
+                    UPDATE commits SET repo_id=(
+                            SELECT cp.repo_id FROM commit_repos cp
+                                WHERE cp.commit_id=commits.id
+                                AND cp.is_orig_repo)
+                    ;
+                    """
             )
 
             self.db.cursor.execute(
@@ -1726,9 +1747,9 @@ class IdentitiesFiller(fillers.Filler):
                     raise ValueError(
                         """Expected syntax:
 
-	identity(e.g. email or login),additional_info (json)
-	or
-	identity(e.g. email or login)
+    identity(e.g. email or login),additional_info (json)
+    or
+    identity(e.g. email or login)
 
 got: {}""".format(
                             headers
@@ -1765,9 +1786,9 @@ got: {}""".format(
         if self.db.db_type == "postgres":
             self.db.cursor.execute(
                 """
-				INSERT INTO identity_types(name) VALUES(%s)
-				ON CONFLICT DO NOTHING
-				;""",
+                INSERT INTO identity_types(name) VALUES(%s)
+                ON CONFLICT DO NOTHING
+                ;""",
                 (identity_type,),
             )
             self.db.connection.commit()
@@ -1775,31 +1796,31 @@ got: {}""".format(
             extras.execute_batch(
                 self.db.cursor,
                 """
-				INSERT INTO users(
-						creation_identity,
-						creation_identity_type_id)
-							SELECT %s,id FROM identity_types WHERE name=%s
-					AND NOT EXISTS (SELECT 1 FROM identities i
-						INNER JOIN identity_types it
-						ON i.identity=%s AND i.identity_type_id=it.id AND it.name=%s)
-				ON CONFLICT DO NOTHING;
-				""",
+                INSERT INTO users(
+                        creation_identity,
+                        creation_identity_type_id)
+                            SELECT %s,id FROM identity_types WHERE name=%s
+                    AND NOT EXISTS (SELECT 1 FROM identities i
+                        INNER JOIN identity_types it
+                        ON i.identity=%s AND i.identity_type_id=it.id AND it.name=%s)
+                ON CONFLICT DO NOTHING;
+                """,
                 ((c[0], identity_type, c[0], identity_type) for c in identities_list),
             )
             self.db.connection.commit()
             extras.execute_batch(
                 self.db.cursor,
                 """
-				INSERT INTO identities(
-						attributes,
-						identity,
-						user_id,
-						identity_type_id) SELECT %s,%s,u.id,it.id
-						FROM users u
-						INNER JOIN identity_types it
-						ON it.name=%s AND u.creation_identity=%s AND u.creation_identity_type_id=it.id
-				ON CONFLICT DO NOTHING;
-				""",
+                INSERT INTO identities(
+                        attributes,
+                        identity,
+                        user_id,
+                        identity_type_id) SELECT %s,%s,u.id,it.id
+                        FROM users u
+                        INNER JOIN identity_types it
+                        ON it.name=%s AND u.creation_identity=%s AND u.creation_identity_type_id=it.id
+                ON CONFLICT DO NOTHING;
+                """,
                 ((c[1], c[0], identity_type, c[0]) for c in identities_list),
             )
             self.db.connection.commit()
@@ -1807,39 +1828,39 @@ got: {}""".format(
         else:
             self.db.cursor.execute(
                 """
-				INSERT OR IGNORE INTO identity_types(name) VALUES(?)
-				;""",
+                INSERT OR IGNORE INTO identity_types(name) VALUES(?)
+                ;""",
                 (identity_type,),
             )
             self.db.connection.commit()
 
             self.db.cursor.executemany(
                 """
-				INSERT OR IGNORE INTO users(
-						creation_identity,
-						creation_identity_type_id)
-							SELECT ?,id FROM identity_types WHERE name=?
-					AND NOT EXISTS  (SELECT 1 FROM identities i
-						INNER JOIN identity_types it
-						ON i.identity=? AND i.identity_type_id=it.id AND it.name=?)
-				;
-				""",
+                INSERT OR IGNORE INTO users(
+                        creation_identity,
+                        creation_identity_type_id)
+                            SELECT ?,id FROM identity_types WHERE name=?
+                    AND NOT EXISTS  (SELECT 1 FROM identities i
+                        INNER JOIN identity_types it
+                        ON i.identity=? AND i.identity_type_id=it.id AND it.name=?)
+                ;
+                """,
                 ((c[0], identity_type, c[0], identity_type) for c in identities_list),
             )
             self.db.connection.commit()
 
             self.db.cursor.executemany(
                 """
-				INSERT OR IGNORE INTO identities(
-						attributes,
-						identity,
-						user_id,
-						identity_type_id) SELECT ?,?,u.id,it.id
-						FROM users u
-						INNER JOIN identity_types it
-						ON it.name=? AND u.creation_identity=? AND u.creation_identity_type_id=it.id
-				;
-				""",
+                INSERT OR IGNORE INTO identities(
+                        attributes,
+                        identity,
+                        user_id,
+                        identity_type_id) SELECT ?,?,u.id,it.id
+                        FROM users u
+                        INNER JOIN identity_types it
+                        ON it.name=? AND u.creation_identity=? AND u.creation_identity_type_id=it.id
+                ;
+                """,
                 ((c[1], c[0], identity_type, c[0]) for c in identities_list),
             )
             self.db.connection.commit()
@@ -1865,15 +1886,15 @@ class SimilarIdentitiesMerger(fillers.Filler):
         if self.db.db_type == "postgres":
             self.db.cursor.execute(
                 """
-				SELECT i1.id,i2.id
-				FROM identities i1
-				INNER JOIN identity_types it1
-				ON i1.identity_type_id =it1.id and it1.name = %(identity_type1)s
-				INNER JOIN identities i2
-				ON i1.identity = i2.identity AND i1.user_id != i2.user_id
-				INNER JOIN identity_types it2
-				ON it2.id=i2.identity_type_id AND it2.name = %(identity_type2)s
-				;""",
+                SELECT i1.id,i2.id
+                FROM identities i1
+                INNER JOIN identity_types it1
+                ON i1.identity_type_id =it1.id and it1.name = %(identity_type1)s
+                INNER JOIN identities i2
+                ON i1.identity = i2.identity AND i1.user_id != i2.user_id
+                INNER JOIN identity_types it2
+                ON it2.id=i2.identity_type_id AND it2.name = %(identity_type2)s
+                ;""",
                 {
                     "identity_type1": self.identity_type1,
                     "identity_type2": self.identity_type2,
@@ -1882,15 +1903,15 @@ class SimilarIdentitiesMerger(fillers.Filler):
         else:
             self.db.cursor.execute(
                 """
-				SELECT i1.id,i2.id
-				FROM identities i1
-				INNER JOIN identity_types it1
-				ON i1.identity_type_id =it1.id and it1.name = :identity_type1
-				INNER JOIN identities i2
-				ON i1.identity = i2.identity AND i1.user_id != i2.user_id
-				INNER JOIN identity_types it2
-				ON it2.id=i2.identity_type_id AND it2.name = :identity_type2
-				;""",
+                SELECT i1.id,i2.id
+                FROM identities i1
+                INNER JOIN identity_types it1
+                ON i1.identity_type_id =it1.id and it1.name = :identity_type1
+                INNER JOIN identities i2
+                ON i1.identity = i2.identity AND i1.user_id != i2.user_id
+                INNER JOIN identity_types it2
+                ON it2.id=i2.identity_type_id AND it2.name = :identity_type2
+                ;""",
                 {
                     "identity_type1": self.identity_type1,
                     "identity_type2": self.identity_type2,
@@ -1931,15 +1952,15 @@ class GithubNoreplyEmailMerger(IdentitiesFiller):
 
         self.db.cursor.execute(
             """
-				SELECT i.id,i.identity FROM identities i
-				INNER JOIN identity_types it
-				ON it.name='email' AND it.id=i.identity_type_id
-				LEFT OUTER JOIN identities i2
-				ON i2.user_id=i.user_id AND i.id!=i2.id
-				WHERE i.identity LIKE '%@users.noreply.github.com'
-				AND i.identity != '@users.noreply.github.com'
-				AND i2.id IS NULL
-				;"""
+                SELECT i.id,i.identity FROM identities i
+                INNER JOIN identity_types it
+                ON it.name='email' AND it.id=i.identity_type_id
+                LEFT OUTER JOIN identities i2
+                ON i2.user_id=i.user_id AND i.id!=i2.id
+                WHERE i.identity LIKE '%@users.noreply.github.com'
+                AND i.identity != '@users.noreply.github.com'
+                AND i2.id IS NULL
+                ;"""
         )
 
         self.to_merge_list = [
@@ -1969,10 +1990,10 @@ class GithubNoreplyEmailMerger(IdentitiesFiller):
 
         self.db.cursor.execute(
             """
-			SELECT i.id,i.identity FROM identities i
-			INNER JOIN identity_types it
-				ON it.name='github_login' AND it.id=i.identity_type_id
-			;"""
+            SELECT i.id,i.identity FROM identities i
+            INNER JOIN identity_types it
+                ON it.name='github_login' AND it.id=i.identity_type_id
+            ;"""
         )
         ghlogin_ids = {login: i for i, login in self.db.cursor.fetchall()}
 
@@ -2015,27 +2036,27 @@ class DLSamplePackages(fillers.Filler):
         if self.db.db_type == "postgres":
             self.db.cursor.execute(
                 """
-					DELETE FROM packages WHERE id NOT IN 
-					 (SELECT pv.package_id FROM package_version_downloads pvd
-					 	INNER JOIN package_versions pv
-					 	ON pv.id=pvd.package_version
-					 	GROUP BY pv.package_id
-					 	ORDER BY SUM(downloads) DESC
-					 	LIMIT %(nb_packages)s)
-					;""",
+                    DELETE FROM packages WHERE id NOT IN 
+                     (SELECT pv.package_id FROM package_version_downloads pvd
+                        INNER JOIN package_versions pv
+                        ON pv.id=pvd.package_version
+                        GROUP BY pv.package_id
+                        ORDER BY SUM(downloads) DESC
+                        LIMIT %(nb_packages)s)
+                    ;""",
                 {"nb_packages": self.nb_packages},
             )
         else:
             self.db.cursor.execute(
                 """
-					DELETE FROM packages WHERE id NOT IN 
-					 (SELECT pv.package_id FROM package_version_downloads pvd
-					 	INNER JOIN package_versions pv
-					 	ON pv.id=pvd.package_version
-					 	GROUP BY pv.package_id
-					 	ORDER BY SUM(downloads) DESC
-					 	LIMIT :nb_packages)
-					;""",
+                    DELETE FROM packages WHERE id NOT IN 
+                     (SELECT pv.package_id FROM package_version_downloads pvd
+                        INNER JOIN package_versions pv
+                        ON pv.id=pvd.package_version
+                        GROUP BY pv.package_id
+                        ORDER BY SUM(downloads) DESC
+                        LIMIT :nb_packages)
+                    ;""",
                 {"nb_packages": self.nb_packages},
             )
 
@@ -2044,9 +2065,9 @@ class DLSamplePackages(fillers.Filler):
     def trim_urls(self):
         self.db.cursor.execute(
             """
-					DELETE FROM urls WHERE id NOT IN 
-					 (SELECT DISTINCT url_id FROM packages)
-					;"""
+                    DELETE FROM urls WHERE id NOT IN 
+                     (SELECT DISTINCT url_id FROM packages)
+                    ;"""
         )
         self.db.connection.commit()
 
@@ -2081,8 +2102,8 @@ class SourcesAutoFiller(SourcesFiller):
     def identify_missing_sources(self):
         self.db.cursor.execute(
             """
-			SELECT url FROM urls WHERE source_root IS NULL
-			;"""
+            SELECT url FROM urls WHERE source_root IS NULL
+            ;"""
         )
 
         self.candidates = {}
@@ -2163,25 +2184,25 @@ class FixURL(fillers.Filler):
         if self.db.db_type == "postgres":
             self.db.cursor.execute(
                 """
-				SELECT u.id,u.cleaned_url,r.id,cu.url FROM urls u
-				LEFT OUTER JOIN urls cu
-				ON cu.id=u.cleaned_url
-				LEFT OUTER JOIN repositories r
-				ON r.url_id=u.cleaned_url
-				WHERE u.url=%(url)s
-			;""",
+                SELECT u.id,u.cleaned_url,r.id,cu.url FROM urls u
+                LEFT OUTER JOIN urls cu
+                ON cu.id=u.cleaned_url
+                LEFT OUTER JOIN repositories r
+                ON r.url_id=u.cleaned_url
+                WHERE u.url=%(url)s
+            ;""",
                 {"url": self.orig_url},
             )
         else:
             self.db.cursor.execute(
                 """
-				SELECT u.id,u.cleaned_url,r.id,cu.url FROM urls u
-				LEFT OUTER JOIN urls cu
-				ON cu.id=u.cleaned_url
-				LEFT OUTER JOIN repositories r
-				ON r.url_id=u.cleaned_url
-				WHERE u.url=:url
-			;""",
+                SELECT u.id,u.cleaned_url,r.id,cu.url FROM urls u
+                LEFT OUTER JOIN urls cu
+                ON cu.id=u.cleaned_url
+                LEFT OUTER JOIN repositories r
+                ON r.url_id=u.cleaned_url
+                WHERE u.url=:url
+            ;""",
                 {"url": self.orig_url},
             )
         res = list(self.db.cursor.fetchall())
@@ -2214,25 +2235,25 @@ class FixURL(fillers.Filler):
             if self.db.db_type == "postgres":
                 self.db.cursor.execute(
                     """
-					UPDATE commits SET repo_id=NULL
-					WHERE repo_id=%(repo_id)s AND id IN (SELECT cr.commit_id FROM commit_repos cr
-						INNER JOIN (SELECT commit_id FROM commit_repos WHERE repo_id=%(repo_id)s) cr1
-						ON cr1.commit_id=cr.commit_id
-						GROUP BY cr.commit_id
-						HAVING COUNT(*)>1 )
-					;""",
+                    UPDATE commits SET repo_id=NULL
+                    WHERE repo_id=%(repo_id)s AND id IN (SELECT cr.commit_id FROM commit_repos cr
+                        INNER JOIN (SELECT commit_id FROM commit_repos WHERE repo_id=%(repo_id)s) cr1
+                        ON cr1.commit_id=cr.commit_id
+                        GROUP BY cr.commit_id
+                        HAVING COUNT(*)>1 )
+                    ;""",
                     {"repo_id": self.repo_id},
                 )
             else:
                 self.db.cursor.execute(
                     """
-					UPDATE commits SET repo_id=NULL
-					WHERE repo_id=:repo_id AND id IN (SELECT cr.commit_id FROM commit_repos cr
-						INNER JOIN (SELECT commit_id FROM commit_repos WHERE repo_id=:repo_id) cr1
-						ON cr1.commit_id=cr.commit_id
-						GROUP BY cr.commit_id
-						HAVING COUNT(*)>1 )
-					;""",
+                    UPDATE commits SET repo_id=NULL
+                    WHERE repo_id=:repo_id AND id IN (SELECT cr.commit_id FROM commit_repos cr
+                        INNER JOIN (SELECT commit_id FROM commit_repos WHERE repo_id=:repo_id) cr1
+                        ON cr1.commit_id=cr.commit_id
+                        GROUP BY cr.commit_id
+                        HAVING COUNT(*)>1 )
+                    ;""",
                     {"repo_id": self.repo_id},
                 )
 
@@ -2241,35 +2262,35 @@ class FixURL(fillers.Filler):
             if self.db.db_type == "postgres":
                 self.db.cursor.execute(
                     """
-					WITH repo_users AS (SELECT DISTINCT i.user_id AS uid FROM identities i
-					INNER JOIN commits c
-					ON (c.author_id=i.id OR c.committer_id=i.id) AND c.repo_id=%(repo_id)s)
-						, uid_to_del AS (SELECT uid FROM repo_users
-					EXCEPT
-					SELECT DISTINCT uid FROM repo_users
-					INNER JOIN identities i
-					ON i.user_id=uid
-					INNER JOIN commits c
-					ON (c.author_id=i.id OR c.committer_id=i.id) AND c.repo_id!=%(repo_id)s)
-						DELETE FROM users WHERE id IN (SELECT uid FROM uid_to_del)
-					;""",
+                    WITH repo_users AS (SELECT DISTINCT i.user_id AS uid FROM identities i
+                    INNER JOIN commits c
+                    ON (c.author_id=i.id OR c.committer_id=i.id) AND c.repo_id=%(repo_id)s)
+                        , uid_to_del AS (SELECT uid FROM repo_users
+                    EXCEPT
+                    SELECT DISTINCT uid FROM repo_users
+                    INNER JOIN identities i
+                    ON i.user_id=uid
+                    INNER JOIN commits c
+                    ON (c.author_id=i.id OR c.committer_id=i.id) AND c.repo_id!=%(repo_id)s)
+                        DELETE FROM users WHERE id IN (SELECT uid FROM uid_to_del)
+                    ;""",
                     {"repo_id": self.repo_id},
                 )
             else:
                 self.db.cursor.execute(
                     """
-					WITH repo_users AS (SELECT DISTINCT i.user_id AS uid FROM identities i
-					INNER JOIN commits c
-					ON (c.author_id=i.id OR c.committer_id=i.id) AND c.repo_id=:repo_id)
-						, uid_to_del AS (SELECT uid FROM repo_users
-					EXCEPT
-					SELECT DISTINCT uid FROM repo_users
-					INNER JOIN identities i
-					ON i.user_id=uid
-					INNER JOIN commits c
-					ON (c.author_id=i.id OR c.committer_id=i.id) AND c.repo_id!=:repo_id)
-						DELETE FROM users WHERE id IN (SELECT uid FROM uid_to_del)
-					;""",
+                    WITH repo_users AS (SELECT DISTINCT i.user_id AS uid FROM identities i
+                    INNER JOIN commits c
+                    ON (c.author_id=i.id OR c.committer_id=i.id) AND c.repo_id=:repo_id)
+                        , uid_to_del AS (SELECT uid FROM repo_users
+                    EXCEPT
+                    SELECT DISTINCT uid FROM repo_users
+                    INNER JOIN identities i
+                    ON i.user_id=uid
+                    INNER JOIN commits c
+                    ON (c.author_id=i.id OR c.committer_id=i.id) AND c.repo_id!=:repo_id)
+                        DELETE FROM users WHERE id IN (SELECT uid FROM uid_to_del)
+                    ;""",
                     {"repo_id": self.repo_id},
                 )
 
@@ -2277,27 +2298,27 @@ class FixURL(fillers.Filler):
         if self.db.db_type == "postgres":
             self.db.cursor.execute(
                 """
-				UPDATE packages SET repo_id=NULL WHERE id=%(repo_id)s
-				;""",
+                UPDATE packages SET repo_id=NULL WHERE id=%(repo_id)s
+                ;""",
                 {"repo_id": self.repo_id},
             )
             self.db.cursor.execute(
                 """
-				DELETE FROM repositories WHERE id=%(repo_id)s
-				;""",
+                DELETE FROM repositories WHERE id=%(repo_id)s
+                ;""",
                 {"repo_id": self.repo_id},
             )
         else:
             self.db.cursor.execute(
                 """
-				UPDATE packages SET repo_id=NULL WHERE id=:repo_id
-				;""",
+                UPDATE packages SET repo_id=NULL WHERE id=:repo_id
+                ;""",
                 {"repo_id": self.repo_id},
             )
             self.db.cursor.execute(
                 """
-				DELETE FROM repositories WHERE id=:repo_id
-				;""",
+                DELETE FROM repositories WHERE id=:repo_id
+                ;""",
                 {"repo_id": self.repo_id},
             )
 
@@ -2305,8 +2326,8 @@ class FixURL(fillers.Filler):
         if self.db.db_type == "postgres":
             self.db.cursor.execute(
                 """
-				SELECT COUNT(*) FROM urls WHERE cleaned_url=%(cleaned_url_id)s AND id NOT IN (%(cleaned_url_id)s,%(url_id)s)
-					;""",
+                SELECT COUNT(*) FROM urls WHERE cleaned_url=%(cleaned_url_id)s AND id NOT IN (%(cleaned_url_id)s,%(url_id)s)
+                    ;""",
                 {
                     "repo_id": self.repo_id,
                     "url_id": self.url_id,
@@ -2318,8 +2339,8 @@ class FixURL(fillers.Filler):
         else:
             self.db.cursor.execute(
                 """
-				SELECT COUNT(*) FROM urls WHERE cleaned_url=:cleaned_url_id AND id NOT IN (:cleaned_url_id,:url_id)
-					;""",
+                SELECT COUNT(*) FROM urls WHERE cleaned_url=:cleaned_url_id AND id NOT IN (:cleaned_url_id,:url_id)
+                    ;""",
                 {
                     "repo_id": self.repo_id,
                     "url_id": self.url_id,
@@ -2339,10 +2360,10 @@ class FixURL(fillers.Filler):
             if self.db.db_type == "postgres":
                 self.db.cursor.execute(
                     """
-					INSERT INTO urls(url,source,source_root)
-					SELECT %(cleaned_url)s,u.source,u.source_root FROM urls u WHERE id=%(url_id)s
-					ON CONFLICT DO NOTHING
-					;""",
+                    INSERT INTO urls(url,source,source_root)
+                    SELECT %(cleaned_url)s,u.source,u.source_root FROM urls u WHERE id=%(url_id)s
+                    ON CONFLICT DO NOTHING
+                    ;""",
                     {
                         "repo_id": self.repo_id,
                         "url_id": self.url_id,
@@ -2353,8 +2374,8 @@ class FixURL(fillers.Filler):
                 )
                 self.db.cursor.execute(
                     """
-					UPDATE urls SET cleaned_url=(SELECT id FROM urls WHERE url=%(cleaned_url)s) WHERE id IN (%(url_id)s,(SELECT id FROM urls WHERE url=%(cleaned_url)s))
-					;""",
+                    UPDATE urls SET cleaned_url=(SELECT id FROM urls WHERE url=%(cleaned_url)s) WHERE id IN (%(url_id)s,(SELECT id FROM urls WHERE url=%(cleaned_url)s))
+                    ;""",
                     {
                         "repo_id": self.repo_id,
                         "url_id": self.url_id,
@@ -2366,9 +2387,9 @@ class FixURL(fillers.Filler):
             else:
                 self.db.cursor.execute(
                     """
-					INSERT OR IGNORE INTO urls(url,source,source_root)
-					SELECT :cleaned_url,u.source,u.source_root FROM urls u WHERE id=:url_id
-					;""",
+                    INSERT OR IGNORE INTO urls(url,source,source_root)
+                    SELECT :cleaned_url,u.source,u.source_root FROM urls u WHERE id=:url_id
+                    ;""",
                     {
                         "repo_id": self.repo_id,
                         "url_id": self.url_id,
@@ -2379,8 +2400,8 @@ class FixURL(fillers.Filler):
                 )
                 self.db.cursor.execute(
                     """
-					UPDATE urls SET cleaned_url=(SELECT id FROM urls WHERE url=:cleaned_url) WHERE id IN (:url_id,(SELECT id FROM urls WHERE url=:cleaned_url))
-					;""",
+                    UPDATE urls SET cleaned_url=(SELECT id FROM urls WHERE url=:cleaned_url) WHERE id IN (:url_id,(SELECT id FROM urls WHERE url=:cleaned_url))
+                    ;""",
                     {
                         "repo_id": self.repo_id,
                         "url_id": self.url_id,
@@ -2393,9 +2414,9 @@ class FixURL(fillers.Filler):
             if self.db.db_type == "postgres":
                 self.db.cursor.execute(
                     """
-					UPDATE urls SET url=%(cleaned_url)s WHERE id=%(cleaned_url_id)s
-					AND NOT EXISTS (SELECT 1 FROM urls WHERE url=%(cleaned_url)s)
-					;""",
+                    UPDATE urls SET url=%(cleaned_url)s WHERE id=%(cleaned_url_id)s
+                    AND NOT EXISTS (SELECT 1 FROM urls WHERE url=%(cleaned_url)s)
+                    ;""",
                     {
                         "repo_id": self.repo_id,
                         "url_id": self.url_id,
@@ -2406,8 +2427,8 @@ class FixURL(fillers.Filler):
                 )
                 self.db.cursor.execute(
                     """
-					UPDATE urls SET cleaned_url=(SELECT id FROM urls WHERE url=%(cleaned_url)s) WHERE id IN (%(url_id)s,(SELECT id FROM urls WHERE url=%(cleaned_url)s))
-					;""",
+                    UPDATE urls SET cleaned_url=(SELECT id FROM urls WHERE url=%(cleaned_url)s) WHERE id IN (%(url_id)s,(SELECT id FROM urls WHERE url=%(cleaned_url)s))
+                    ;""",
                     {
                         "repo_id": self.repo_id,
                         "url_id": self.url_id,
@@ -2418,8 +2439,8 @@ class FixURL(fillers.Filler):
                 )
                 self.db.cursor.execute(
                     """
-					DELETE FROM urls WHERE url=%(cu_db)s
-					;""",
+                    DELETE FROM urls WHERE url=%(cu_db)s
+                    ;""",
                     {
                         "repo_id": self.repo_id,
                         "url_id": self.url_id,
@@ -2432,9 +2453,9 @@ class FixURL(fillers.Filler):
             else:
                 self.db.cursor.execute(
                     """
-					UPDATE urls SET url=:cleaned_url WHERE id=:cleaned_url_id
-					AND NOT EXISTS (SELECT 1 FROM urls WHERE url=:cleaned_url)
-					;""",
+                    UPDATE urls SET url=:cleaned_url WHERE id=:cleaned_url_id
+                    AND NOT EXISTS (SELECT 1 FROM urls WHERE url=:cleaned_url)
+                    ;""",
                     {
                         "repo_id": self.repo_id,
                         "url_id": self.url_id,
@@ -2445,8 +2466,8 @@ class FixURL(fillers.Filler):
                 )
                 self.db.cursor.execute(
                     """
-					UPDATE urls SET cleaned_url=(SELECT id FROM urls WHERE url=:cleaned_url) WHERE id IN (:url_id,(SELECT id FROM urls WHERE url=:cleaned_url))
-					;""",
+                    UPDATE urls SET cleaned_url=(SELECT id FROM urls WHERE url=:cleaned_url) WHERE id IN (:url_id,(SELECT id FROM urls WHERE url=:cleaned_url))
+                    ;""",
                     {
                         "repo_id": self.repo_id,
                         "url_id": self.url_id,
@@ -2457,8 +2478,8 @@ class FixURL(fillers.Filler):
                 )
                 self.db.cursor.execute(
                     """
-					DELETE FROM urls WHERE url=:cu_db
-					;""",
+                    DELETE FROM urls WHERE url=:cu_db
+                    ;""",
                     {
                         "repo_id": self.repo_id,
                         "url_id": self.url_id,
