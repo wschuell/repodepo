@@ -7866,6 +7866,7 @@ class UserCContribsGQLFiller(UserLanguagesGQLFiller):
             start = datetime.datetime(2008, 1, 1)
         start_str = 'from: "{}"'.format(start.strftime("%Y-%m-%dT%H:%M:%SZ"))
         if end is None:
+            current_year = datetime.datetime.now().year
             end = datetime.datetime(current_year + 1, 1, 1)
         end_str = 'to: "{}"'.format(end.strftime("%Y-%m-%dT%H:%M:%SZ"))
         return f"({start_str}, {end_str})"
