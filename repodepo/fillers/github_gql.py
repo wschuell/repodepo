@@ -7946,12 +7946,10 @@ class UserCContribsGQLFiller(UserLanguagesGQLFiller):
         for qname, q in query_result.items():
             if qname == "rateLimit" or q is None:
                 continue
-            for e in q["contributionsCollection"][
-                f"{self.contrib_type}ContributionsByRepository"
-            ]:
-                key = f"total{f'{self.contrib_type[0].upper()}{self.contrib_type[1:]}'}Contributions"
-                if key in e.keys():
-                    ans += e[key]
+            e = q["contributionsCollection"]
+            key = f"total{self.contrib_type[0].upper()}{self.contrib_type[1:]}Contributions"
+            if key in e.keys():
+                ans += e[key]
         return ans
 
     def parse_query_result(self, query_result, identity_id, identity_type_id, **kwargs):
