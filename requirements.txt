@@ -14,3 +14,4 @@ networkx
 semantic-version
 toml
 ijson
+langdetect

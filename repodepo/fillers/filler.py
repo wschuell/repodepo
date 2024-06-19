@@ -50,12 +50,12 @@ class Filler(object):
         self.max_reexec = max_reexec
 
         # if file_info is not None:
-        # 	self.set_file_info(file_info)
+        #   self.set_file_info(file_info)
 
     # def set_file_info(self,file_info): # deprecated, files are managed at filler level only
-    # 	"""set_file_info should add the filename in self.db.fillers_shareddata['files'][filecode] = filename
-    # 	while checking that the filecode is not present already in the relevant dict"""
-    # 	raise NotImplementedError
+    #   """set_file_info should add the filename in self.db.fillers_shareddata['files'][filecode] = filename
+    #   while checking that the filecode is not present already in the relevant dict"""
+    #   raise NotImplementedError
 
     def apply(self):
         # filling script here
@@ -185,3 +185,6 @@ class Filler(object):
         if not os.path.exists(repo_folder):
             self.logger.info(f"Cloning {repo_url} into {repo_folder}")
             pygit2.clone_repository(url=repo_url, path=repo_folder)
+
+    def reexec_modif(self):
+        pass

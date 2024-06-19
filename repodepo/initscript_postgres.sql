@@ -476,7 +476,7 @@
 				CREATE TABLE IF NOT EXISTS repo_languages(
 					repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
 					language TEXT NOT NULL,
-					size INT,
+					size BIGINT,
 					share DOUBLE PRECISION,
 					queried_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 					PRIMARY KEY(repo_id,language)
@@ -556,4 +556,37 @@
 					-- is_invalid BOOLEAN,
 					note TEXT,
 					additional_info JSONB
+					);
+
+				CREATE TABLE IF NOT EXISTS commit_comments_lang(
+					lang TEXT,
+					prob REAL,
+					repo_id BIGINT,
+					commit_id BIGINT,
+					comment_id BIGINT,
+					lang_rank INT,
+					FOREIGN KEY(repo_id,commit_id,comment_id) REFERENCES commit_comments(repo_id,commit_id,comment_id) ON DELETE CASCADE,
+					PRIMARY KEY(repo_id,commit_id,comment_id,lang)
+					);
+
+				CREATE TABLE IF NOT EXISTS issue_comments_lang(
+					lang TEXT,
+					prob REAL,
+					repo_id BIGINT,
+					issue_number BIGINT,
+					comment_id BIGINT,
+					lang_rank INT,
+					FOREIGN KEY(repo_id,issue_number,comment_id) REFERENCES issue_comments(repo_id,issue_number,comment_id) ON DELETE CASCADE,
+					PRIMARY KEY(repo_id,issue_number,comment_id,lang)
+					);
+
+				CREATE TABLE IF NOT EXISTS pullrequest_comments_lang(
+					lang TEXT,
+					prob REAL,
+					repo_id BIGINT,
+					pullrequest_number BIGINT,
+					comment_id BIGINT,
+					lang_rank INT,
+					FOREIGN KEY(repo_id,pullrequest_number,comment_id) REFERENCES pullrequest_comments(repo_id,pullrequest_number,comment_id) ON DELETE CASCADE,
+					PRIMARY KEY(repo_id,pullrequest_number,comment_id,lang)
 					);

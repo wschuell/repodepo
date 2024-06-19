@@ -112,8 +112,8 @@ class GithubFiller(fillers.Filler):
             ) as f:
                 self.api_keys += [l.split("#")[0] for l in f.read().split("\n")]
         # if os.path.exists(os.path.join(os.environ['HOME'],'.repo_tools','github_api_keys.txt')):
-        # 	with open(os.path.join(os.environ['HOME'],'.repo_tools','github_api_keys.txt'),'r') as f:
-        # 		self.api_keys += [l.split('#')[0] for l in f.read().split('\n')]
+        #   with open(os.path.join(os.environ['HOME'],'.repo_tools','github_api_keys.txt'),'r') as f:
+        #       self.api_keys += [l.split('#')[0] for l in f.read().split('\n')]
         try:
             self.api_keys.append(os.environ[self.env_apikey])
         except KeyError:
@@ -247,6 +247,9 @@ class GithubFiller(fillers.Filler):
                             )
                         )
                         time.sleep(time_to_reset + 1)
+
+    def reexec_modif(self):
+        self.workers = max(1, int(self.workers / 2))
 
 
 class StarsFiller(GithubFiller):
@@ -518,7 +521,7 @@ class StarsFiller(GithubFiller):
                         )
                     )
                 # for future in concurrent.futures.as_completed(futures):
-                # 	pass
+                #   pass
                 for future in futures:
                     future.result()
 
@@ -533,15 +536,15 @@ class StarsFiller(GithubFiller):
             extras.execute_batch(
                 db.cursor,
                 """
-				INSERT INTO stars(starred_at,login,repo_id,identity_type_id,identity_id)
-				VALUES(%s,
-						%s,
-						%s,
-						(SELECT id FROM identity_types WHERE name='github_login'),
-						(SELECT id FROM identities WHERE identity=%s AND identity_type_id=(SELECT id FROM identity_types WHERE name='github_login'))
-					)
-				ON CONFLICT DO NOTHING
-				;""",
+                INSERT INTO stars(starred_at,login,repo_id,identity_type_id,identity_id)
+                VALUES(%s,
+                        %s,
+                        %s,
+                        (SELECT id FROM identity_types WHERE name='github_login'),
+                        (SELECT id FROM identities WHERE identity=%s AND identity_type_id=(SELECT id FROM identity_types WHERE name='github_login'))
+                    )
+                ON CONFLICT DO NOTHING
+                ;""",
                 (
                     (s["starred_at"], s["login"], s["repo_id"], s["login"])
                     for s in stars_list
@@ -550,13 +553,13 @@ class StarsFiller(GithubFiller):
         else:
             db.cursor.executemany(
                 """
-					INSERT OR IGNORE INTO stars(starred_at,login,repo_id,identity_type_id,identity_id)
-					VALUES(?,
-							?,
-							?,
-							(SELECT id FROM identity_types WHERE name='github_login'),
-							(SELECT id FROM identities WHERE identity=? AND identity_type_id=(SELECT id FROM identity_types WHERE name='github_login'))
-						);""",
+                    INSERT OR IGNORE INTO stars(starred_at,login,repo_id,identity_type_id,identity_id)
+                    VALUES(?,
+                            ?,
+                            ?,
+                            (SELECT id FROM identity_types WHERE name='github_login'),
+                            (SELECT id FROM identities WHERE identity=? AND identity_type_id=(SELECT id FROM identity_types WHERE name='github_login'))
+                        );""",
                 (
                     (s["starred_at"], s["login"], s["repo_id"], s["login"])
                     for s in stars_list
@@ -589,121 +592,121 @@ class GHLoginsFiller(GithubFiller):
             if self.force:
                 if self.db.db_type == "postgres":
                     # self.db.cursor.execute('''
-                    # 	SELECT i.id,c.repo_id,r.owner,r.name,c.sha
-                    # 	FROM identities i
-                    # 	INNER JOIN identity_types it
-                    # 	ON i.identity_type_id = it.id AND it.name!='github_login'
-                    # 	JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
-                    # 		WHERE cc.author_id=i.id ORDER BY cc.created_at DESC LIMIT 1) AS c
-                    # 	ON (SELECT i2.id FROM identities i2
-                    # 		INNER JOIN identity_types it2
-                    # 		ON i2.user_id=i.user_id AND i2.identity_type_id=it2.id AND it2.name='github_login'
-                    # 		LIMIT 1) IS NULL
-                    # 	INNER JOIN repositories r
-                    # 	ON r.id=c.repo_id
-                    # 	;''')
+                    #   SELECT i.id,c.repo_id,r.owner,r.name,c.sha
+                    #   FROM identities i
+                    #   INNER JOIN identity_types it
+                    #   ON i.identity_type_id = it.id AND it.name!='github_login'
+                    #   JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
+                    #       WHERE cc.author_id=i.id ORDER BY cc.created_at DESC LIMIT 1) AS c
+                    #   ON (SELECT i2.id FROM identities i2
+                    #       INNER JOIN identity_types it2
+                    #       ON i2.user_id=i.user_id AND i2.identity_type_id=it2.id AND it2.name='github_login'
+                    #       LIMIT 1) IS NULL
+                    #   INNER JOIN repositories r
+                    #   ON r.id=c.repo_id
+                    #   ;''')
                     self.db.cursor.execute(
                         """
-						SELECT i.id,c.repo_id,r.owner,r.name,c.sha
-						FROM (	(SELECT i1.id FROM identities i1)
-									EXCEPT
-								(SELECT i2.id FROM identities i2
-									INNER JOIN identities i3
-									ON i3.user_id = i2.user_id
-									INNER JOIN identity_types it2
-									ON it2.id=i3.identity_type_id AND it2.name='github_login')
-								) AS i
-					 	JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
-					 		WHERE cc.author_id=i.id ORDER BY cc.created_at DESC LIMIT 1) AS c
-					 	ON true
-					 	INNER JOIN repositories r
-					 	ON c.repo_id=r.id
-						ORDER BY i.id
-						;"""
+                        SELECT i.id,c.repo_id,r.owner,r.name,c.sha
+                        FROM (  (SELECT i1.id FROM identities i1)
+                                    EXCEPT
+                                (SELECT i2.id FROM identities i2
+                                    INNER JOIN identities i3
+                                    ON i3.user_id = i2.user_id
+                                    INNER JOIN identity_types it2
+                                    ON it2.id=i3.identity_type_id AND it2.name='github_login')
+                                ) AS i
+                        JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
+                            WHERE cc.author_id=i.id ORDER BY cc.created_at DESC LIMIT 1) AS c
+                        ON true
+                        INNER JOIN repositories r
+                        ON c.repo_id=r.id
+                        ORDER BY i.id
+                        ;"""
                     )
                 else:
                     # self.db.cursor.execute('''
-                    # 	SELECT i.id,c.repo_id,r.owner,r.name,c.sha
-                    # 	FROM identities i
-                    # 	INNER JOIN identity_types it
-                    # 	ON i.identity_type_id = it.id AND it.name!='github_login'
-                    # 	JOIN commits c
-                    # 		ON (SELECT i2.id FROM identities i2
-                    # 			INNER JOIN identity_types it2
-                    # 			ON i2.user_id=i.user_id AND i2.identity_type_id=it2.id AND it2.name='github_login'
-                    # 			LIMIT 1) IS NULL AND
-                    # 		c.id IN (SELECT cc.id FROM commits cc
-                    # 			WHERE cc.author_id=i.id ORDER BY cc.created_at DESC LIMIT 1)
-                    # 	INNER JOIN repositories r
-                    # 	ON r.id=c.repo_id
+                    #   SELECT i.id,c.repo_id,r.owner,r.name,c.sha
+                    #   FROM identities i
+                    #   INNER JOIN identity_types it
+                    #   ON i.identity_type_id = it.id AND it.name!='github_login'
+                    #   JOIN commits c
+                    #       ON (SELECT i2.id FROM identities i2
+                    #           INNER JOIN identity_types it2
+                    #           ON i2.user_id=i.user_id AND i2.identity_type_id=it2.id AND it2.name='github_login'
+                    #           LIMIT 1) IS NULL AND
+                    #       c.id IN (SELECT cc.id FROM commits cc
+                    #           WHERE cc.author_id=i.id ORDER BY cc.created_at DESC LIMIT 1)
+                    #   INNER JOIN repositories r
+                    #   ON r.id=c.repo_id
                     # ;''')
                     self.db.cursor.execute(
                         """
-						SELECT i.id,c.repo_id,r.owner,r.name,c.sha
-						FROM (	SELECT i1.id FROM identities i1
-									EXCEPT
-								SELECT i2.id FROM identities i2
-									INNER JOIN identities i3
-									ON i3.user_id = i2.user_id
-									INNER JOIN identity_types it2
-									ON it2.id=i3.identity_type_id AND it2.name='github_login'
-								) AS i
-					 	JOIN commits c
-					 	ON c.id IN (SELECT cc.id FROM commits cc
-					 		WHERE cc.author_id=i.id ORDER BY cc.created_at DESC LIMIT 1)
-					 	INNER JOIN repositories r
-					 	ON c.repo_id=r.id
-						ORDER BY i.id
-						;"""
+                        SELECT i.id,c.repo_id,r.owner,r.name,c.sha
+                        FROM (  SELECT i1.id FROM identities i1
+                                    EXCEPT
+                                SELECT i2.id FROM identities i2
+                                    INNER JOIN identities i3
+                                    ON i3.user_id = i2.user_id
+                                    INNER JOIN identity_types it2
+                                    ON it2.id=i3.identity_type_id AND it2.name='github_login'
+                                ) AS i
+                        JOIN commits c
+                        ON c.id IN (SELECT cc.id FROM commits cc
+                            WHERE cc.author_id=i.id ORDER BY cc.created_at DESC LIMIT 1)
+                        INNER JOIN repositories r
+                        ON c.repo_id=r.id
+                        ORDER BY i.id
+                        ;"""
                     )
 
             else:
                 if self.db.db_type == "postgres":
                     self.db.cursor.execute(
                         """
-						SELECT i.id,c.repo_id,r.owner,r.name,c.sha
-						FROM (
-							SELECT ii.id FROM
-						 		(SELECT iii.id FROM identities iii
-								WHERE (SELECT iiii.id FROM identities iiii
-									INNER JOIN identity_types iiiit
-									ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name='github_login') IS NULL) AS ii
-								LEFT JOIN table_updates tu
-								ON tu.identity_id=ii.id AND tu.table_name='login'
-								GROUP BY ii.id,tu.identity_id
-								HAVING tu.identity_id IS NULL
-							) AS i
-						JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
-							WHERE cc.author_id=i.id ORDER BY cc.created_at DESC LIMIT 1) AS c
-						ON true
-						INNER JOIN repositories r
-						ON r.id=c.repo_id
-						ORDER BY i.id
-						;"""
+                        SELECT i.id,c.repo_id,r.owner,r.name,c.sha
+                        FROM (
+                            SELECT ii.id FROM
+                                (SELECT iii.id FROM identities iii
+                                WHERE (SELECT iiii.id FROM identities iiii
+                                    INNER JOIN identity_types iiiit
+                                    ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name='github_login') IS NULL) AS ii
+                                LEFT JOIN table_updates tu
+                                ON tu.identity_id=ii.id AND tu.table_name='login'
+                                GROUP BY ii.id,tu.identity_id
+                                HAVING tu.identity_id IS NULL
+                            ) AS i
+                        JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
+                            WHERE cc.author_id=i.id ORDER BY cc.created_at DESC LIMIT 1) AS c
+                        ON true
+                        INNER JOIN repositories r
+                        ON r.id=c.repo_id
+                        ORDER BY i.id
+                        ;"""
                     )
                 else:
                     self.db.cursor.execute(
                         """
-						SELECT i.id,c.repo_id,r.owner,r.name,c.sha
-						FROM (
-							SELECT ii.id FROM
-						 		(SELECT iii.id FROM identities iii
-								WHERE (SELECT iiii.id FROM identities iiii
-									INNER JOIN identity_types iiiit
-									ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name='github_login') IS NULL) AS ii
-								LEFT JOIN table_updates tu
-								ON tu.identity_id=ii.id AND tu.table_name='login'
-								GROUP BY ii.id,tu.identity_id
-								HAVING tu.identity_id IS NULL
-							) AS i
-						JOIN commits c
-							ON
-							c.id IN (SELECT cc.id FROM commits cc
-								WHERE cc.author_id=i.id ORDER BY cc.created_at DESC LIMIT 1)
-						INNER JOIN repositories r
-						ON r.id=c.repo_id
-						ORDER BY i.id
-						;"""
+                        SELECT i.id,c.repo_id,r.owner,r.name,c.sha
+                        FROM (
+                            SELECT ii.id FROM
+                                (SELECT iii.id FROM identities iii
+                                WHERE (SELECT iiii.id FROM identities iiii
+                                    INNER JOIN identity_types iiiit
+                                    ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name='github_login') IS NULL) AS ii
+                                LEFT JOIN table_updates tu
+                                ON tu.identity_id=ii.id AND tu.table_name='login'
+                                GROUP BY ii.id,tu.identity_id
+                                HAVING tu.identity_id IS NULL
+                            ) AS i
+                        JOIN commits c
+                            ON
+                            c.id IN (SELECT cc.id FROM commits cc
+                                WHERE cc.author_id=i.id ORDER BY cc.created_at DESC LIMIT 1)
+                        INNER JOIN repositories r
+                        ON r.id=c.repo_id
+                        ORDER BY i.id
+                        ;"""
                     )
 
             self.info_list = list(self.db.cursor.fetchall())
@@ -833,7 +836,7 @@ class GHLoginsFiller(GithubFiller):
                         )
                     )
                 # for future in concurrent.futures.as_completed(futures):
-                # 	pass
+                #   pass
                 for future in futures:
                     future.result()
 
@@ -847,20 +850,20 @@ class GHLoginsFiller(GithubFiller):
             if login is not None:
                 db.cursor.execute(
                     """ INSERT INTO users(creation_identity_type_id,creation_identity) VALUES(
-											(SELECT id FROM identity_types WHERE name='github_login'),
-											%s
-											) ON CONFLICT DO NOTHING;""",
+                                            (SELECT id FROM identity_types WHERE name='github_login'),
+                                            %s
+                                            ) ON CONFLICT DO NOTHING;""",
                     (login,),
                 )
 
                 db.cursor.execute(
                     """ INSERT INTO identities(identity_type_id,user_id,identity)
-												VALUES((SELECT id FROM identity_types WHERE name='github_login'),
-														(SELECT id FROM users
-														WHERE creation_identity_type_id=(SELECT id FROM identity_types WHERE name='github_login')
-															AND creation_identity=%s),
-														%s)
-												ON CONFLICT DO NOTHING;""",
+                                                VALUES((SELECT id FROM identity_types WHERE name='github_login'),
+                                                        (SELECT id FROM users
+                                                        WHERE creation_identity_type_id=(SELECT id FROM identity_types WHERE name='github_login')
+                                                            AND creation_identity=%s),
+                                                        %s)
+                                                ON CONFLICT DO NOTHING;""",
                     (
                         login,
                         login,
@@ -869,8 +872,8 @@ class GHLoginsFiller(GithubFiller):
 
                 db.cursor.execute(
                     """SELECT id FROM identities
-											WHERE identity_type_id=(SELECT id FROM identity_types WHERE name='github_login')
-											AND identity=%s;""",
+                                            WHERE identity_type_id=(SELECT id FROM identity_types WHERE name='github_login')
+                                            AND identity=%s;""",
                     (login,),
                 )
                 identity2 = db.cursor.fetchone()[0]
@@ -888,19 +891,19 @@ class GHLoginsFiller(GithubFiller):
             if login is not None:
                 db.cursor.execute(
                     """ INSERT OR IGNORE INTO users(creation_identity_type_id,creation_identity) VALUES(
-											(SELECT id FROM identity_types WHERE name='github_login'),
-											?
-											);""",
+                                            (SELECT id FROM identity_types WHERE name='github_login'),
+                                            ?
+                                            );""",
                     (login,),
                 )
 
                 db.cursor.execute(
                     """ INSERT OR IGNORE INTO identities(identity_type_id,user_id,identity)
-												VALUES((SELECT id FROM identity_types WHERE name='github_login'),
-														(SELECT id FROM users
-														WHERE creation_identity_type_id=(SELECT id FROM identity_types WHERE name='github_login')
-															AND creation_identity=?),
-														?);""",
+                                                VALUES((SELECT id FROM identity_types WHERE name='github_login'),
+                                                        (SELECT id FROM users
+                                                        WHERE creation_identity_type_id=(SELECT id FROM identity_types WHERE name='github_login')
+                                                            AND creation_identity=?),
+                                                        ?);""",
                     (
                         login,
                         login,
@@ -909,8 +912,8 @@ class GHLoginsFiller(GithubFiller):
 
                 db.cursor.execute(
                     """SELECT id FROM identities
-											WHERE identity_type_id=(SELECT id FROM identity_types WHERE name='github_login')
-											AND identity=?;""",
+                                            WHERE identity_type_id=(SELECT id FROM identity_types WHERE name='github_login')
+                                            AND identity=?;""",
                     (login,),
                 )
                 identity2 = db.cursor.fetchone()[0]
@@ -1126,18 +1129,18 @@ class ForksFiller(GithubFiller):
                             ) + len(sg_list):
                                 # if in_thread:
                                 # if db.db_type == 'sqlite' and in_thread:
-                                # 	time.sleep(1+random.random()) # to avoid database locked issues, and smooth a bit concurrency
+                                #   time.sleep(1+random.random()) # to avoid database locked issues, and smooth a bit concurrency
                                 if self.db.db_type == "postgres":
                                     extras.execute_batch(
                                         db.cursor,
                                         """
-										INSERT INTO forks(forking_repo_id,forked_repo_id,forking_repo_url,forked_at)
-										VALUES((SELECT r.id FROM repositories r
-													INNER JOIN sources s
-													ON s.name=%s AND s.id=r.source AND CONCAT(r.owner,'/',r.name)=%s)
-												,%s,%s,%s)
-										ON CONFLICT DO NOTHING
-										;""",
+                                        INSERT INTO forks(forking_repo_id,forked_repo_id,forking_repo_url,forked_at)
+                                        VALUES((SELECT r.id FROM repositories r
+                                                    INNER JOIN sources s
+                                                    ON s.name=%s AND s.id=r.source AND CONCAT(r.owner,'/',r.name)=%s)
+                                                ,%s,%s,%s)
+                                        ON CONFLICT DO NOTHING
+                                        ;""",
                                         (
                                             (
                                                 s["source"],
@@ -1152,12 +1155,12 @@ class ForksFiller(GithubFiller):
                                 else:
                                     db.cursor.executemany(
                                         """
-										INSERT OR IGNORE INTO forks(forking_repo_id,forked_repo_id,forking_repo_url,forked_at)
-										VALUES((SELECT r.id FROM repositories r
-													INNER JOIN sources s
-													ON s.name=? AND s.id=r.source AND r.owner || '/' || r.name=?)
-												,?,?,?)
-										;""",
+                                        INSERT OR IGNORE INTO forks(forking_repo_id,forked_repo_id,forking_repo_url,forked_at)
+                                        VALUES((SELECT r.id FROM repositories r
+                                                    INNER JOIN sources s
+                                                    ON s.name=? AND s.id=r.source AND r.owner || '/' || r.name=?)
+                                                ,?,?,?)
+                                        ;""",
                                         (
                                             (
                                                 s["source"],
@@ -1240,7 +1243,7 @@ class ForksFiller(GithubFiller):
                         )
                     )
                 # for future in concurrent.futures.as_completed(futures):
-                # 	pass
+                #   pass
                 for future in futures:
                     future.result()
 
@@ -1249,27 +1252,27 @@ class ForksFiller(GithubFiller):
         if self.db.db_type == "postgres":
             self.db.cursor.execute(
                 """
-				INSERT INTO forks(forking_repo_id,forking_repo_url,forked_repo_id,forked_at,fork_rank)
-					SELECT f1.forking_repo_id,f1.forking_repo_url,f2.forked_repo_id,f1.forked_at,f2.fork_rank+f1.fork_rank
-						FROM forks f1
-						INNER JOIN forks f2
-						ON f1.forked_repo_id=f2.forking_repo_id
-				ON CONFLICT DO NOTHING
-				;
-				"""
+                INSERT INTO forks(forking_repo_id,forking_repo_url,forked_repo_id,forked_at,fork_rank)
+                    SELECT f1.forking_repo_id,f1.forking_repo_url,f2.forked_repo_id,f1.forked_at,f2.fork_rank+f1.fork_rank
+                        FROM forks f1
+                        INNER JOIN forks f2
+                        ON f1.forked_repo_id=f2.forking_repo_id
+                ON CONFLICT DO NOTHING
+                ;
+                """
             )
             rowcount = self.db.cursor.rowcount
         else:
             self.db.cursor.execute(
                 """
-				INSERT OR IGNORE INTO forks(forking_repo_id,forking_repo_url,forked_repo_id,forked_at,fork_rank)
-					SELECT f1.forking_repo_id,f1.forking_repo_url,f2.forked_repo_id,f1.forked_at,f2.fork_rank+f1.fork_rank
-						FROM forks f1
-						INNER JOIN forks f2
-						ON f1.forked_repo_id=f2.forking_repo_id
+                INSERT OR IGNORE INTO forks(forking_repo_id,forking_repo_url,forked_repo_id,forked_at,fork_rank)
+                    SELECT f1.forking_repo_id,f1.forking_repo_url,f2.forked_repo_id,f1.forked_at,f2.fork_rank+f1.fork_rank
+                        FROM forks f1
+                        INNER JOIN forks f2
+                        ON f1.forked_repo_id=f2.forking_repo_id
 
-				;
-				"""
+                ;
+                """
             )
             rowcount = self.db.cursor.rowcount
         if rowcount > 0:
@@ -1300,50 +1303,50 @@ class FollowersFiller(GithubFiller):
         self.db.connection.commit()
 
     # def fill_followers(self,login_list=None,workers=1,in_thread=False,time_delay=24*3600):
-    # 	'''
-    # 	Getting followers for github logins. Avoiding by default logins which already have a value from less than time_delay seconds ago.
-    # 	'''
+    #   '''
+    #   Getting followers for github logins. Avoiding by default logins which already have a value from less than time_delay seconds ago.
+    #   '''
 
-    # 	option = 'logins'
+    #   option = 'logins'
 
-    # 	if login_list is None:
-    # 		login_list = self.db.get_user_list(option=option,time_delay=time_delay)
+    #   if login_list is None:
+    #       login_list = self.db.get_user_list(option=option,time_delay=time_delay)
 
-    # 	if workers == 1:
-    # 		requester_gen = self.get_requester()
-    # 		if in_thread:
-    # 			db = self.db.copy()
-    # 		else:
-    # 			db = self.db
-    # 		for login in login_list:
-    # 			self.logger.info('Filling followers for login {}'.format(login))
-    # 			requester = next(requester_gen)
-    # 			try:
-    # 				user_apiobj = requester.get_user('{}'.format(login))
-    # 			except github.GithubException:
-    # 				self.logger.info('No such user: {}'.format(login))
-    # 			else:
-    # 				try:
-    # 					followers = user_apiobj.followers
-    # 					self.logger.info('Login {} has {} followers'.format(login,followers))
-    # 				except github.GithubException:
-    # 					self.logger.info('No followers info available for login {}, uncompletable object error'.format(login))
-    # 					followers = None
+    #   if workers == 1:
+    #       requester_gen = self.get_requester()
+    #       if in_thread:
+    #           db = self.db.copy()
+    #       else:
+    #           db = self.db
+    #       for login in login_list:
+    #           self.logger.info('Filling followers for login {}'.format(login))
+    #           requester = next(requester_gen)
+    #           try:
+    #               user_apiobj = requester.get_user('{}'.format(login))
+    #           except github.GithubException:
+    #               self.logger.info('No such user: {}'.format(login))
+    #           else:
+    #               try:
+    #                   followers = user_apiobj.followers
+    #                   self.logger.info('Login {} has {} followers'.format(login,followers))
+    #               except github.GithubException:
+    #                   self.logger.info('No followers info available for login {}, uncompletable object error'.format(login))
+    #                   followers = None
 
-    # 				db.fill_followers(followers_info_list=[(login,followers)])
+    #               db.fill_followers(followers_info_list=[(login,followers)])
 
-    # 		if in_thread:
-    # 			db.connection.close()
-    # 			del db
-    # 	else:
-    # 		with ThreadPoolExecutor(max_workers=workers) as executor:
-    # 			futures = []
-    # 			for login in login_list:
-    # 				futures.append(executor.submit(self.fill_followers,login_list=[login],workers=1,in_thread=True))
-    # 			# for future in concurrent.futures.as_completed(futures):
-    # 			# 	pass
-    # 			for future in futures:
-    # 				future.result()
+    #       if in_thread:
+    #           db.connection.close()
+    #           del db
+    #   else:
+    #       with ThreadPoolExecutor(max_workers=workers) as executor:
+    #           futures = []
+    #           for login in login_list:
+    #               futures.append(executor.submit(self.fill_followers,login_list=[login],workers=1,in_thread=True))
+    #           # for future in concurrent.futures.as_completed(futures):
+    #           #   pass
+    #           for future in futures:
+    #               future.result()
 
     def prepare(self):
         GithubFiller.prepare(self)
@@ -1352,26 +1355,26 @@ class FollowersFiller(GithubFiller):
             if self.force:
                 self.db.cursor.execute(
                     """
-					SELECT i.id,i.identity,i.identity_type_id FROM identities i
-					INNER JOIN identity_types it
-					ON it.id=i.identity_type_id AND it.name='github_login'
-					ORDER BY i.identity;
-					"""
+                    SELECT i.id,i.identity,i.identity_type_id FROM identities i
+                    INNER JOIN identity_types it
+                    ON it.id=i.identity_type_id AND it.name='github_login'
+                    ORDER BY i.identity;
+                    """
                 )
             else:
                 self.db.cursor.execute(
                     """
-					SELECT i.id,i.identity,i.identity_type_id FROM identities i
-					INNER JOIN identity_types it
-					ON it.id=i.identity_type_id AND it.name='github_login'
-					EXCEPT
-					SELECT i.id,i.identity,i.identity_type_id FROM identities i
-					INNER JOIN identity_types it
-					ON it.id=i.identity_type_id AND it.name='github_login'
-					INNER JOIN table_updates tu
-					ON tu.success AND tu.identity_id=i.id AND tu.table_name='followers'
-					ORDER BY identity;
-					"""
+                    SELECT i.id,i.identity,i.identity_type_id FROM identities i
+                    INNER JOIN identity_types it
+                    ON it.id=i.identity_type_id AND it.name='github_login'
+                    EXCEPT
+                    SELECT i.id,i.identity,i.identity_type_id FROM identities i
+                    INNER JOIN identity_types it
+                    ON it.id=i.identity_type_id AND it.name='github_login'
+                    INNER JOIN table_updates tu
+                    ON tu.success AND tu.identity_id=i.id AND tu.table_name='followers'
+                    ORDER BY identity;
+                    """
                 )
             self.login_list = list(self.db.cursor.fetchall())
         self.db.connection.commit()
@@ -1474,7 +1477,7 @@ class FollowersFiller(GithubFiller):
                                 int(nb_followers / self.per_page)
                             ) + len(sg_list):
                                 # if db.db_type == 'sqlite' and in_thread:
-                                # 	time.sleep(1+random.random()) # to avoid database locked issues, and smooth a bit concurrency
+                                #   time.sleep(1+random.random()) # to avoid database locked issues, and smooth a bit concurrency
                                 self.insert_followers(
                                     db=db,
                                     followers_list=[
@@ -1539,7 +1542,7 @@ class FollowersFiller(GithubFiller):
                         )
                     )
                 # for future in concurrent.futures.as_completed(futures):
-                # 	pass
+                #   pass
                 for future in futures:
                     future.result()
 
@@ -1554,14 +1557,14 @@ class FollowersFiller(GithubFiller):
             extras.execute_batch(
                 db.cursor,
                 """
-				INSERT INTO followers(follower_identity_type_id,follower_login,follower_id,followee_id)
-				VALUES(%s,
-						%s,
-						(SELECT id FROM identities WHERE identity=%s AND identity_type_id=%s),
-						%s
-					)
-				ON CONFLICT DO NOTHING
-				;""",
+                INSERT INTO followers(follower_identity_type_id,follower_login,follower_id,followee_id)
+                VALUES(%s,
+                        %s,
+                        (SELECT id FROM identities WHERE identity=%s AND identity_type_id=%s),
+                        %s
+                    )
+                ON CONFLICT DO NOTHING
+                ;""",
                 (
                     (
                         f["identity_type_id"],
@@ -1576,13 +1579,13 @@ class FollowersFiller(GithubFiller):
         else:
             db.cursor.executemany(
                 """
-				INSERT OR IGNORE INTO followers(follower_identity_type_id,follower_login,follower_id,followee_id)
-				VALUES(?,
-						?,
-						(SELECT id FROM identities WHERE identity=? AND identity_type_id=?),
-						?
-					)
-				;""",
+                INSERT OR IGNORE INTO followers(follower_identity_type_id,follower_login,follower_id,followee_id)
+                VALUES(?,
+                        ?,
+                        (SELECT id FROM identities WHERE identity=? AND identity_type_id=?),
+                        ?
+                    )
+                ;""",
                 (
                     (
                         f["identity_type_id"],

@@ -169,6 +169,9 @@ class Requester(object):
             sec_limit_detected = False
             while not result_found:
                 try:
+                    # self.logger.info(
+                    #     self.format_query(gql_query=gql_query, params=params)
+                    # )
                     result = self.client.execute(
                         gql.gql(self.format_query(gql_query=gql_query, params=params))
                     )
@@ -243,9 +246,10 @@ Original error message: {}""".format(
                 else:
                     self.logger.info(
                         "Exception catched, {} :{}, result: {}".format(
-                            e.__class__, e, result
+                            e.__class__, e, result, e.errors
                         )
                     )
+                    result["errors"] = e.errors
             else:
                 raise
         self.remaining = result["rateLimit"]["remaining"]
@@ -318,7 +322,7 @@ class GHGQLFiller(github_rest.GithubFiller):
         max_page_size=100,
         secondary_page_size=None,
         other_update_names=None,
-        max_reexec=3,
+        max_reexec=5,
         **kwargs,
     ):
         if requester_class is None:
@@ -647,8 +651,16 @@ class GHGQLFiller(github_rest.GithubFiller):
 
                     # catch non existent
                     if (
-                        self.queried_obj == "repo" and result["repository"] is None
-                    ) or (self.queried_obj == "user" and result["user"] is None):
+                        "errors" in result.keys()
+                        and result["errors"][0]["type"] == "NOT_FOUND"
+                        and (
+                            (
+                                self.queried_obj == "repo"
+                                and result["repository"] is None
+                            )
+                            or (self.queried_obj == "user" and result["user"] is None)
+                        )
+                    ):
                         self.logger.info(
                             "No such {}: {} ({}/{})".format(
                                 self.queried_obj, elt_name, elt_nb, total_elt
@@ -2743,7 +2755,7 @@ class LoginsGQLFiller(GHGQLFiller):
                             (SELECT iii.id,iii.identity,iii.identity_type_id FROM identities iii
                             WHERE (SELECT iiii.id FROM identities iiii
                                 INNER JOIN identity_types iiiit
-                                ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name=%(target_identity_type)s) IS NULL) AS ii
+                                ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name=%(target_identity_type)s LIMIT 1) IS NULL) AS ii
                             LEFT JOIN table_updates tu
                             ON tu.identity_id=ii.id AND tu.table_name='login'
                             GROUP BY ii.id,ii.identity,ii.identity_type_id,tu.identity_id
@@ -2850,7 +2862,7 @@ class LoginsGQLFiller(GHGQLFiller):
                             (SELECT iii.id,iii.identity,iii.identity_type_id FROM identities iii
                             WHERE (SELECT iiii.id FROM identities iiii
                                 INNER JOIN identity_types iiiit
-                                ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name=:target_identity_type) IS NULL) AS ii
+                                ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name=:target_identity_type LIMIT 1) IS NULL) AS ii
                             LEFT JOIN table_updates tu
                             ON tu.identity_id=ii.id AND tu.table_name='login'
                             GROUP BY ii.id,ii.identity,ii.identity_type_id,tu.identity_id
@@ -3004,7 +3016,7 @@ class RandomCommitLoginsGQLFiller(LoginsGQLFiller):
                             (SELECT iii.id,iii.identity,iii.identity_type_id FROM identities iii
                             WHERE (SELECT iiii.id FROM identities iiii
                                 INNER JOIN identity_types iiiit
-                                ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name=%(id_type)s) IS NULL) AS ii
+                                ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name=%(id_type)s LIMIT 1) IS NULL) AS ii
                             LEFT JOIN table_updates tu
                             ON tu.identity_id=ii.id AND tu.table_name='login'
                             GROUP BY ii.id,ii.identity,ii.identity_type_id,tu.identity_id
@@ -3039,7 +3051,7 @@ class RandomCommitLoginsGQLFiller(LoginsGQLFiller):
                             (SELECT iii.id,iii.identity,iii.identity_type_id FROM identities iii
                             WHERE (SELECT iiii.id FROM identities iiii
                                 INNER JOIN identity_types iiiit
-                                ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name=:id_type) IS NULL) AS ii
+                                ON iiii.user_id=iii.user_id AND iiiit.id=iiii.identity_type_id AND iiiit.name=:id_type LIMIT 1) IS NULL) AS ii
                             LEFT JOIN table_updates tu
                             ON tu.identity_id=ii.id AND tu.table_name='login'
                             GROUP BY ii.id,ii.identity,ii.identity_type_id,tu.identity_id
@@ -5289,9 +5301,9 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
                 d["merged_at"] = e["mergedAt"]
                 d["closed_at"] = e["closedAt"]
                 d["pullrequest_number"] = e["number"]
-                d["pullrequest_title"] = e["title"]
+                d["pullrequest_title"] = e["title"].replace("\x00", "\uFFFD")
                 d["pullrequest_gql_id"] = e["id"]
-                d["pullrequest_text"] = e["bodyText"]
+                d["pullrequest_text"] = e["bodyText"].replace("\x00", "\uFFFD")
 
                 d["reactions_pageinfo"] = e["reactions"]["pageInfo"]
                 d["labels_pageinfo"] = e["labels"]["pageInfo"]
@@ -5385,7 +5397,9 @@ class CompletePullRequestsGQLFiller(PullRequestsGQLFiller):
                         r["pullrequest_gql_id"] = d["pullrequest_gql_id"]
                         try:
                             r["created_at"] = ee["createdAt"]
-                            r["pullrequest_comment_text"] = ee["bodyText"]
+                            r["pullrequest_comment_text"] = ee["bodyText"].replace(
+                                "\x00", "\uFFFD"
+                            )
                             r["pullrequest_comment_id"] = ee["databaseId"]
                             r["pullrequest_comment_gql_id"] = ee["id"]
                             r["comment_reactions_pageinfo"] = ee["reactions"][
@@ -7680,6 +7694,7 @@ class UserLanguagesGQLFiller(SingleQueryUserLanguagesGQLFiller):
     """
 
     def __init__(self, start=None, end=None, **kwargs):
+        SingleQueryUserLanguagesGQLFiller.__init__(self, **kwargs)
         if isinstance(end, str):
             self.end = dateutil.parser.parse(end)
         else:
@@ -7688,7 +7703,6 @@ class UserLanguagesGQLFiller(SingleQueryUserLanguagesGQLFiller):
             self.start = dateutil.parser.parse(start)
         else:
             self.start = start
-        SingleQueryUserLanguagesGQLFiller.__init__(self, **kwargs)
 
     def get_startend_attr(self, end, start):
         """
@@ -7730,10 +7744,15 @@ class UserLanguagesGQLFiller(SingleQueryUserLanguagesGQLFiller):
                 self.get_startend_attr(end=current_max, start=current_min)
             )  # case current_min = start
 
-        query = "query {{"
+        query = """query {{
+                        user(login: "{user_login}")
+                            {{
+                            login
+                            }}
+                    """
         for i, tw in enumerate(tw_info):
             query += self.query_string_element(
-                query_name=("q{}".format(i) if i > 0 else "user"), time_window_info=tw
+                query_name=(f"q{i}"), time_window_info=tw
             )
         query += " }}"
 
@@ -7808,3 +7827,316 @@ class UserLanguagesGQLFiller(SingleQueryUserLanguagesGQLFiller):
                     [e["node"]["name"] for e in r["repository"]["languages"]["edges"]]
                 )
         return len(ans)
+
+
+class UserCContribsGQLFiller(UserLanguagesGQLFiller):
+    contrib_type = "commit"
+
+    def __init__(self, **kwargs):
+        UserLanguagesGQLFiller.__init__(self, **kwargs)
+        self.items_name = f"user_{self.contrib_type}_contributions"
+
+    def prepare(self):
+        UserLanguagesGQLFiller.prepare(self)
+        self.set_extra_tables()
+
+    def set_extra_tables(self):
+        self.db.cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_contributions(
+                identity_id BIGINT REFERENCES identities(id) ON DELETE CASCADE,
+                repo_id BIGINT REFERENCES repositories(id) ON DELETE CASCADE,
+                repo_source BIGINT REFERENCES sources(id) ON DELETE CASCADE,
+                repo_owner TEXT NOT NULL,
+                repo_name TEXT NOT NULL,
+                contrib_type TEXT,
+                contrib_count BIGINT,
+                year INT,
+                PRIMARY KEY (identity_id,repo_source,repo_owner,repo_name,contrib_type)
+                );
+            """
+        )
+
+    def get_startend_attr(self, end, start):
+        """
+        returns a string to be put as argument of contributionsCollection in the GraphQL queries for time window selection
+        """
+
+        if start is None:
+            start = datetime.datetime(2008, 1, 1)
+        start_str = 'from: "{}"'.format(start.strftime("%Y-%m-%dT%H:%M:%SZ"))
+        if end is None:
+            end = datetime.datetime(current_year + 1, 1, 1)
+        end_str = 'to: "{}"'.format(end.strftime("%Y-%m-%dT%H:%M:%SZ"))
+        return f"({start_str}, {end_str})"
+
+    def query_string(self, **kwargs):
+        """
+        In subclasses this has to be implemented
+        output: python-formatable string representing the graphql query
+        """
+        if self.start is None:
+            start = datetime.datetime(2008, 1, 1)
+        else:
+            start = self.start
+        if self.end is None:
+            current_year = datetime.datetime.now().year
+            end = datetime.datetime(current_year + 1, 1, 1)
+        else:
+            # end = datetime.datetime(self.end.year, 1, 1)
+            # if not end == self.end:
+            #     end = datetime.datetime(self.end.year + 1, 1, 1)
+            end = self.end
+
+        tw_info = []
+        delta = relativedelta(years=1)
+        current_max = end
+        current_min = max(end - delta, start)
+        while current_min > start:
+            tw_info.append(self.get_startend_attr(end=current_max, start=current_min))
+            current_max = current_min
+            current_min = max(current_max - delta, start)
+        tw_info.append(
+            self.get_startend_attr(end=current_max, start=current_min)
+        )  # case current_min = start
+
+        query = "query {{"
+        for i, tw in enumerate(tw_info):
+            query += self.query_string_element(
+                query_name=("q{}".format(i) if i > 0 else "user"), time_window_info=tw
+            )
+        query += " }}"
+        return query
+
+    def query_string_element(self, query_name, time_window_info, **kwargs):
+        return (
+            """{query_name}:user(login: "{user_login}") {{
+                            login
+                            contributionsCollection{time_window_info} {{
+                                total{contrib_type_up}Contributions
+                                startedAt
+                                endedAt
+                                {contrib_type}ContributionsByRepository(maxRepositories:100) {{
+                                    contributions{{
+                                        totalCount
+                                        }}
+                                    repository{{
+                                        nameWithOwner
+                                        }}
+                                    }}
+                                }}
+                            }}
+""".replace(
+                "{query_name}", query_name
+            )
+            .replace("{time_window_info}", time_window_info)
+            .replace("{contrib_type}", self.contrib_type)
+            .replace(
+                "{contrib_type_up}",
+                f"{self.contrib_type[0].upper()}{self.contrib_type[1:]}",
+            )
+        )  # Not using classic format for clarity: {{ }} would become {{{{ }}}}
+
+    def get_nb_items(self, query_result):
+        """
+        In subclasses this has to be implemented
+        output: nb_items or None if not relevant
+        """
+        ans = 0
+        for qname, q in query_result.items():
+            if qname == "rateLimit" or q is None:
+                continue
+            for e in q["contributionsCollection"][
+                f"{self.contrib_type}ContributionsByRepository"
+            ]:
+                key = f"total{f'{self.contrib_type[0].upper()}{self.contrib_type[1:]}'}Contributions"
+                if key in e.keys():
+                    ans += e[key]
+        return ans
+
+    def parse_query_result(self, query_result, identity_id, identity_type_id, **kwargs):
+        """
+        In subclasses this has to be implemented
+        output: [ {'user_identity':identity_id,'language':languagename,'size':size,'identity_type_id':it_id,'user_login':user_login} , ...]
+        """
+        ans = []
+
+        for qname, q in query_result.items():
+            if qname == "rateLimit" or q is None:
+                continue
+            ans += self.single_parse_query_result(
+                query_result={"user": q},
+                identity_id=identity_id,
+                identity_type_id=identity_type_id,
+                **kwargs,
+            )
+        return ans
+
+    def single_parse_query_result(
+        self, query_result, identity_id, identity_type_id, **kwargs
+    ):
+        """
+        In subclasses this has to be implemented
+        output: [ {
+            'user_identity':identity_id,
+            'contrib_type':text,
+            'contrib_count':int,
+            'identity_type_id':it_id,
+            'user_login':user_login,
+            'repo_owner':text,
+            'repo_name':text,
+            'year':int
+            } , ...]
+        """
+        ans = []
+        user_login = query_result["user"]["login"]
+        year = int(query_result["user"]["contributionsCollection"]["startedAt"][:4])
+        for e in query_result["user"]["contributionsCollection"][
+            f"{self.contrib_type}ContributionsByRepository"
+        ]:
+            try:
+                repo_owner, repo_name = e["repository"]["nameWithOwner"].split("/")
+                contrib_count = e["contributions"]["totalCount"]
+                ans.append(
+                    {
+                        "user_identity": identity_id,
+                        "contrib_type": self.contrib_type,
+                        "contrib_count": contrib_count,
+                        "identity_type_id": identity_type_id,
+                        "user_login": user_login,
+                        "repo_owner": repo_owner,
+                        "repo_name": repo_name,
+                        "year": year,
+                    }
+                )
+            except (KeyError, TypeError) as err:
+                self.logger.info(
+                    f"KeyError when parsing {self.contrib_type} contributions for {user_login}: {err}"
+                )
+
+        return ans
+
+    def insert_items(self, items_list, commit=True, db=None):
+        """
+        In subclasses this has to be implemented
+        inserts results in the DB
+        """
+        if db is None:
+            db = self.db
+        if db.db_type == "postgres":
+            extras.execute_batch(
+                db.cursor,
+                """
+                WITH
+                repoid_q AS (SELECT s.id AS sid,r.id as rid 
+                    FROM sources s
+                    LEFT OUTER JOIN repositories r
+                    ON s.id=r.source
+                    AND r.owner=%(repo_owner)s
+                    AND r.name=%(repo_name)s
+                    WHERE s.name='GitHub')
+                INSERT INTO user_contributions(
+                    identity_id,
+                    repo_id,
+                    repo_source,
+                    repo_owner,
+                    repo_name,
+                    contrib_type,
+                    contrib_count,
+                    year
+                    )
+                SELECT %(identity_id)s,
+                        r.rid,
+                        r.sid,
+                        %(repo_owner)s, 
+                        %(repo_name)s,
+                        %(contrib_type)s, 
+                        %(contrib_count)s,
+                        %(year)s
+                    FROM repoid_q r
+
+                ON CONFLICT DO NOTHING
+                ;""",
+                (
+                    dict(
+                        user_login=s["user_login"],
+                        identity_id=s["user_identity"],
+                        repo_name=s["repo_name"],
+                        repo_owner=s["repo_owner"],
+                        contrib_type=s["contrib_type"],
+                        contrib_count=s["contrib_count"],
+                        year=s["year"],
+                    )
+                    for s in items_list
+                ),
+            )
+        else:
+            db.cursor.executemany(
+                """
+                WITH
+                repoid_q AS (SELECT s.id AS sid,r.id as rid 
+                    FROM sources s
+                    LEFT OUTER JOIN repositories r
+                    ON s.id=r.source
+                    AND r.owner=:repo_owner
+                    AND r.name=:repo_name
+                    WHERE s.name='GitHub')
+                INSERT OR IGNORE INTO user_contributions(
+                    identity_id,
+                    repo_id,
+                    repo_source,
+                    repo_owner,
+                    repo_name,
+                    contrib_type,
+                    contrib_count,
+                    year
+                    )
+                SELECT :identity_id,
+                        r.rid,
+                        r.sid,
+                        :repo_owner,
+                        :repo_name,
+                        :contrib_type,
+                        :contrib_count,
+                        :year
+                    FROM repoid_q r
+                ;""",
+                (
+                    dict(
+                        user_login=s["user_identity"],
+                        identity_id=s["user_identity"],
+                        repo_name=s["repo_name"],
+                        repo_owner=s["repo_owner"],
+                        contrib_type=s["contrib_type"],
+                        contrib_count=s["contrib_count"],
+                        year=s["year"],
+                    )
+                    for s in items_list
+                ),
+            )
+
+        if commit:
+            db.connection.commit()
+
+
+class UserIContribsGQLFiller(UserCContribsGQLFiller):
+    contrib_type = "issue"
+
+
+class UserPRContribsGQLFiller(UserCContribsGQLFiller):
+    contrib_type = "pullRequest"
+
+
+class UserPRContribsGQLFiller(UserCContribsGQLFiller):
+    contrib_type = "pullRequestReview"
+
+
+class UserAllContribsGQLFiller(fillers.Filler):
+    def __init__(self, extra_args=dict(), **kwargs):
+        self.kwargs = copy.deepcopy(extra_args)
+        fillers.Filler.__init__(self, **kwargs)
+
+    def after_insert(self):
+        self.db.add_filler(UserCContribsGQLFiller(**self.kwargs))
+        self.db.add_filler(UserIContribsGQLFiller(**self.kwargs))
+        self.db.add_filler(UserPRContribsGQLFiller(**self.kwargs))

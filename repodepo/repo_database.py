@@ -274,15 +274,15 @@ class Database(object):
         if self.db_type == "postgres":
             self.cursor.execute(
                 """SELECT 1 FROM information_schema.columns c
-								WHERE c.table_schema = (SELECT current_schema())
-								AND c.table_name='_dbinfo'
-								LIMIT 1 ;"""
+                                WHERE c.table_schema = (SELECT current_schema())
+                                AND c.table_name='_dbinfo'
+                                LIMIT 1 ;"""
             )
         else:
             self.cursor.execute(
                 """SELECT 1 FROM sqlite_master
-				WHERE type='table' AND name='_dbinfo';
-				"""
+                WHERE type='table' AND name='_dbinfo';
+                """
             )
         ans = list(self.cursor.fetchall())
         if len(ans) == 0:
@@ -308,7 +308,7 @@ class Database(object):
         logger.info("Creating database ({}) table and indexes".format(self.db_type))
         if self.db_type == "sqlite":
             # with open(os.path.join(os.path.dirname(__file__),'initscript_sqlite.sql'),'r') as f:
-            # 	self.DB_INIT = f.read()
+            #   self.DB_INIT = f.read()
             for q in self.DB_INIT.split(";")[:-1]:
                 self.cursor.execute(q)
 
@@ -323,7 +323,7 @@ class Database(object):
 
         elif self.db_type == "postgres":
             # with open(os.path.join(os.path.dirname(__file__),'initscript_postgres.sql'),'r') as f:
-            # 	self.DB_INIT = f.read()
+            #   self.DB_INIT = f.read()
             self.cursor.execute(self.DB_INIT)
             self.cursor.execute(
                 """INSERT INTO _dbinfo(info_type,info_content) VALUES('uuid',%s) ON CONFLICT (info_type) DO NOTHING ;""",
@@ -480,6 +480,7 @@ class Database(object):
                                         f"Error during execution of filler {f.name}, triggering reexecution. {e.__class__}: {e}"
                                     )
                                     f.reexec += 1
+                                    f.reexec_modif()
             else:
                 self.logger.info(
                     "Already filled with filler {}, skipping".format(f.name)
@@ -503,19 +504,19 @@ class Database(object):
         if self.db_type == "postgres":
             self.cursor.execute(
                 """ INSERT INTO repositories(source,owner,name,cloned)
-				 VALUES((SELECT id FROM sources WHERE name=%s),
-								%s,
-								%s,
-								%s) ON CONFLICT DO NOTHING; """,
+                 VALUES((SELECT id FROM sources WHERE name=%s),
+                                %s,
+                                %s,
+                                %s) ON CONFLICT DO NOTHING; """,
                 (source, owner, repo, cloned),
             )
         else:
             self.cursor.execute(
                 """ INSERT OR IGNORE INTO repositories(source,owner,name,cloned)
-				 VALUES((SELECT id FROM sources WHERE name=?),
-								?,
-								?,
-								?);""",
+                 VALUES((SELECT id FROM sources WHERE name=?),
+                                ?,
+                                ?,
+                                ?);""",
                 (source, owner, repo, cloned),
             )
         self.connection.commit()
@@ -527,13 +528,13 @@ class Database(object):
         if self.db_type == "postgres":
             self.cursor.execute(
                 """ INSERT INTO sources(name,url_root)
-				 SELECT %(source)s,%(url_root)s WHERE NOT EXISTS (SELECT 1 FROM sources WHERE name=%(source)s) ON CONFLICT DO NOTHING;""",
+                 SELECT %(source)s,%(url_root)s WHERE NOT EXISTS (SELECT 1 FROM sources WHERE name=%(source)s) ON CONFLICT DO NOTHING;""",
                 {"source": source, "url_root": source_urlroot},
             )
         else:
             self.cursor.execute(
                 """ INSERT OR IGNORE INTO sources(name,url_root)
-				 SELECT :source,:url_root WHERE NOT EXISTS (SELECT 1 FROM sources WHERE name=:source);""",
+                 SELECT :source,:url_root WHERE NOT EXISTS (SELECT 1 FROM sources WHERE name=:source);""",
                 {"source": source, "url_root": source_urlroot},
             )
         self.connection.commit()
@@ -554,9 +555,9 @@ class Database(object):
             extras.execute_batch(
                 self.cursor,
                 """ INSERT INTO urls(source,source_root,url)
-				 VALUES((SELECT id FROM sources WHERE name=%s),
-				 				%s,
-								%s) ON CONFLICT(url) DO NOTHING;""",
+                 VALUES((SELECT id FROM sources WHERE name=%s),
+                                %s,
+                                %s) ON CONFLICT(url) DO NOTHING;""",
                 (
                     (source, source_root_id, url_cleaned)
                     for url, url_cleaned, source_root_id in url_list
@@ -601,10 +602,10 @@ class Database(object):
             extras.execute_batch(
                 self.cursor,
                 """ INSERT INTO urls(source,source_root,url,cleaned_url)
-				 VALUES((SELECT id FROM sources WHERE name=%s),
-				 				%s,
-								%s,(SELECT id FROM urls WHERE url=%s)) ON CONFLICT(url) DO UPDATE
-								SET cleaned_url=excluded.cleaned_url;""",
+                 VALUES((SELECT id FROM sources WHERE name=%s),
+                                %s,
+                                %s,(SELECT id FROM urls WHERE url=%s)) ON CONFLICT(url) DO UPDATE
+                                SET cleaned_url=excluded.cleaned_url;""",
                 (
                     (source, source_root_id, url, url_cleaned)
                     for url, url_cleaned, source_root_id in url_list
@@ -613,9 +614,9 @@ class Database(object):
         else:
             self.cursor.executemany(
                 """ INSERT OR IGNORE INTO urls(source,source_root,url)
-				 VALUES((SELECT id FROM sources WHERE name=?),
-				 				?,
-								?);""",
+                 VALUES((SELECT id FROM sources WHERE name=?),
+                                ?,
+                                ?);""",
                 (
                     (source, source_root_id, url_cleaned)
                     for url, url_cleaned, source_root_id in url_list
@@ -656,9 +657,9 @@ class Database(object):
             )
             self.cursor.executemany(
                 """ INSERT OR REPLACE INTO urls(source,source_root,url,cleaned_url)
-				 VALUES((SELECT id FROM sources WHERE name=?),
-				 				?,
-								?,(SELECT id FROM urls WHERE url=?));""",
+                 VALUES((SELECT id FROM sources WHERE name=?),
+                                ?,
+                                ?,(SELECT id FROM urls WHERE url=?));""",
                 (
                     (source, source_root_id, url, url_cleaned)
                     for url, url_cleaned, source_root_id in url_list
@@ -678,29 +679,29 @@ class Database(object):
         else:
             self.register_urls(source=source, url_list=[(repo_url, *clean_info)])
 
-    # 	if self.db_type == 'postgres':
-    # 		self.cursor.execute(''' INSERT INTO urls(source,repo_url,repo_id)
-    # 			 VALUES((SELECT id FROM sources WHERE name=%s),
-    # 							%s,%s) ON CONFLICT DO NOTHING;''',(source,repo_url,repo_id))
-    # 	else:
-    # 		self.cursor.execute(''' INSERT OR IGNORE INTO urls(source,repo_url,repo_id)
-    # 			 VALUES((SELECT id FROM sources WHERE name=?),
-    # 							?,?);''',(source,repo_url,repo_id))
-    # 	self.connection.commit()
+    #   if self.db_type == 'postgres':
+    #       self.cursor.execute(''' INSERT INTO urls(source,repo_url,repo_id)
+    #            VALUES((SELECT id FROM sources WHERE name=%s),
+    #                           %s,%s) ON CONFLICT DO NOTHING;''',(source,repo_url,repo_id))
+    #   else:
+    #       self.cursor.execute(''' INSERT OR IGNORE INTO urls(source,repo_url,repo_id)
+    #            VALUES((SELECT id FROM sources WHERE name=?),
+    #                           ?,?);''',(source,repo_url,repo_id))
+    #   self.connection.commit()
 
     # def update_url(self,source,repo_url,repo_id):
-    # 	'''
-    # 	Updating a URL in the database
-    # 	'''
-    # 	if self.db_type == 'postgres':
-    # 		self.cursor.execute(''' UPDATE urls SET repo_id=%s WHERE
-    # 			 source=(SELECT id FROM sources WHERE name=%s
-    # 							AND repo_url=%s);''',(repo_id,source,repo_url))
-    # 	else:
-    # 		self.cursor.execute(''' UPDATE urls SET repo_id=? WHERE
-    # 			 source=(SELECT id FROM sources WHERE name=?
-    # 							AND repo_url=?);''',(repo_id,source,repo_url))
-    # 	self.connection.commit()
+    #   '''
+    #   Updating a URL in the database
+    #   '''
+    #   if self.db_type == 'postgres':
+    #       self.cursor.execute(''' UPDATE urls SET repo_id=%s WHERE
+    #            source=(SELECT id FROM sources WHERE name=%s
+    #                           AND repo_url=%s);''',(repo_id,source,repo_url))
+    #   else:
+    #       self.cursor.execute(''' UPDATE urls SET repo_id=? WHERE
+    #            source=(SELECT id FROM sources WHERE name=?
+    #                           AND repo_url=?);''',(repo_id,source,repo_url))
+    #   self.connection.commit()
 
     def register_repositories(self, repo_info_list):
         """
@@ -711,19 +712,19 @@ class Database(object):
             extras.execute_batch(
                 self.cursor,
                 """
-				INSERT INTO repositories(source,owner,name,url_id) VALUES(
-				%s,%s,%s,(SELECT id FROM urls WHERE url=%s)
-				) ON CONFLICT DO NOTHING
-				;""",
+                INSERT INTO repositories(source,owner,name,url_id) VALUES(
+                %s,%s,%s,(SELECT id FROM urls WHERE url=%s)
+                ) ON CONFLICT DO NOTHING
+                ;""",
                 repo_info_list,
             )
         else:
             self.cursor.executemany(
                 """
-				INSERT OR IGNORE INTO repositories(source,owner,name,url_id) VALUES(
-				?,?,?,(SELECT id FROM urls WHERE url=?)
-				)
-				;""",
+                INSERT OR IGNORE INTO repositories(source,owner,name,url_id) VALUES(
+                ?,?,?,(SELECT id FROM urls WHERE url=?)
+                )
+                ;""",
                 repo_info_list,
             )
         self.connection.commit()
@@ -744,14 +745,14 @@ class Database(object):
             extras.execute_batch(
                 self.cursor,
                 """
-				INSERT INTO packages(repo_id,source_id,insource_id,name,created_at,url_id,archived_at)
-				VALUES(
-					(SELECT r.id FROM urls u
-						INNER JOIN repositories r ON r.url_id=u.cleaned_url
-						AND u.url=%(url)s),
-				%(source)s,%(pid)s,%(name)s,%(c_at)s,(SELECT id FROM urls WHERE url=%(url)s),%(a_at)s)
-				ON CONFLICT DO NOTHING
-				;""",
+                INSERT INTO packages(repo_id,source_id,insource_id,name,created_at,url_id,archived_at)
+                VALUES(
+                    (SELECT r.id FROM urls u
+                        INNER JOIN repositories r ON r.url_id=u.cleaned_url
+                        AND u.url=%(url)s),
+                %(source)s,%(pid)s,%(name)s,%(c_at)s,(SELECT id FROM urls WHERE url=%(url)s),%(a_at)s)
+                ON CONFLICT DO NOTHING
+                ;""",
                 (
                     {
                         "pid": pid,
@@ -768,13 +769,13 @@ class Database(object):
                 extras.execute_batch(
                     self.cursor,
                     """
-					UPDATE packages SET repo_id=
-						(SELECT r.id FROM urls u
-							INNER JOIN repositories r ON r.url_id=u.cleaned_url
-							AND u.url=%(url)s),
-						url_id=(SELECT id FROM urls WHERE url=%(url)s)
-					WHERE (url_id IS NULL OR repo_id IS NULL) AND insource_id=%(pid)s
-				;""",
+                    UPDATE packages SET repo_id=
+                        (SELECT r.id FROM urls u
+                            INNER JOIN repositories r ON r.url_id=u.cleaned_url
+                            AND u.url=%(url)s),
+                        url_id=(SELECT id FROM urls WHERE url=%(url)s)
+                    WHERE (url_id IS NULL OR repo_id IS NULL) AND insource_id=%(pid)s
+                ;""",
                     (
                         {
                             "pid": pid,
@@ -791,12 +792,12 @@ class Database(object):
         else:
             self.cursor.executemany(
                 """
-				INSERT OR IGNORE INTO packages(repo_id,source_id,insource_id,name,created_at,url_id,archived_at)
-				VALUES(
-					(SELECT r.id FROM urls u
-						INNER JOIN repositories r ON r.url_id=u.cleaned_url
-						AND u.url=:url),:source,:pid,:name,:c_at,(SELECT id FROM urls WHERE url=:url),:a_at)
-				;""",
+                INSERT OR IGNORE INTO packages(repo_id,source_id,insource_id,name,created_at,url_id,archived_at)
+                VALUES(
+                    (SELECT r.id FROM urls u
+                        INNER JOIN repositories r ON r.url_id=u.cleaned_url
+                        AND u.url=:url),:source,:pid,:name,:c_at,(SELECT id FROM urls WHERE url=:url),:a_at)
+                ;""",
                 (
                     {
                         "pid": pid,
@@ -812,13 +813,13 @@ class Database(object):
             if update_urls:
                 self.cursor.executemany(
                     """
-					UPDATE packages SET repo_id=
-						(SELECT r.id FROM urls u
-							INNER JOIN repositories r ON r.url_id=u.cleaned_url
-							AND u.url=:url),
-						url_id=(SELECT id FROM urls WHERE url=:url)
-					WHERE (url_id IS NULL or repo_id IS NULL) AND insource_id=:pid
-				;""",
+                    UPDATE packages SET repo_id=
+                        (SELECT r.id FROM urls u
+                            INNER JOIN repositories r ON r.url_id=u.cleaned_url
+                            AND u.url=:url),
+                        url_id=(SELECT id FROM urls WHERE url=:url)
+                    WHERE (url_id IS NULL or repo_id IS NULL) AND insource_id=:pid
+                ;""",
                     (
                         {
                             "pid": pid,
@@ -842,17 +843,17 @@ class Database(object):
         if self.db_type == "postgres":
             self.cursor.execute(
                 """
-				SELECT id FROM repositories
-				WHERE id=%s
-				;""",
+                SELECT id FROM repositories
+                WHERE id=%s
+                ;""",
                 (repo_id,),
             )
         else:
             self.cursor.execute(
                 """
-				SELECT id FROM repositories
-				WHERE id=?
-				;""",
+                SELECT id FROM repositories
+                WHERE id=?
+                ;""",
                 (repo_id,),
             )
 
@@ -872,21 +873,21 @@ class Database(object):
             if self.db_type == "postgres":
                 self.cursor.execute(
                     """ SELECT r.id FROM repositories r
-										INNER JOIN sources s
-										ON r.source=s.id
-										AND s.name=%s
-										AND r.owner=%s
-										AND r.name=%s;""",
+                                        INNER JOIN sources s
+                                        ON r.source=s.id
+                                        AND s.name=%s
+                                        AND r.owner=%s
+                                        AND r.name=%s;""",
                     (source, owner, name),
                 )
             else:
                 self.cursor.execute(
                     """ SELECT r.id FROM repositories r
-										INNER JOIN sources s
-										ON r.source=s.id
-										AND s.name=?
-										AND r.owner=?
-										AND r.name=?;""",
+                                        INNER JOIN sources s
+                                        ON r.source=s.id
+                                        AND s.name=?
+                                        AND r.owner=?
+                                        AND r.name=?;""",
                     (source, owner, name),
                 )
             repo_id = self.cursor.fetchone()
@@ -898,17 +899,17 @@ class Database(object):
             if self.db_type == "postgres":
                 self.cursor.execute(
                     """ SELECT id FROM repositories WHERE
-										source=%s
-										AND owner=%s
-										AND name=%s;""",
+                                        source=%s
+                                        AND owner=%s
+                                        AND name=%s;""",
                     (source, owner, name),
                 )
             else:
                 self.cursor.execute(
                     """ SELECT id FROM repositories WHERE
-										source=?
-										AND owner=?
-										AND name=?;""",
+                                        source=?
+                                        AND owner=?
+                                        AND name=?;""",
                     (source, owner, name),
                 )
             repo_id = self.cursor.fetchone()
@@ -920,15 +921,15 @@ class Database(object):
             if self.db_type == "postgres":
                 self.cursor.execute(
                     """ SELECT id FROM repositories WHERE
-										owner=%s
-										AND name=%s;""",
+                                        owner=%s
+                                        AND name=%s;""",
                     (owner, name),
                 )
             else:
                 self.cursor.execute(
                     """ SELECT id FROM repositories WHERE
-										owner=?
-										AND name=?;""",
+                                        owner=?
+                                        AND name=?;""",
                     (owner, name),
                 )
             ans = list(self.cursor.fetchall())
@@ -955,17 +956,17 @@ class Database(object):
             if self.db_type == "postgres":
                 self.cursor.execute(
                     """ INSERT INTO repositories(source,owner,name)
-					 VALUES((SELECT id FROM sources WHERE name=%s),
-									%s,
-									%s);""",
+                     VALUES((SELECT id FROM sources WHERE name=%s),
+                                    %s,
+                                    %s);""",
                     (source, owner, repo),
                 )
             else:
                 self.cursor.execute(
                     """ INSERT INTO repositories(source,owner,name)
-					 VALUES((SELECT id FROM sources WHERE name=?),
-									?,
-									?);""",
+                     VALUES((SELECT id FROM sources WHERE name=?),
+                                    ?,
+                                    ?);""",
                     (source, owner, repo),
                 )
             repo_id = self.get_repo_id(name=repo, source=source, owner=owner)
@@ -975,39 +976,39 @@ class Database(object):
             if self.db_type == "postgres":
                 self.cursor.execute(
                     """ INSERT INTO table_updates(repo_id,table_name,success)
-				 VALUES(%s,'clones',%s);""",
+                 VALUES(%s,'clones',%s);""",
                     (repo_id, success),
                 )
                 if success:
                     self.cursor.execute(
                         """ UPDATE repositories SET updated_at=(SELECT CURRENT_TIMESTAMP), cloned=true
-				WHERE id=%s;""",
+                WHERE id=%s;""",
                         (repo_id,),
                     )
 
             else:
                 self.cursor.execute(
                     """ INSERT INTO table_updates(repo_id,table_name,success)
-				 VALUES(?,'clones',?);""",
+                 VALUES(?,'clones',?);""",
                     (repo_id, success),
                 )
                 if success:
                     self.cursor.execute(
                         """ UPDATE repositories SET updated_at=(SELECT CURRENT_TIMESTAMP), cloned=1
-				WHERE id=?;""",
+                WHERE id=?;""",
                         (repo_id,),
                     )
         else:
             if self.db_type == "postgres":
                 self.cursor.execute(
                     """ INSERT INTO table_updates(repo_id,table_name,success,updated_at)
-				 VALUES(%s,'clones',%s,%s);""",
+                 VALUES(%s,'clones',%s,%s);""",
                     (repo_id, success, dl_time),
                 )
                 if success:
                     self.cursor.execute(
                         """ UPDATE repositories SET updated_at=%s, cloned=true
-				WHERE id=%s;""",
+                WHERE id=%s;""",
                         (
                             dl_time,
                             repo_id,
@@ -1017,13 +1018,13 @@ class Database(object):
             else:
                 self.cursor.execute(
                     """ INSERT INTO table_updates(repo_id,table_name,success,updated_at)
-				 VALUES(?,'clones',?,?);""",
+                 VALUES(?,'clones',?,?);""",
                     (repo_id, success, dl_time),
                 )
                 if success:
                     self.cursor.execute(
                         """ UPDATE repositories SET updated_at=?, cloned=1
-				WHERE id=?;""",
+                WHERE id=?;""",
                         (
                             dl_time,
                             repo_id,
@@ -1038,45 +1039,45 @@ class Database(object):
         if option == "all":
             self.cursor.execute(
                 """
-				SELECT s.name,s.url_root,r.owner,r.name
-				FROM repositories r
-				INNER JOIN sources s
-				ON s.id=r.source
-				ORDER BY s.name,r.owner,r.name
-				;"""
+                SELECT s.name,s.url_root,r.owner,r.name
+                FROM repositories r
+                INNER JOIN sources s
+                ON s.id=r.source
+                ORDER BY s.name,r.owner,r.name
+                ;"""
             )
             return list(self.cursor.fetchall())
         elif option == "only_cloned":
             self.cursor.execute(
                 """
-				SELECT s.name,s.url_root,r.owner,r.name
-				FROM repositories r
-				INNER JOIN sources s
-				ON s.id=r.source AND r.cloned
-				ORDER BY s.name,r.owner,r.name
-				;"""
+                SELECT s.name,s.url_root,r.owner,r.name
+                FROM repositories r
+                INNER JOIN sources s
+                ON s.id=r.source AND r.cloned
+                ORDER BY s.name,r.owner,r.name
+                ;"""
             )
             return list(self.cursor.fetchall())
         elif option == "only_not_cloned":
             self.cursor.execute(
                 """
-				SELECT s.name,s.url_root,r.owner,r.name
-				FROM repositories r
-				INNER JOIN sources s
-				ON s.id=r.source AND NOT r.cloned
-				ORDER BY s.name,r.owner,r.name
-				;"""
+                SELECT s.name,s.url_root,r.owner,r.name
+                FROM repositories r
+                INNER JOIN sources s
+                ON s.id=r.source AND NOT r.cloned
+                ORDER BY s.name,r.owner,r.name
+                ;"""
             )
             return list(self.cursor.fetchall())
         elif option == "basicinfo_dict":
             self.cursor.execute(
                 """
-				SELECT s.name,r.owner,r.name,r.id
-				FROM repositories r
-				INNER JOIN sources s
-				ON s.id=r.source
-				ORDER BY s.name,r.owner,r.name
-				;"""
+                SELECT s.name,r.owner,r.name,r.id
+                FROM repositories r
+                INNER JOIN sources s
+                ON s.id=r.source
+                ORDER BY s.name,r.owner,r.name
+                ;"""
             )
             return [
                 {"source": r[0], "owner": r[1], "name": r[2], "repo_id": r[3]}
@@ -1087,22 +1088,22 @@ class Database(object):
             if self.db_type == "postgres":
                 self.cursor.execute(
                     """
-					SELECT s.name,r.owner,r.name,r.id,extract(epoch from r.latest_commit_time)
-					FROM repositories r
-					INNER JOIN sources s
-					ON s.id=r.source
-					ORDER BY s.name,r.owner,r.name
-					;"""
+                    SELECT s.name,r.owner,r.name,r.id,extract(epoch from r.latest_commit_time)
+                    FROM repositories r
+                    INNER JOIN sources s
+                    ON s.id=r.source
+                    ORDER BY s.name,r.owner,r.name
+                    ;"""
                 )
             else:
                 self.cursor.execute(
                     """
-					SELECT s.name,r.owner,r.name,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
-					FROM repositories r
-					INNER JOIN sources s
-					ON s.id=r.source
-					ORDER BY s.name,r.owner,r.name
-					;"""
+                    SELECT s.name,r.owner,r.name,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
+                    FROM repositories r
+                    INNER JOIN sources s
+                    ON s.id=r.source
+                    ORDER BY s.name,r.owner,r.name
+                    ;"""
                 )
 
             return [
@@ -1118,12 +1119,12 @@ class Database(object):
         elif option == "basicinfo_dict_cloned":
             self.cursor.execute(
                 """
-				SELECT s.name,r.owner,r.name,r.id
-				FROM repositories r
-				INNER JOIN sources s
-				ON s.id=r.source AND r.cloned
-				ORDER BY s.name,r.owner,r.name
-				;"""
+                SELECT s.name,r.owner,r.name,r.id
+                FROM repositories r
+                INNER JOIN sources s
+                ON s.id=r.source AND r.cloned
+                ORDER BY s.name,r.owner,r.name
+                ;"""
             )
             return [
                 {"source": r[0], "owner": r[1], "name": r[2], "repo_id": r[3]}
@@ -1134,22 +1135,22 @@ class Database(object):
             if self.db_type == "postgres":
                 self.cursor.execute(
                     """
-					SELECT s.name,r.owner,r.name,r.id,extract(epoch from r.latest_commit_time)
-					FROM repositories r
-					INNER JOIN sources s
-					ON s.id=r.source AND r.cloned
-					ORDER BY s.name,r.owner,r.name
-					;"""
+                    SELECT s.name,r.owner,r.name,r.id,extract(epoch from r.latest_commit_time)
+                    FROM repositories r
+                    INNER JOIN sources s
+                    ON s.id=r.source AND r.cloned
+                    ORDER BY s.name,r.owner,r.name
+                    ;"""
                 )
             else:
                 self.cursor.execute(
                     """
-					SELECT s.name,r.owner,r.name,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
-					FROM repositories r
-					INNER JOIN sources s
-					ON s.id=r.source AND r.cloned
-					ORDER BY s.name,r.owner,r.name
-					;"""
+                    SELECT s.name,r.owner,r.name,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
+                    FROM repositories r
+                    INNER JOIN sources s
+                    ON s.id=r.source AND r.cloned
+                    ORDER BY s.name,r.owner,r.name
+                    ;"""
                 )
 
             return [
@@ -1166,15 +1167,15 @@ class Database(object):
         elif option == "starinfo_dict":
             self.cursor.execute(
                 """
-				SELECT s.name,r.owner,r.name,r.id,MAX(tu.updated_at)
-				FROM repositories r
-				INNER JOIN sources s
-				ON s.id=r.source
-				LEFT OUTER JOIN table_updates tu
-				ON tu.repo_id=r.id AND tu.table_name='stars'
-				GROUP BY s.name,r.owner,r.name
-				ORDER BY s.name,r.owner,r.name
-				;"""
+                SELECT s.name,r.owner,r.name,r.id,MAX(tu.updated_at)
+                FROM repositories r
+                INNER JOIN sources s
+                ON s.id=r.source
+                LEFT OUTER JOIN table_updates tu
+                ON tu.repo_id=r.id AND tu.table_name='stars'
+                GROUP BY s.name,r.owner,r.name
+                ORDER BY s.name,r.owner,r.name
+                ;"""
             )
             return [
                 {
@@ -1190,67 +1191,67 @@ class Database(object):
         elif option == "starinfo":
             self.cursor.execute(
                 """
-				SELECT t1.sname,t1.rowner,t1.rname,t1.rid,t1.updated,t1.succ FROM
-					(SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ
-						FROM repositories r
-						INNER JOIN sources s
-						ON s.id=r.source
-						LEFT OUTER JOIN table_updates tu
-						ON tu.repo_id=r.id AND tu.table_name='stars'
-						ORDER BY r.owner,r.name,tu.updated_at ) as t1
-					INNER JOIN
-						(SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id AS rid,max(tu.updated_at) AS updated
-						FROM repositories r
-						INNER JOIN sources s
-						ON s.id=r.source
-						LEFT OUTER JOIN table_updates tu
-						ON tu.repo_id=r.id AND tu.table_name='stars'
-						GROUP BY r.owner,r.name,r.id,s."name" ) AS t2
-				ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-				ORDER BY t1.sname,t1.rowner,t1.rname
-				;"""
+                SELECT t1.sname,t1.rowner,t1.rname,t1.rid,t1.updated,t1.succ FROM
+                    (SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ
+                        FROM repositories r
+                        INNER JOIN sources s
+                        ON s.id=r.source
+                        LEFT OUTER JOIN table_updates tu
+                        ON tu.repo_id=r.id AND tu.table_name='stars'
+                        ORDER BY r.owner,r.name,tu.updated_at ) as t1
+                    INNER JOIN
+                        (SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id AS rid,max(tu.updated_at) AS updated
+                        FROM repositories r
+                        INNER JOIN sources s
+                        ON s.id=r.source
+                        LEFT OUTER JOIN table_updates tu
+                        ON tu.repo_id=r.id AND tu.table_name='stars'
+                        GROUP BY r.owner,r.name,r.id,s."name" ) AS t2
+                ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
+                ORDER BY t1.sname,t1.rowner,t1.rname
+                ;"""
             )
             return list(self.cursor.fetchall())
 
         elif option == "forkinfo":
             self.cursor.execute(
                 """
-				SELECT t1.sname,t1.rowner,t1.rname,t1.rid,t1.updated,t1.succ FROM
-					(SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ
-						FROM repositories r
-						INNER JOIN sources s
-						ON s.id=r.source
-						LEFT OUTER JOIN table_updates tu
-						ON tu.repo_id=r.id AND tu.table_name='forks'
-						ORDER BY r.owner,r.name,tu.updated_at ) as t1
-					INNER JOIN
-						(SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id AS rid,max(tu.updated_at) AS updated
-						FROM repositories r
-						INNER JOIN sources s
-						ON s.id=r.source
-						LEFT OUTER JOIN table_updates tu
-						ON tu.repo_id=r.id AND tu.table_name='forks'
-						GROUP BY r.owner,r.name,r.id,s."name" ) AS t2
-				ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
-				ORDER BY t1.sname,t1.rowner,t1.rname
-				;"""
+                SELECT t1.sname,t1.rowner,t1.rname,t1.rid,t1.updated,t1.succ FROM
+                    (SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id AS rid,tu.updated_at AS updated,tu.success AS succ
+                        FROM repositories r
+                        INNER JOIN sources s
+                        ON s.id=r.source
+                        LEFT OUTER JOIN table_updates tu
+                        ON tu.repo_id=r.id AND tu.table_name='forks'
+                        ORDER BY r.owner,r.name,tu.updated_at ) as t1
+                    INNER JOIN
+                        (SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id AS rid,max(tu.updated_at) AS updated
+                        FROM repositories r
+                        INNER JOIN sources s
+                        ON s.id=r.source
+                        LEFT OUTER JOIN table_updates tu
+                        ON tu.repo_id=r.id AND tu.table_name='forks'
+                        GROUP BY r.owner,r.name,r.id,s."name" ) AS t2
+                ON (t1.updated=t2.updated or t2.updated IS NULL) AND t1.rid=t2.rid
+                ORDER BY t1.sname,t1.rowner,t1.rname
+                ;"""
             )
             return list(self.cursor.fetchall())
 
         elif option == "no_dl":
             self.cursor.execute(
                 """
-				SELECT s.name,s.url_root,r.owner,r.name
-				FROM repositories r
-				INNER JOIN sources s
-				ON s.id=r.source
-				LEFT JOIN table_updates tu
-				ON tu.repo_id=r.id AND tu.table_name='clones'
-				GROUP BY s.name,s.url_root,r.owner,r.name
-				HAVING COUNT(tu.repo_id)=0
-				ORDER BY s.name,r.owner,r.name
+                SELECT s.name,s.url_root,r.owner,r.name
+                FROM repositories r
+                INNER JOIN sources s
+                ON s.id=r.source
+                LEFT JOIN table_updates tu
+                ON tu.repo_id=r.id AND tu.table_name='clones'
+                GROUP BY s.name,s.url_root,r.owner,r.name
+                HAVING COUNT(tu.repo_id)=0
+                ORDER BY s.name,r.owner,r.name
 
-				;"""
+                ;"""
             )
             return list(self.cursor.fetchall())
 
@@ -1283,17 +1284,17 @@ class Database(object):
             if self.db_type == "postgres":
                 self.cursor.execute(
                     """
-					SELECT i.user_id FROM identities i
-					WHERE i.id=%s
-					;""",
+                    SELECT i.user_id FROM identities i
+                    WHERE i.id=%s
+                    ;""",
                     (identity_id,),
                 )
             else:
                 self.cursor.execute(
                     """
-					SELECT i.user_id FROM identities i
-					WHERE i.id=?
-					;""",
+                    SELECT i.user_id FROM identities i
+                    WHERE i.id=?
+                    ;""",
                     (identity_id,),
                 )
             ans = self.cursor.fetchone()
@@ -1303,17 +1304,17 @@ class Database(object):
             if self.db_type == "postgres":
                 self.cursor.execute(
                     """
-					SELECT DISTINCT i.user_id FROM identities i
-					WHERE i.identity=%s
-					;""",
+                    SELECT DISTINCT i.user_id FROM identities i
+                    WHERE i.identity=%s
+                    ;""",
                     (identity_id,),
                 )
             else:
                 self.cursor.execute(
                     """
-					SELECT DISTINCT i.user_id FROM identities i
-					WHERE i.identity=?
-					;""",
+                    SELECT DISTINCT i.user_id FROM identities i
+                    WHERE i.identity=?
+                    ;""",
                     (identity_id,),
                 )
             ans = list(self.cursor.fetchall())
@@ -1331,19 +1332,19 @@ class Database(object):
                 if self.db_type == "postgres":
                     self.cursor.execute(
                         """
-						SELECT i.user_id FROM identities i
-						WHERE i.identity=%s
-						AND i.identity_type_id=%s
-						;""",
+                        SELECT i.user_id FROM identities i
+                        WHERE i.identity=%s
+                        AND i.identity_type_id=%s
+                        ;""",
                         (identity, identity_type),
                     )
                 else:
                     self.cursor.execute(
                         """
-						SELECT i.user_id FROM identities i
-						WHERE i.identity=?
-						AND i.identity_type_id=?
-						;""",
+                        SELECT i.user_id FROM identities i
+                        WHERE i.identity=?
+                        AND i.identity_type_id=?
+                        ;""",
                         (identity, identity_type),
                     )
                 ans = self.cursor.fetchone()
@@ -1353,23 +1354,23 @@ class Database(object):
                 if self.db_type == "postgres":
                     self.cursor.execute(
                         """
-						SELECT i.user_id FROM identities i
-						INNER JOIN identity_types it
-						ON i.identity=%s
-						AND i.identity_type_id=it.id
-						AND it.name=%s
-						;""",
+                        SELECT i.user_id FROM identities i
+                        INNER JOIN identity_types it
+                        ON i.identity=%s
+                        AND i.identity_type_id=it.id
+                        AND it.name=%s
+                        ;""",
                         (identity, identity_type),
                     )
                 else:
                     self.cursor.execute(
                         """
-						SELECT i.user_id FROM identities i
-						INNER JOIN identity_types it
-						ON i.identity=?
-						AND i.identity_type_id=it.id
-						AND it.name=?
-						;""",
+                        SELECT i.user_id FROM identities i
+                        INNER JOIN identity_types it
+                        ON i.identity=?
+                        AND i.identity_type_id=it.id
+                        AND it.name=?
+                        ;""",
                         (identity, identity_type),
                     )
                 ans = self.cursor.fetchone()
@@ -1392,32 +1393,32 @@ class Database(object):
         if option == "all":
             self.cursor.execute(
                 """
-				SELECT u.id,u.email,u.github_login
-				FROM users u
-				;"""
+                SELECT u.id,u.email,u.github_login
+                FROM users u
+                ;"""
             )
             return list(self.cursor.fetchall())
         elif option == "id_sha_all":
             if self.db_type == "postgres":
                 self.cursor.execute(
                     """
-					SELECT u.id,c.repo_id,c.sha
-					FROM users u
-					JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
-						WHERE cc.author_id=u.id ORDER BY cc.created_at DESC LIMIT 1) AS c
-					ON u.github_login IS NULL
-					;"""
+                    SELECT u.id,c.repo_id,c.sha
+                    FROM users u
+                    JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
+                        WHERE cc.author_id=u.id ORDER BY cc.created_at DESC LIMIT 1) AS c
+                    ON u.github_login IS NULL
+                    ;"""
                 )
             else:
                 self.cursor.execute(
                     """
-					SELECT u.id,c.repo_id,c.sha
-					FROM users u
-					JOIN commits c
-						ON u.github_login IS NULL AND
-						c.id IN (SELECT cc.id FROM commits cc
-							WHERE cc.author_id=u.id ORDER BY cc.created_at DESC LIMIT 1)
-					;"""
+                    SELECT u.id,c.repo_id,c.sha
+                    FROM users u
+                    JOIN commits c
+                        ON u.github_login IS NULL AND
+                        c.id IN (SELECT cc.id FROM commits cc
+                            WHERE cc.author_id=u.id ORDER BY cc.created_at DESC LIMIT 1)
+                    ;"""
                 )
 
             return list(self.cursor.fetchall())
@@ -1426,39 +1427,39 @@ class Database(object):
             if self.db_type == "postgres":
                 self.cursor.execute(
                     """
-					SELECT u.id,c.repo_id,c.sha
-					FROM (
-						SELECT uu.id FROM
-					 		(SELECT uuu.id FROM users uuu
-							WHERE uuu.github_login IS NULL) AS uu
-							LEFT JOIN table_updates tu
-							ON tu.user_id=uu.id AND tu.table_name='login'
-							GROUP BY uu.id,tu.user_id
-							HAVING tu.user_id IS NULL
-						) AS u
-					JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
-						WHERE cc.author_id=u.id ORDER BY cc.created_at DESC LIMIT 1) AS c
-					ON true
-					;"""
+                    SELECT u.id,c.repo_id,c.sha
+                    FROM (
+                        SELECT uu.id FROM
+                            (SELECT uuu.id FROM users uuu
+                            WHERE uuu.github_login IS NULL) AS uu
+                            LEFT JOIN table_updates tu
+                            ON tu.user_id=uu.id AND tu.table_name='login'
+                            GROUP BY uu.id,tu.user_id
+                            HAVING tu.user_id IS NULL
+                        ) AS u
+                    JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
+                        WHERE cc.author_id=u.id ORDER BY cc.created_at DESC LIMIT 1) AS c
+                    ON true
+                    ;"""
                 )
             else:
                 self.cursor.execute(
                     """
-					SELECT u.id,c.repo_id,c.sha
-					FROM (
-						SELECT uu.id FROM
-					 		(SELECT uuu.id FROM users uuu
-							WHERE uuu.github_login IS NULL) AS uu
-							LEFT JOIN table_updates tu
-							ON tu.user_id=uu.id AND tu.table_name='login'
-							GROUP BY uu.id,tu.user_id
-							HAVING tu.user_id IS NULL
-						) AS u
-					JOIN commits c
-						ON
-						c.id IN (SELECT cc.id FROM commits cc
-							WHERE cc.author_id=u.id ORDER BY cc.created_at DESC LIMIT 1)
-					;"""
+                    SELECT u.id,c.repo_id,c.sha
+                    FROM (
+                        SELECT uu.id FROM
+                            (SELECT uuu.id FROM users uuu
+                            WHERE uuu.github_login IS NULL) AS uu
+                            LEFT JOIN table_updates tu
+                            ON tu.user_id=uu.id AND tu.table_name='login'
+                            GROUP BY uu.id,tu.user_id
+                            HAVING tu.user_id IS NULL
+                        ) AS u
+                    JOIN commits c
+                        ON
+                        c.id IN (SELECT cc.id FROM commits cc
+                            WHERE cc.author_id=u.id ORDER BY cc.created_at DESC LIMIT 1)
+                    ;"""
                 )
             return list(self.cursor.fetchall())
 
@@ -1466,27 +1467,27 @@ class Database(object):
             if self.db_type == "postgres":
                 self.cursor.execute(
                     """
-					SELECT u.id,c.repo_id,r.owner,r.name,c.sha
-					FROM users u
-					JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
-						WHERE cc.author_id=u.id ORDER BY cc.created_at DESC LIMIT 1) AS c
-					ON u.github_login IS NULL
-					INNER JOIN repositories r
-					ON r.id=c.repo_id
-					;"""
+                    SELECT u.id,c.repo_id,r.owner,r.name,c.sha
+                    FROM users u
+                    JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
+                        WHERE cc.author_id=u.id ORDER BY cc.created_at DESC LIMIT 1) AS c
+                    ON u.github_login IS NULL
+                    INNER JOIN repositories r
+                    ON r.id=c.repo_id
+                    ;"""
                 )
             else:
                 self.cursor.execute(
                     """
-					SELECT u.id,c.repo_id,r.owner,r.name,c.sha
-					FROM users u
-					JOIN commits c
-						ON u.github_login IS NULL AND
-						c.id IN (SELECT cc.id FROM commits cc
-							WHERE cc.author_id=u.id ORDER BY cc.created_at DESC LIMIT 1)
-					INNER JOIN repositories r
-					ON r.id=c.repo_id
-					;"""
+                    SELECT u.id,c.repo_id,r.owner,r.name,c.sha
+                    FROM users u
+                    JOIN commits c
+                        ON u.github_login IS NULL AND
+                        c.id IN (SELECT cc.id FROM commits cc
+                            WHERE cc.author_id=u.id ORDER BY cc.created_at DESC LIMIT 1)
+                    INNER JOIN repositories r
+                    ON r.id=c.repo_id
+                    ;"""
                 )
 
             return list(self.cursor.fetchall())
@@ -1495,43 +1496,43 @@ class Database(object):
             if self.db_type == "postgres":
                 self.cursor.execute(
                     """
-					SELECT u.id,c.repo_id,r.owner,r.name,c.sha
-					FROM (
-						SELECT uu.id FROM
-					 		(SELECT uuu.id FROM users uuu
-							WHERE uuu.github_login IS NULL) AS uu
-							LEFT JOIN table_updates tu
-							ON tu.user_id=uu.id AND tu.table_name='login'
-							GROUP BY uu.id,tu.user_id
-							HAVING tu.user_id IS NULL
-						) AS u
-					JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
-						WHERE cc.author_id=u.id ORDER BY cc.created_at DESC LIMIT 1) AS c
-					ON true
-					INNER JOIN repositories r
-					ON r.id=c.repo_id
-					;"""
+                    SELECT u.id,c.repo_id,r.owner,r.name,c.sha
+                    FROM (
+                        SELECT uu.id FROM
+                            (SELECT uuu.id FROM users uuu
+                            WHERE uuu.github_login IS NULL) AS uu
+                            LEFT JOIN table_updates tu
+                            ON tu.user_id=uu.id AND tu.table_name='login'
+                            GROUP BY uu.id,tu.user_id
+                            HAVING tu.user_id IS NULL
+                        ) AS u
+                    JOIN LATERAL (SELECT cc.sha,cc.repo_id FROM commits cc
+                        WHERE cc.author_id=u.id ORDER BY cc.created_at DESC LIMIT 1) AS c
+                    ON true
+                    INNER JOIN repositories r
+                    ON r.id=c.repo_id
+                    ;"""
                 )
             else:
                 self.cursor.execute(
                     """
-					SELECT u.id,c.repo_id,r.owner,r.name,c.sha
-					FROM (
-						SELECT uu.id FROM
-					 		(SELECT uuu.id FROM users uuu
-							WHERE uuu.github_login IS NULL) AS uu
-							LEFT JOIN table_updates tu
-							ON tu.user_id=uu.id AND tu.table_name='login'
-							GROUP BY uu.id,tu.user_id
-							HAVING tu.user_id IS NULL
-						) AS u
-					JOIN commits c
-						ON
-						c.id IN (SELECT cc.id FROM commits cc
-							WHERE cc.author_id=u.id ORDER BY cc.created_at DESC LIMIT 1)
-					INNER JOIN repositories r
-					ON r.id=c.repo_id
-					;"""
+                    SELECT u.id,c.repo_id,r.owner,r.name,c.sha
+                    FROM (
+                        SELECT uu.id FROM
+                            (SELECT uuu.id FROM users uuu
+                            WHERE uuu.github_login IS NULL) AS uu
+                            LEFT JOIN table_updates tu
+                            ON tu.user_id=uu.id AND tu.table_name='login'
+                            GROUP BY uu.id,tu.user_id
+                            HAVING tu.user_id IS NULL
+                        ) AS u
+                    JOIN commits c
+                        ON
+                        c.id IN (SELECT cc.id FROM commits cc
+                            WHERE cc.author_id=u.id ORDER BY cc.created_at DESC LIMIT 1)
+                    INNER JOIN repositories r
+                    ON r.id=c.repo_id
+                    ;"""
                 )
             return list(self.cursor.fetchall())
 
@@ -1539,29 +1540,29 @@ class Database(object):
             if self.db_type == "postgres":
                 self.cursor.execute(
                     """
-					SELECT u.github_login FROM
-						(SELECT DISTINCT uu.github_login FROM users uu
-						WHERE uu.github_login IS NOT NULL) AS u
-					LEFT JOIN followers f
-					ON f.github_login=u.github_login
-					AND now() - f.created_at < %s*'1 second'::interval
-					GROUP BY u.github_login,f.github_login
-					HAVING f.github_login IS NULL
-					;""",
+                    SELECT u.github_login FROM
+                        (SELECT DISTINCT uu.github_login FROM users uu
+                        WHERE uu.github_login IS NOT NULL) AS u
+                    LEFT JOIN followers f
+                    ON f.github_login=u.github_login
+                    AND now() - f.created_at < %s*'1 second'::interval
+                    GROUP BY u.github_login,f.github_login
+                    HAVING f.github_login IS NULL
+                    ;""",
                     (time_delay,),
                 )
             else:
                 self.cursor.execute(
                     """
-					SELECT u.github_login FROM
-						(SELECT DISTINCT uu.github_login FROM users uu
-						WHERE uu.github_login IS NOT NULL) AS u
-					LEFT JOIN followers f
-					ON f.github_login=u.github_login
-					AND (julianday('now') - julianday(f.created_at))*24*3600 < ?
-					GROUP BY u.github_login,f.github_login
-					HAVING f.github_login IS NULL
-					;""",
+                    SELECT u.github_login FROM
+                        (SELECT DISTINCT uu.github_login FROM users uu
+                        WHERE uu.github_login IS NOT NULL) AS u
+                    LEFT JOIN followers f
+                    ON f.github_login=u.github_login
+                    AND (julianday('now') - julianday(f.created_at))*24*3600 < ?
+                    GROUP BY u.github_login,f.github_login
+                    HAVING f.github_login IS NULL
+                    ;""",
                     (time_delay,),
                 )
 
@@ -1594,9 +1595,9 @@ class Database(object):
             extras.execute_batch(
                 self.cursor,
                 """
-				INSERT INTO users(name,email) VALUES(%s,%s)
-				ON CONFLICT DO NOTHING;
-				""",
+                INSERT INTO users(name,email) VALUES(%s,%s)
+                ON CONFLICT DO NOTHING;
+                """,
                 (
                     (c["author_name"], c["author_email"])
                     for c in tracked_gen(commit_info_list)
@@ -1606,9 +1607,9 @@ class Database(object):
         else:
             self.cursor.executemany(
                 """
-				INSERT OR IGNORE INTO users(name,email) VALUES(?,?)
-				;
-				""",
+                INSERT OR IGNORE INTO users(name,email) VALUES(?,?)
+                ;
+                """,
                 (
                     (c["author_name"], c["author_email"])
                     for c in tracked_gen(commit_info_list)
@@ -1655,16 +1656,16 @@ class Database(object):
             extras.execute_batch(
                 self.cursor,
                 """
-				INSERT INTO commits(sha,author_id,repo_id,created_at,insertions,deletions)
-					VALUES(%s,
-							(SELECT id FROM users WHERE email=%s),
-							%s,
-							%s,
-							%s,
-							%s
-							)
-				ON CONFLICT DO NOTHING;
-				""",
+                INSERT INTO commits(sha,author_id,repo_id,created_at,insertions,deletions)
+                    VALUES(%s,
+                            (SELECT id FROM users WHERE email=%s),
+                            %s,
+                            %s,
+                            %s,
+                            %s
+                            )
+                ON CONFLICT DO NOTHING;
+                """,
                 (
                     (
                         c["sha"],
@@ -1681,15 +1682,15 @@ class Database(object):
         else:
             self.cursor.executemany(
                 """
-				INSERT OR IGNORE INTO commits(sha,author_id,repo_id,created_at,insertions,deletions)
-					VALUES(?,
-							(SELECT id FROM users WHERE email=?),
-							?,
-							?,
-							?,
-							?
-							);
-				""",
+                INSERT OR IGNORE INTO commits(sha,author_id,repo_id,created_at,insertions,deletions)
+                    VALUES(?,
+                            (SELECT id FROM users WHERE email=?),
+                            ?,
+                            ?,
+                            ?,
+                            ?
+                            );
+                """,
                 (
                     (
                         c["sha"],
@@ -1745,25 +1746,25 @@ class Database(object):
             extras.execute_batch(
                 self.cursor,
                 """
-				INSERT INTO commit_parents(child_id,parent_id,rank)
-					VALUES(
-							(SELECT id FROM commits WHERE sha=%s),
-							(SELECT id FROM commits WHERE sha=%s),
-							%s)
-				ON CONFLICT DO NOTHING;
-				""",
+                INSERT INTO commit_parents(child_id,parent_id,rank)
+                    VALUES(
+                            (SELECT id FROM commits WHERE sha=%s),
+                            (SELECT id FROM commits WHERE sha=%s),
+                            %s)
+                ON CONFLICT DO NOTHING;
+                """,
                 transformed_list(commit_info_list),
             )
 
         else:
             self.cursor.executemany(
                 """
-				INSERT OR IGNORE INTO commit_parents(child_id,parent_id,rank)
-					VALUES(
-							(SELECT id FROM commits WHERE sha=?),
-							(SELECT id FROM commits WHERE sha=?),
-							?);
-				""",
+                INSERT OR IGNORE INTO commit_parents(child_id,parent_id,rank)
+                    VALUES(
+                            (SELECT id FROM commits WHERE sha=?),
+                            (SELECT id FROM commits WHERE sha=?),
+                            ?);
+                """,
                 transformed_list(commit_info_list),
             )
 
@@ -1803,46 +1804,46 @@ class Database(object):
             extras.execute_batch(
                 self.cursor,
                 """
-				INSERT INTO followers(github_login,followers)
-				VALUES(%s,%s)
-				;""",
+                INSERT INTO followers(github_login,followers)
+                VALUES(%s,%s)
+                ;""",
                 followers_info_list,
             )
         else:
             self.cursor.executemany(
                 """
-				INSERT INTO followers(github_login,followers)
-				VALUES(?,?)
-				;""",
+                INSERT INTO followers(github_login,followers)
+                VALUES(?,?)
+                ;""",
                 followers_info_list,
             )
         if autocommit:
             self.connection.commit()
 
     # def create_indexes(self,table=None):
-    # 	'''
-    # 	Creating indexes for the various tables that are not specified at table creation, where insertion time could be impacted by their presence
-    # 	'''
-    # 	if table == 'user' or table is None:
-    # 		self.logger.info('Creating indexes for table user')
-    # 		self.cursor.execute('''
-    # 			CREATE INDEX IF NOT EXISTS user_names_idx ON users(name)
-    # 			;''')
-    # 	elif table == 'commits' or table is None:
-    # 		self.logger.info('Creating indexes for table commits')
-    # 		self.cursor.execute('''
-    # 			CREATE INDEX IF NOT EXISTS commits_ac_idx ON commits(author_id,created_at)
-    # 			;''')
-    # 		self.cursor.execute('''
-    # 			CREATE INDEX IF NOT EXISTS commits_rc_idx ON commits(repo_id,created_at)
-    # 			;''')
-    # 		self.cursor.execute('''
-    # 			CREATE INDEX IF NOT EXISTS commits_cra_idx ON commits(created_at,repo_id,author_id)
-    # 			;''')
-    # 	elif table == 'commit_parents' or table is None:
-    # 		self.logger.info('Creating indexes for table commit_parents')
-    # 		pass
-    # 	self.connection.commit()
+    #   '''
+    #   Creating indexes for the various tables that are not specified at table creation, where insertion time could be impacted by their presence
+    #   '''
+    #   if table == 'user' or table is None:
+    #       self.logger.info('Creating indexes for table user')
+    #       self.cursor.execute('''
+    #           CREATE INDEX IF NOT EXISTS user_names_idx ON users(name)
+    #           ;''')
+    #   elif table == 'commits' or table is None:
+    #       self.logger.info('Creating indexes for table commits')
+    #       self.cursor.execute('''
+    #           CREATE INDEX IF NOT EXISTS commits_ac_idx ON commits(author_id,created_at)
+    #           ;''')
+    #       self.cursor.execute('''
+    #           CREATE INDEX IF NOT EXISTS commits_rc_idx ON commits(repo_id,created_at)
+    #           ;''')
+    #       self.cursor.execute('''
+    #           CREATE INDEX IF NOT EXISTS commits_cra_idx ON commits(created_at,repo_id,author_id)
+    #           ;''')
+    #   elif table == 'commit_parents' or table is None:
+    #       self.logger.info('Creating indexes for table commit_parents')
+    #       pass
+    #   self.connection.commit()
 
     def get_last_dl(self, repo_id, success=None):
         """
@@ -1853,19 +1854,19 @@ class Database(object):
         if self.db_type == "postgres":
             self.cursor.execute(
                 """
-				SELECT MAX(updated_at)
-					FROM table_updates
-					WHERE repo_id=%s AND table_name='clones' AND (%s IS NULL OR success=%s)
-				;""",
+                SELECT MAX(updated_at)
+                    FROM table_updates
+                    WHERE repo_id=%s AND table_name='clones' AND (%s IS NULL OR success=%s)
+                ;""",
                 (repo_id, success, success),
             )
         else:
             self.cursor.execute(
                 """
-				SELECT MAX(updated_at)
-					FROM table_updates
-					WHERE repo_id=? AND table_name='clones' AND (? IS NULL OR success=?)
-				;""",
+                SELECT MAX(updated_at)
+                    FROM table_updates
+                    WHERE repo_id=? AND table_name='clones' AND (? IS NULL OR success=?)
+                ;""",
                 (repo_id, success, success),
             )
         ans = self.cursor.fetchone()
@@ -1900,15 +1901,15 @@ class Database(object):
             if self.db_type == "postgres":
                 self.cursor.execute(
                     """SELECT s.id,s.url_root FROM sources s
-								INNER JOIN repositories r
-								ON r.id=%s AND r.source=s.id;""",
+                                INNER JOIN repositories r
+                                ON r.id=%s AND r.source=s.id;""",
                     (repo_id,),
                 )
             else:
                 self.cursor.execute(
                     """SELECT s.id,s.url_root FROM sources s
-								INNER JOIN repositories r
-								ON r.id=? AND r.source=s.id;""",
+                                INNER JOIN repositories r
+                                ON r.id=? AND r.source=s.id;""",
                     (repo_id,),
                 )
             ans = self.cursor.fetchone()
@@ -1940,13 +1941,13 @@ class Database(object):
         if self.db_type == "postgres":
             self.cursor.execute(
                 """SELECT created_at,starred_at,login FROM stars WHERE repo_id=%s
-									ORDER BY created_at DESC LIMIT 1;""",
+                                    ORDER BY created_at DESC LIMIT 1;""",
                 (repo_id,),
             )
         else:
             self.cursor.execute(
                 """SELECT created_at,starred_at,login FROM stars WHERE repo_id=?
-									ORDER BY created_at DESC LIMIT 1;""",
+                                    ORDER BY created_at DESC LIMIT 1;""",
                 (repo_id,),
             )
         ans = self.cursor.fetchone()
@@ -2013,20 +2014,20 @@ class Database(object):
         if self.db_type == "postgres":
             self.cursor.execute(
                 """
-				SELECT COUNT(*) FROM followers
-				WHERE followee_id=%s
-				;
+                SELECT COUNT(*) FROM followers
+                WHERE followee_id=%s
+                ;
 
-				""",
+                """,
                 (login_id,),
             )
         else:
             self.cursor.execute(
                 """
-				SELECT COUNT(*) FROM followers
-				WHERE followee_id=?
-				;
-				""",
+                SELECT COUNT(*) FROM followers
+                WHERE followee_id=?
+                ;
+                """,
                 (login_id,),
             )
         ans = self.cursor.fetchall()
@@ -2038,8 +2039,8 @@ class Database(object):
     def count_users(self):
         self.cursor.execute(
             """
-				SELECT COUNT(*) FROM users
-				;"""
+                SELECT COUNT(*) FROM users
+                ;"""
         )
         ans = self.cursor.fetchall()
         if ans is None:
@@ -2051,24 +2052,24 @@ class Database(object):
         if user_id is None:
             self.cursor.execute(
                 """
-				SELECT COUNT(*) FROM identities
-				;"""
+                SELECT COUNT(*) FROM identities
+                ;"""
             )
         else:
             if self.db_type == "postgres":
                 self.cursor.execute(
                     """
-					SELECT COUNT(*) FROM identities
-					WHERE user_id=%s
-					;""",
+                    SELECT COUNT(*) FROM identities
+                    WHERE user_id=%s
+                    ;""",
                     (user_id,),
                 )
             else:
                 self.cursor.execute(
                     """
-					SELECT COUNT(*) FROM identities
-					WHERE user_id=?
-					;""",
+                    SELECT COUNT(*) FROM identities
+                    WHERE user_id=?
+                    ;""",
                     (user_id,),
                 )
         ans = self.cursor.fetchall()
@@ -2086,18 +2087,18 @@ class Database(object):
             extras.execute_batch(
                 self.cursor,
                 """
-				INSERT INTO stars(starred_at,login,repo_id)
-				VALUES(%s,%s,%s)
-				ON CONFLICT DO NOTHING
-				;""",
+                INSERT INTO stars(starred_at,login,repo_id)
+                VALUES(%s,%s,%s)
+                ON CONFLICT DO NOTHING
+                ;""",
                 ((s["starred_at"], s["login"], s["repo_id"]) for s in stars_list),
             )
         else:
             self.cursor.executemany(
                 """
-				INSERT OR IGNORE INTO stars(starred_at,login,repo_id)
-				VALUES(?,?,?)
-				;""",
+                INSERT OR IGNORE INTO stars(starred_at,login,repo_id)
+                VALUES(?,?,?)
+                ;""",
                 ((s["starred_at"], s["login"], s["repo_id"]) for s in stars_list),
             )
 
@@ -2124,15 +2125,15 @@ class Database(object):
         if self.db_type == "postgres":
             self.cursor.execute(
                 """INSERT INTO table_updates(repo_id,identity_id,table_name,success,info)
-				VALUES(%s,%s,%s,%s,%s)
-				;""",
+                VALUES(%s,%s,%s,%s,%s)
+                ;""",
                 (repo_id, identity_id, table, success, info),
             )
         else:
             self.cursor.execute(
                 """INSERT INTO table_updates(repo_id,identity_id,table_name,success,info)
-				VALUES(?,?,?,?,?)
-				;""",
+                VALUES(?,?,?,?,?)
+                ;""",
                 (repo_id, identity_id, table, success, info),
             )
         if autocommit:
@@ -2147,17 +2148,17 @@ class Database(object):
         if self.db_type == "postgres":
             self.cursor.execute(
                 """DELETE FROM table_updates
-				WHERE success IS NULL
-				AND repo_id=%s AND identity_id=%s AND table_name=%s
-				;""",
+                WHERE success IS NULL
+                AND repo_id=%s AND identity_id=%s AND table_name=%s
+                ;""",
                 (repo_id, identity_id, table),
             )
         else:
             self.cursor.execute(
                 """DELETE FROM table_updates
-				WHERE success IS NULL
-				AND repo_id=? AND identity_id=? AND table_name=?
-				;""",
+                WHERE success IS NULL
+                AND repo_id=? AND identity_id=? AND table_name=?
+                ;""",
                 (repo_id, identity_id, table),
             )
         if autocommit:
@@ -2179,18 +2180,18 @@ class Database(object):
             self.connection.commit()
 
     # def set_gh_login(self,user_id,login,autocommit=True):
-    # 	'''
-    # 	Sets a login for a given user (id refers to a unique email, which can refer to several logins)
-    # 	'''
-    # 	if self.db_type == 'postgres':
-    # 		self.cursor.execute('''UPDATE users SET github_login=%s WHERE id=%s;''',(login,user_id))
-    # 		self.cursor.execute('''INSERT INTO table_updates(user_id,table_name,success) VALUES(%s,'login',%s);''',(user_id,(login is not None)))
-    # 	else:
-    # 		self.cursor.execute('''UPDATE users SET github_login=? WHERE id=?;''',(login,user_id))
-    # 		self.cursor.execute('''INSERT INTO table_updates(user_id,table_name,success) VALUES(?,'login',?);''',(user_id,(login is not None)))
+    #   '''
+    #   Sets a login for a given user (id refers to a unique email, which can refer to several logins)
+    #   '''
+    #   if self.db_type == 'postgres':
+    #       self.cursor.execute('''UPDATE users SET github_login=%s WHERE id=%s;''',(login,user_id))
+    #       self.cursor.execute('''INSERT INTO table_updates(user_id,table_name,success) VALUES(%s,'login',%s);''',(user_id,(login is not None)))
+    #   else:
+    #       self.cursor.execute('''UPDATE users SET github_login=? WHERE id=?;''',(login,user_id))
+    #       self.cursor.execute('''INSERT INTO table_updates(user_id,table_name,success) VALUES(?,'login',?);''',(user_id,(login is not None)))
 
-    # 	if autocommit:
-    # 		self.connection.commit()
+    #   if autocommit:
+    #       self.connection.commit()
 
     def merge_identities(
         self, identity1, identity2, autocommit=True, record=True, reason=None
@@ -2204,15 +2205,15 @@ class Database(object):
         if self.db_type == "postgres":
             self.cursor.execute(
                 """
-				SELECT user_id FROM identities WHERE id=%s LIMIT 1
-				;""",
+                SELECT user_id FROM identities WHERE id=%s LIMIT 1
+                ;""",
                 (identity2,),
             )
         else:
             self.cursor.execute(
                 """
-				SELECT user_id FROM identities WHERE id=? LIMIT 1
-				;""",
+                SELECT user_id FROM identities WHERE id=? LIMIT 1
+                ;""",
                 (identity2,),
             )
         old_user_id2 = self.cursor.fetchall()[0][0]
@@ -2221,15 +2222,15 @@ class Database(object):
         if self.db_type == "postgres":
             self.cursor.execute(
                 """
-				SELECT user_id FROM identities WHERE id=%s LIMIT 1
-				;""",
+                SELECT user_id FROM identities WHERE id=%s LIMIT 1
+                ;""",
                 (identity1,),
             )
         else:
             self.cursor.execute(
                 """
-				SELECT user_id FROM identities WHERE id=? LIMIT 1
-				;""",
+                SELECT user_id FROM identities WHERE id=? LIMIT 1
+                ;""",
                 (identity1,),
             )
         user_id = self.cursor.fetchall()[0][0]
@@ -2251,7 +2252,7 @@ class Database(object):
                 if self.db_type == "postgres":
                     self.cursor.execute(
                         """INSERT INTO merged_identities(main_identity_id,secondary_identity_id,main_user_id,secondary_user_id,affected_identities,reason)
-							VALUES(%s,%s,%s,%s,%s,%s);""",
+                            VALUES(%s,%s,%s,%s,%s,%s);""",
                         (
                             identity1,
                             identity2,
@@ -2264,7 +2265,7 @@ class Database(object):
                 else:
                     self.cursor.execute(
                         """INSERT INTO merged_identities(main_identity_id,secondary_identity_id,main_user_id,secondary_user_id,affected_identities,reason)
-							VALUES(?,?,?,?,?,?);""",
+                            VALUES(?,?,?,?,?,?);""",
                         (
                             identity1,
                             identity2,
@@ -2290,8 +2291,8 @@ class Database(object):
                 if self.db_type == "postgres":
                     self.cursor.execute(
                         """INSERT INTO merged_identities(main_identity_id,secondary_identity_id,main_user_id,secondary_user_id,affected_identities,reason)
-							SELECT %(id1)s,%(id2)s,%(uid1)s,%(uid2)s,%(aff)s,%(reason)s
-							WHERE NOT EXISTS(SELECT 1 FROM merged_identities WHERE main_identity_id=%(id1)s AND secondary_identity_id=%(id2)s);""",
+                            SELECT %(id1)s,%(id2)s,%(uid1)s,%(uid2)s,%(aff)s,%(reason)s
+                            WHERE NOT EXISTS(SELECT 1 FROM merged_identities WHERE main_identity_id=%(id1)s AND secondary_identity_id=%(id2)s);""",
                         {
                             "id1": identity1,
                             "id2": identity2,
@@ -2304,8 +2305,8 @@ class Database(object):
                 else:
                     self.cursor.execute(
                         """INSERT INTO merged_identities(main_identity_id,secondary_identity_id,main_user_id,secondary_user_id,affected_identities,reason)
-							SELECT :id1,:id2,:uid1,:uid2,:aff,:reason
-							WHERE NOT EXISTS(SELECT 1 FROM merged_identities WHERE main_identity_id=:id1 AND secondary_identity_id=:id2);""",
+                            SELECT :id1,:id2,:uid1,:uid2,:aff,:reason
+                            WHERE NOT EXISTS(SELECT 1 FROM merged_identities WHERE main_identity_id=:id1 AND secondary_identity_id=:id2);""",
                         {
                             "id1": identity1,
                             "id2": identity2,
@@ -2326,33 +2327,33 @@ class Database(object):
         if self.db_type == "postgres":
             self.cursor.execute(
                 """
-				INSERT INTO users(creation_identity_type_id,creation_identity)
-					SELECT i.identity_type_id,i.identity FROM identities i
-				ON CONFLICT DO NOTHING;"""
+                INSERT INTO users(creation_identity_type_id,creation_identity)
+                    SELECT i.identity_type_id,i.identity FROM identities i
+                ON CONFLICT DO NOTHING;"""
             )
         else:
             self.cursor.execute(
                 """
-				INSERT OR IGNORE INTO users(creation_identity_type_id,creation_identity)
-					SELECT i.identity_type_id,i.identity FROM identities i
-				;"""
+                INSERT OR IGNORE INTO users(creation_identity_type_id,creation_identity)
+                    SELECT i.identity_type_id,i.identity FROM identities i
+                ;"""
             )
         # Associating each identity to its user
         # if self.db_type == 'postgres':
-        # 	self.cursor.execute('''
-        # 		UPDATE identities SET user_id=u.id
-        # 			FROM identities i
-        # 			INNER JOIN users u
-        # 			ON i.identity=u.creation_identity
-        # 			AND i.identity_type_id=u.creation_identity_type_id
-        # 		;''')
+        #   self.cursor.execute('''
+        #       UPDATE identities SET user_id=u.id
+        #           FROM identities i
+        #           INNER JOIN users u
+        #           ON i.identity=u.creation_identity
+        #           AND i.identity_type_id=u.creation_identity_type_id
+        #       ;''')
         # else:
         self.cursor.execute(
             """
-				UPDATE identities SET user_id=(SELECT u.id FROM users u
-					WHERE identities.identity=u.creation_identity
-					AND identities.identity_type_id=u.creation_identity_type_id)
-				;"""
+                UPDATE identities SET user_id=(SELECT u.id FROM users u
+                    WHERE identities.identity=u.creation_identity
+                    AND identities.identity_type_id=u.creation_identity_type_id)
+                ;"""
         )
 
         self.connection.commit()
@@ -2399,19 +2400,19 @@ class Database(object):
         if self.db_type == "postgres":
             self.cursor.execute(
                 """
-				INSERT INTO merged_repositories(
-				new_id,
-				new_source,
-				new_owner,
-				new_name,
-				obsolete_id,
-				obsolete_source,
-				obsolete_owner,
-				obsolete_name,
-				merging_reason_source)
-					VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)
-					RETURNING id
-				;""",
+                INSERT INTO merged_repositories(
+                new_id,
+                new_source,
+                new_owner,
+                new_name,
+                obsolete_id,
+                obsolete_source,
+                obsolete_owner,
+                obsolete_name,
+                merging_reason_source)
+                    VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    RETURNING id
+                ;""",
                 (
                     new_id,
                     new_source,
@@ -2463,18 +2464,18 @@ class Database(object):
         else:
             self.cursor.execute(
                 """
-				INSERT INTO merged_repositories(
-				new_id,
-				new_source,
-				new_owner,
-				new_name,
-				obsolete_id,
-				obsolete_source,
-				obsolete_owner,
-				obsolete_name,
-				merging_reason_source)
-					VALUES(?,?,?,?,?,?,?,?,?)
-				;""",
+                INSERT INTO merged_repositories(
+                new_id,
+                new_source,
+                new_owner,
+                new_name,
+                obsolete_id,
+                obsolete_source,
+                obsolete_owner,
+                obsolete_name,
+                merging_reason_source)
+                    VALUES(?,?,?,?,?,?,?,?,?)
+                ;""",
                 (
                     new_id,
                     new_source,
@@ -2502,17 +2503,17 @@ class Database(object):
         if self.db_type == "postgres":
             self.cursor.execute(
                 """
-				UPDATE merged_repositories SET merged_at=CURRENT_TIMESTAMP
-					WHERE id=%s
-					;""",
+                UPDATE merged_repositories SET merged_at=CURRENT_TIMESTAMP
+                    WHERE id=%s
+                    ;""",
                 (merged_repo_table_id,),
             )
         else:
             self.cursor.execute(
                 """
-				UPDATE merged_repositories SET merged_at=CURRENT_TIMESTAMP
-					WHERE id=?
-					;""",
+                UPDATE merged_repositories SET merged_at=CURRENT_TIMESTAMP
+                    WHERE id=?
+                    ;""",
                 (merged_repo_table_id,),
             )
         self.connection.commit()
@@ -2524,18 +2525,18 @@ class Database(object):
         """
         self.cursor.execute(
             """
-			SELECT id,
-				new_id,
-				new_source,
-				new_owner,
-				new_name,
-				obsolete_id,
-				obsolete_source,
-				obsolete_owner,
-				obsolete_name,
-				merging_reason_source FROM merged_repositories
-			WHERE merged_at is NULL
-			;"""
+            SELECT id,
+                new_id,
+                new_source,
+                new_owner,
+                new_name,
+                obsolete_id,
+                obsolete_source,
+                obsolete_owner,
+                obsolete_name,
+                merging_reason_source FROM merged_repositories
+            WHERE merged_at is NULL
+            ;"""
         )
 
         merge_list = [
@@ -2748,13 +2749,13 @@ class Database(object):
                 if self.db_type == "postgres":
                     self.cursor.execute(
                         """SELECT cu.url
-							FROM urls cu
-							INNER JOIN urls u
-								ON cu.id=u.cleaned_url
-							INNER JOIN repositories r
-								ON r.url_id=u.id
-								AND r.id=%s
-						;""",
+                            FROM urls cu
+                            INNER JOIN urls u
+                                ON cu.id=u.cleaned_url
+                            INNER JOIN repositories r
+                                ON r.url_id=u.id
+                                AND r.id=%s
+                        ;""",
                         (obsolete_id,),
                     )
 
@@ -2768,9 +2769,9 @@ class Database(object):
 
                     self.cursor.execute(
                         """SELECT u.id
-							FROM urls u
-							WHERE u.url=%s
-						;""",
+                            FROM urls u
+                            WHERE u.url=%s
+                        ;""",
                         (url,),
                     )
 
@@ -2778,9 +2779,9 @@ class Database(object):
 
                     self.cursor.execute(
                         """SELECT r.url_id
-							FROM repositories r
-							WHERE r.id=%s
-						;""",
+                            FROM repositories r
+                            WHERE r.id=%s
+                        ;""",
                         (obsolete_id,),
                     )
 
@@ -2789,13 +2790,13 @@ class Database(object):
 
                     self.cursor.execute(
                         """
-						UPDATE repositories SET
-							url_id=%s,
-							source=%s,
-							owner=%s,
-							name=%s
-						WHERE id=%s
-						;""",
+                        UPDATE repositories SET
+                            url_id=%s,
+                            source=%s,
+                            owner=%s,
+                            name=%s
+                        WHERE id=%s
+                        ;""",
                         (url_id, new_source_id, new_owner, new_name, obsolete_id),
                     )
 
@@ -2807,8 +2808,8 @@ class Database(object):
                     if old_url_id is not None:
                         self.cursor.execute(
                             """UPDATE urls SET cleaned_url=%s
-							WHERE urls.cleaned_url=(SELECT u.cleaned_url FROM urls u WHERE u.id=%s)
-						;""",
+                            WHERE urls.cleaned_url=(SELECT u.cleaned_url FROM urls u WHERE u.id=%s)
+                        ;""",
                             (
                                 url_id,
                                 old_url_id,
@@ -2818,13 +2819,13 @@ class Database(object):
                 else:
                     self.cursor.execute(
                         """SELECT cu.url
-							FROM urls cu
-							INNER JOIN urls u
-								ON cu.id=u.cleaned_url
-							INNER JOIN repositories r
-								ON r.url_id=u.id
-								AND r.id=?
-						;""",
+                            FROM urls cu
+                            INNER JOIN urls u
+                                ON cu.id=u.cleaned_url
+                            INNER JOIN repositories r
+                                ON r.url_id=u.id
+                                AND r.id=?
+                        ;""",
                         (obsolete_id,),
                     )
 
@@ -2838,9 +2839,9 @@ class Database(object):
 
                     self.cursor.execute(
                         """SELECT u.id
-							FROM urls u
-							WHERE u.url=?
-						;""",
+                            FROM urls u
+                            WHERE u.url=?
+                        ;""",
                         (url,),
                     )
 
@@ -2848,9 +2849,9 @@ class Database(object):
 
                     self.cursor.execute(
                         """SELECT r.url_id
-							FROM repositories r
-							WHERE r.id=?
-						;""",
+                            FROM repositories r
+                            WHERE r.id=?
+                        ;""",
                         (obsolete_id,),
                     )
 
@@ -2859,13 +2860,13 @@ class Database(object):
 
                     self.cursor.execute(
                         """
-						UPDATE repositories SET
-							url_id=?,
-							source=?,
-							owner=?,
-							name=?
-						WHERE id=?
-						;""",
+                        UPDATE repositories SET
+                            url_id=?,
+                            source=?,
+                            owner=?,
+                            name=?
+                        WHERE id=?
+                        ;""",
                         (url_id, new_source_id, new_owner, new_name, obsolete_id),
                     )
 
@@ -2877,8 +2878,8 @@ class Database(object):
                     if old_url_id is not None:
                         self.cursor.execute(
                             """UPDATE urls SET cleaned_url=?
-							WHERE urls.cleaned_url=(SELECT u.cleaned_url FROM urls u WHERE u.id=?)
-						;""",
+                            WHERE urls.cleaned_url=(SELECT u.cleaned_url FROM urls u WHERE u.id=?)
+                        ;""",
                             (
                                 url_id,
                                 old_url_id,
@@ -2919,7 +2920,7 @@ class Database(object):
                             ),
                         )
                         # if not os.listdir(os.path.join(self.clone_folder,new_source_name,new_owner)):
-                        # 	shutil.rmtree(os.path.join(self.clone_folder,new_source_name,new_owner))
+                        #   shutil.rmtree(os.path.join(self.clone_folder,new_source_name,new_owner))
                         os.symlink(
                             os.path.abspath(
                                 os.path.join(
@@ -2942,21 +2943,21 @@ class Database(object):
                 if self.db_type == "postgres":
                     self.cursor.execute(
                         """SELECT cu.url
-							FROM urls cu
-							INNER JOIN urls u
-								ON cu.id=u.cleaned_url
-							INNER JOIN repositories r
-								ON r.url_id=u.id
-								AND r.id=%s
-						;""",
+                            FROM urls cu
+                            INNER JOIN urls u
+                                ON cu.id=u.cleaned_url
+                            INNER JOIN repositories r
+                                ON r.url_id=u.id
+                                AND r.id=%s
+                        ;""",
                         (obsolete_id,),
                     )
 
                     self.cursor.execute(
                         """SELECT r.url_id
-							FROM repositories r
-							WHERE r.id=%s
-						;""",
+                            FROM repositories r
+                            WHERE r.id=%s
+                        ;""",
                         (new_id,),
                     )
 
@@ -2964,9 +2965,9 @@ class Database(object):
 
                     self.cursor.execute(
                         """SELECT r.url_id
-							FROM repositories r
-							WHERE r.id=%s
-						;""",
+                            FROM repositories r
+                            WHERE r.id=%s
+                        ;""",
                         (obsolete_id,),
                     )
 
@@ -2984,13 +2985,13 @@ class Database(object):
 
                     self.cursor.execute(
                         """SELECT cu.url
-							FROM urls cu
-							INNER JOIN urls u
-								ON cu.id=u.cleaned_url
-							INNER JOIN repositories r
-								ON r.url_id=u.id
-								AND r.id=%s
-						;""",
+                            FROM urls cu
+                            INNER JOIN urls u
+                                ON cu.id=u.cleaned_url
+                            INNER JOIN repositories r
+                                ON r.url_id=u.id
+                                AND r.id=%s
+                        ;""",
                         (new_id,),
                     )
 
@@ -3002,48 +3003,48 @@ class Database(object):
 
                     self.cursor.execute(
                         """
-						UPDATE packages SET repo_id=%s
-						WHERE repo_id=%s
-						;""",
+                        UPDATE packages SET repo_id=%s
+                        WHERE repo_id=%s
+                        ;""",
                         (new_id, obsolete_id),
                     )
                     self.cursor.execute(
                         """
-						UPDATE commits SET repo_id=%s
-						WHERE repo_id=%s
-						;""",
+                        UPDATE commits SET repo_id=%s
+                        WHERE repo_id=%s
+                        ;""",
                         (new_id, obsolete_id),
                     )
                     self.cursor.execute(
                         """
-						UPDATE stars SET repo_id=%s
-						WHERE repo_id=%s
-						AND NOT EXISTS (SELECT repo_id FROM stars s WHERE s.repo_id=%s AND stars.login=s.login AND stars.identity_type_id=s.identity_type_id)
-						;""",
+                        UPDATE stars SET repo_id=%s
+                        WHERE repo_id=%s
+                        AND NOT EXISTS (SELECT repo_id FROM stars s WHERE s.repo_id=%s AND stars.login=s.login AND stars.identity_type_id=s.identity_type_id)
+                        ;""",
                         (new_id, obsolete_id, new_id),
                     )
                     self.cursor.execute(
                         """
-						UPDATE commit_repos SET repo_id=%s
-						WHERE repo_id=%s
-						AND NOT EXISTS (SELECT repo_id FROM commit_repos cr WHERE cr.repo_id=%s AND commit_repos.commit_id=cr.commit_id)
-						;""",
+                        UPDATE commit_repos SET repo_id=%s
+                        WHERE repo_id=%s
+                        AND NOT EXISTS (SELECT repo_id FROM commit_repos cr WHERE cr.repo_id=%s AND commit_repos.commit_id=cr.commit_id)
+                        ;""",
                         (new_id, obsolete_id, new_id),
                     )
                     self.cursor.execute(
                         """
-						UPDATE forks SET forked_repo_id=%s
-						WHERE forked_repo_id=%s
-						AND NOT EXISTS (SELECT forked_repo_id FROM forks f WHERE f.forked_repo_id=%s AND forks.forking_repo_url=f.forking_repo_url)
-						;""",
+                        UPDATE forks SET forked_repo_id=%s
+                        WHERE forked_repo_id=%s
+                        AND NOT EXISTS (SELECT forked_repo_id FROM forks f WHERE f.forked_repo_id=%s AND forks.forking_repo_url=f.forking_repo_url)
+                        ;""",
                         (new_id, obsolete_id, new_id),
                     )
                     self.cursor.execute(
                         """
-						UPDATE forks SET forking_repo_id=%s,forking_repo_url=%s
-						WHERE forking_repo_id=%s
-						AND NOT EXISTS (SELECT forked_repo_id FROM forks f WHERE f.forking_repo_id=%s AND forks.forked_repo_id=f.forked_repo_id)
-						;""",
+                        UPDATE forks SET forking_repo_id=%s,forking_repo_url=%s
+                        WHERE forking_repo_id=%s
+                        AND NOT EXISTS (SELECT forked_repo_id FROM forks f WHERE f.forking_repo_id=%s AND forks.forked_repo_id=f.forked_repo_id)
+                        ;""",
                         (new_id, url[8:], obsolete_id, new_id),
                     )
 
@@ -3054,8 +3055,8 @@ class Database(object):
                     if old_url_id is not None:
                         self.cursor.execute(
                             """UPDATE urls SET cleaned_url=%s
-							WHERE urls.cleaned_url=(SELECT u.cleaned_url FROM urls u WHERE u.id=%s)
-						;""",
+                            WHERE urls.cleaned_url=(SELECT u.cleaned_url FROM urls u WHERE u.id=%s)
+                        ;""",
                             (
                                 url_id,
                                 old_url_id,
@@ -3065,13 +3066,13 @@ class Database(object):
                 else:
                     self.cursor.execute(
                         """SELECT cu.url
-							FROM urls cu
-							INNER JOIN urls u
-								ON cu.id=u.cleaned_url
-							INNER JOIN repositories r
-								ON r.url_id=u.id
-								AND r.id=?
-						;""",
+                            FROM urls cu
+                            INNER JOIN urls u
+                                ON cu.id=u.cleaned_url
+                            INNER JOIN repositories r
+                                ON r.url_id=u.id
+                                AND r.id=?
+                        ;""",
                         (obsolete_id,),
                     )
 
@@ -3085,13 +3086,13 @@ class Database(object):
 
                     self.cursor.execute(
                         """SELECT cu.url
-							FROM urls cu
-							INNER JOIN urls u
-								ON cu.id=u.cleaned_url
-							INNER JOIN repositories r
-								ON r.url_id=u.id
-								AND r.id=?
-						;""",
+                            FROM urls cu
+                            INNER JOIN urls u
+                                ON cu.id=u.cleaned_url
+                            INNER JOIN repositories r
+                                ON r.url_id=u.id
+                                AND r.id=?
+                        ;""",
                         (new_id,),
                     )
 
@@ -3103,9 +3104,9 @@ class Database(object):
 
                     self.cursor.execute(
                         """SELECT r.url_id
-							FROM repositories r
-							WHERE r.id=?
-						;""",
+                            FROM repositories r
+                            WHERE r.id=?
+                        ;""",
                         (new_id,),
                     )
 
@@ -3113,9 +3114,9 @@ class Database(object):
 
                     self.cursor.execute(
                         """SELECT r.url_id
-							FROM repositories r
-							WHERE r.id=?
-						;""",
+                            FROM repositories r
+                            WHERE r.id=?
+                        ;""",
                         (obsolete_id,),
                     )
 
@@ -3125,48 +3126,48 @@ class Database(object):
 
                     self.cursor.execute(
                         """
-						UPDATE OR IGNORE packages SET repo_id=?
-						WHERE repo_id=?
-						;""",
+                        UPDATE OR IGNORE packages SET repo_id=?
+                        WHERE repo_id=?
+                        ;""",
                         (new_id, obsolete_id),
                     )
                     self.cursor.execute(
                         """
-						UPDATE OR IGNORE commits SET repo_id=?
-						WHERE repo_id=?
-						;""",
+                        UPDATE OR IGNORE commits SET repo_id=?
+                        WHERE repo_id=?
+                        ;""",
                         (new_id, obsolete_id),
                     )
                     self.cursor.execute(
                         """
-						UPDATE OR IGNORE stars SET repo_id=?
-						WHERE repo_id=?
-						AND NOT EXISTS (SELECT repo_id FROM stars s WHERE s.repo_id=? AND stars.login=s.login AND stars.identity_type_id=s.identity_type_id)
-						;""",
+                        UPDATE OR IGNORE stars SET repo_id=?
+                        WHERE repo_id=?
+                        AND NOT EXISTS (SELECT repo_id FROM stars s WHERE s.repo_id=? AND stars.login=s.login AND stars.identity_type_id=s.identity_type_id)
+                        ;""",
                         (new_id, obsolete_id, new_id),
                     )
                     self.cursor.execute(
                         """
-						UPDATE OR IGNORE commit_repos SET repo_id=?
-						WHERE repo_id=?
-						AND NOT EXISTS (SELECT repo_id FROM commit_repos cr WHERE cr.repo_id=? AND commit_repos.commit_id=cr.commit_id)
-						;""",
+                        UPDATE OR IGNORE commit_repos SET repo_id=?
+                        WHERE repo_id=?
+                        AND NOT EXISTS (SELECT repo_id FROM commit_repos cr WHERE cr.repo_id=? AND commit_repos.commit_id=cr.commit_id)
+                        ;""",
                         (new_id, obsolete_id, new_id),
                     )
                     self.cursor.execute(
                         """
-						UPDATE OR IGNORE forks SET forked_repo_id=?
-						WHERE forked_repo_id=?
-						AND NOT EXISTS (SELECT forked_repo_id FROM forks f WHERE f.forked_repo_id=? AND forks.forking_repo_id=f.forking_repo_id AND forks.forking_repo_url=f.forking_repo_url)
-						;""",
+                        UPDATE OR IGNORE forks SET forked_repo_id=?
+                        WHERE forked_repo_id=?
+                        AND NOT EXISTS (SELECT forked_repo_id FROM forks f WHERE f.forked_repo_id=? AND forks.forking_repo_id=f.forking_repo_id AND forks.forking_repo_url=f.forking_repo_url)
+                        ;""",
                         (new_id, obsolete_id, new_id),
                     )
                     self.cursor.execute(
                         """
-						UPDATE OR IGNORE forks SET forking_repo_id=?,forking_repo_url=?
-						WHERE forking_repo_id=?
-						AND NOT EXISTS (SELECT forked_repo_id FROM forks f WHERE f.forking_repo_id=? AND forks.forked_repo_id=f.forked_repo_id)
-						;""",
+                        UPDATE OR IGNORE forks SET forking_repo_id=?,forking_repo_url=?
+                        WHERE forking_repo_id=?
+                        AND NOT EXISTS (SELECT forked_repo_id FROM forks f WHERE f.forking_repo_id=? AND forks.forked_repo_id=f.forked_repo_id)
+                        ;""",
                         (new_id, url[8:], obsolete_id, new_id),
                     )
 
@@ -3177,8 +3178,8 @@ class Database(object):
                     if old_url_id is not None:
                         self.cursor.execute(
                             """UPDATE urls SET cleaned_url=?
-							WHERE urls.cleaned_url=(SELECT u.cleaned_url FROM urls u WHERE u.id=?)
-						;""",
+                            WHERE urls.cleaned_url=(SELECT u.cleaned_url FROM urls u WHERE u.id=?)
+                        ;""",
                             (
                                 url_id,
                                 old_url_id,
@@ -3197,17 +3198,17 @@ class Database(object):
         if self.db_type == "postgres":
             self.cursor.execute(
                 """
-				INSERT INTO _error_logs(error)
-				VALUES (%s);
-				""",
+                INSERT INTO _error_logs(error)
+                VALUES (%s);
+                """,
                 (message,),
             )
         else:
             self.cursor.execute(
                 """
-				INSERT INTO _error_logs(error)
-				VALUES (?);
-				""",
+                INSERT INTO _error_logs(error)
+                VALUES (?);
+                """,
                 (message,),
             )
         self.connection.commit()
@@ -3216,21 +3217,21 @@ class Database(object):
         if safe:
             self.cursor.execute(
                 """
-				DELETE FROM users
-				WHERE
-					EXISTS (SELECT 1 FROM identities i
-						WHERE i.identity  = users.creation_identity AND users.creation_identity_type_id=i.identity_type_id )
-					AND NOT EXISTS (SELECT 1 FROM identities
-						WHERE identities.user_id  = users.id )
-				;"""
+                DELETE FROM users
+                WHERE
+                    EXISTS (SELECT 1 FROM identities i
+                        WHERE i.identity  = users.creation_identity AND users.creation_identity_type_id=i.identity_type_id )
+                    AND NOT EXISTS (SELECT 1 FROM identities
+                        WHERE identities.user_id  = users.id )
+                ;"""
             )
         else:
             self.cursor.execute(
                 """
-				DELETE FROM users
-				WHERE NOT EXISTS (SELECT 1 FROM identities
-						WHERE identities.user_id  = users.id )
-				;"""
+                DELETE FROM users
+                WHERE NOT EXISTS (SELECT 1 FROM identities
+                        WHERE identities.user_id  = users.id )
+                ;"""
             )
 
         self.connection.commit()
@@ -3252,37 +3253,37 @@ class ComputationDB(object):
         )
         self.db_id = self.orig_db.cursor.fetchone()[0]
         CP_DBINIT = """
-				CREATE TABLE IF NOT EXISTS measures(
-				id INTEGER PRIMARY KEY,
-				name TEXT NOT NULL,
-				db_id TEXT NOT NULL,
-				params TEXT NOT NULL,
-				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-				completed_at TIMESTAMP DEFAULT NULL,
-				UNIQUE(db_id,name,params)
-				);
+                CREATE TABLE IF NOT EXISTS measures(
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                db_id TEXT NOT NULL,
+                params TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                completed_at TIMESTAMP DEFAULT NULL,
+                UNIQUE(db_id,name,params)
+                );
 
-				CREATE TABLE IF NOT EXISTS data_repositories(
-				measure INTEGER REFERENCES measures(id) ON DELETE CASCADE,
-				obj_id INTEGER NOT NULL,
-				measured_at DATE NOT NULL,
-				value REAL,
-				PRIMARY KEY(measure,obj_id,measured_at)
-				);
+                CREATE TABLE IF NOT EXISTS data_repositories(
+                measure INTEGER REFERENCES measures(id) ON DELETE CASCADE,
+                obj_id INTEGER NOT NULL,
+                measured_at DATE NOT NULL,
+                value REAL,
+                PRIMARY KEY(measure,obj_id,measured_at)
+                );
 
-				CREATE INDEX IF NOT EXISTS repo_idx2 ON data_repositories(measure,measured_at,obj_id);
+                CREATE INDEX IF NOT EXISTS repo_idx2 ON data_repositories(measure,measured_at,obj_id);
 
-				CREATE TABLE IF NOT EXISTS data_users(
-				measure INTEGER REFERENCES measures(id) ON DELETE CASCADE,
-				obj_id INTEGER NOT NULL,
-				measured_at DATE NOT NULL,
-				value REAL,
-				PRIMARY KEY(measure,obj_id,measured_at)
-				);
+                CREATE TABLE IF NOT EXISTS data_users(
+                measure INTEGER REFERENCES measures(id) ON DELETE CASCADE,
+                obj_id INTEGER NOT NULL,
+                measured_at DATE NOT NULL,
+                value REAL,
+                PRIMARY KEY(measure,obj_id,measured_at)
+                );
 
-				CREATE INDEX IF NOT EXISTS user_idx2 ON data_users(measure,measured_at,obj_id);
+                CREATE INDEX IF NOT EXISTS user_idx2 ON data_users(measure,measured_at,obj_id);
 
-				"""
+                """
         for q in CP_DBINIT.split(";")[:-1]:
             self.cursor.execute(q)
         self.connection.commit()
@@ -3383,11 +3384,11 @@ class ComputationDB(object):
             if obj_id is None:
                 self.cursor.execute(
                     """
-					SELECT obj_id,measured_at,value FROM data_{}
-					WHERE measure=?
-					AND date(datetime(?))<=measured_at AND measured_at<=date(datetime(?))
-					ORDER BY obj_id,measured_at;
-					""".format(
+                    SELECT obj_id,measured_at,value FROM data_{}
+                    WHERE measure=?
+                    AND date(datetime(?))<=measured_at AND measured_at<=date(datetime(?))
+                    ORDER BY obj_id,measured_at;
+                    """.format(
                         table_name
                     ),
                     (measure_id, start_time, end_time),
@@ -3395,12 +3396,12 @@ class ComputationDB(object):
             else:
                 self.cursor.execute(
                     """
-					SELECT obj_id,measured_at,value FROM data_{}
-					WHERE measure=?
-					AND date(datetime(?))<=measured_at AND measured_at<=date(datetime(?))
-					AND obj_id=?
-					ORDER BY obj_id,measured_at;
-					""".format(
+                    SELECT obj_id,measured_at,value FROM data_{}
+                    WHERE measure=?
+                    AND date(datetime(?))<=measured_at AND measured_at<=date(datetime(?))
+                    AND obj_id=?
+                    ORDER BY obj_id,measured_at;
+                    """.format(
                         table_name
                     ),
                     (measure_id, start_time, end_time, obj_id),
@@ -3419,9 +3420,9 @@ class ComputationDB(object):
         else:
             self.cursor.executemany(
                 """
-				INSERT OR IGNORE INTO data_{} (measure,obj_id,measured_at,value)
-				VALUES(?,?,?,?);
-				""".format(
+                INSERT OR IGNORE INTO data_{} (measure,obj_id,measured_at,value)
+                VALUES(?,?,?,?);
+                """.format(
                     table_name
                 ),
                 (
@@ -3432,9 +3433,9 @@ class ComputationDB(object):
             if self.cursor.rowcount > 0:
                 self.cursor.execute(
                     """
-					UPDATE measures SET completed_at=CURRENT_TIMESTAMP
-					WHERE id=?
-					;""",
+                    UPDATE measures SET completed_at=CURRENT_TIMESTAMP
+                    WHERE id=?
+                    ;""",
                     (measure_id,),
                 )
 

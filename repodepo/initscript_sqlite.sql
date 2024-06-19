@@ -543,12 +543,45 @@
 
 
 				CREATE TABLE IF NOT EXISTS _bots_manual_check(
-					identity_id BIGINT PRIMARY KEY REFERENCES identities(id) ON DELETE CASCADE,
+					identity_id INTEGER PRIMARY KEY REFERENCES identities(id) ON DELETE CASCADE,
 					identity TEXT,
-					identity_type_id BIGINT REFERENCES identity_types(id) ON DELETE CASCADE,
+					identity_type_id INTEGER REFERENCES identity_types(id) ON DELETE CASCADE,
 					identity_type TEXT,
 					is_bot BOOLEAN,
 					-- is_invalid BOOLEAN,
 					note TEXT,
 					additional_info TEXT
+					);
+
+				CREATE TABLE IF NOT EXISTS commit_comments_lang(
+					lang TEXT,
+					prob REAL,
+					repo_id INTEGER,
+					commit_id INTEGER,
+					comment_id INTEGER,
+					lang_rank INTEGER,
+					FOREIGN KEY(repo_id,commit_id,comment_id) REFERENCES commit_comments(repo_id,commit_id,comment_id) ON DELETE CASCADE,
+					PRIMARY KEY(repo_id,commit_id,comment_id,lang)
+					);
+
+				CREATE TABLE IF NOT EXISTS issue_comments_lang(
+					lang TEXT,
+					prob REAL,
+					repo_id INTEGER,
+					issue_number INTEGER,
+					comment_id INTEGER,
+					lang_rank INTEGER,
+					FOREIGN KEY(repo_id,issue_number,comment_id) REFERENCES issue_comments(repo_id,issue_number,comment_id) ON DELETE CASCADE,
+					PRIMARY KEY(repo_id,issue_number,comment_id,lang)
+					);
+
+				CREATE TABLE IF NOT EXISTS pullrequest_comments_lang(
+					lang TEXT,
+					prob REAL,
+					repo_id INTEGER,
+					pullrequest_number INTEGER,
+					comment_id INTEGER,
+					lang_rank INTEGER,
+					FOREIGN KEY(repo_id,pullrequest_number,comment_id) REFERENCES pullrequest_comments(repo_id,pullrequest_number,comment_id) ON DELETE CASCADE,
+					PRIMARY KEY(repo_id,pullrequest_number,comment_id,lang)
 					);

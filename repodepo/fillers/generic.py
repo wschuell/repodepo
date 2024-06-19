@@ -6,8 +6,11 @@ import pygit2
 import json
 import shutil
 import datetime
+import sqlite3
 import subprocess
 import itertools
+import langdetect
+import uuid
 
 from psycopg2 import extras
 
@@ -2491,3 +2494,175 @@ class FixURL(fillers.Filler):
                 )
 
         self.db.connection.commit()
+
+
+class CommentLangFiller(fillers.Filler):
+    def __init__(self, comment_batch_size=10**4, **kwargs):
+        fillers.Filler.__init__(self, **kwargs)
+        self.comment_batch_size = comment_batch_size
+
+    def prepare(self):
+        self.reset_cursor()
+
+    def reset_cursor(self):
+        if self.db.db_type == "sqlite":
+            self.extracursor = self.db.connection.cursor()
+            self.extracursor.row_factory = sqlite3.Row
+        else:
+            self.extracursor = self.db.connection.cursor(
+                name=str(uuid.uuid1()), cursor_factory=extras.DictCursor
+            )
+
+    def apply(self):
+        self.fill_issue_comments()
+        self.fill_commit_comments()
+        self.fill_pullrequest_comments()
+
+    def process_text(self, t):
+        try:
+            return langdetect.detect_langs(t)
+        except:
+            return []
+
+    def parse_data(self, data):
+        for i, d in enumerate(data):
+            l_detect = self.process_text(d["comment_text"])
+            for lang_rank, lp in enumerate(l_detect):
+                yield dict(d, lang=lp.lang, prob=lp.prob, lang_rank=lang_rank)
+            if (i + 1) % 10**6 == 0:
+                self.logger.info(f"Processed {i} comments")
+
+    def fill_issue_comments(self):
+        self.logger.info("Parsing issue comments for language detection")
+        self.extracursor.execute(
+            """
+            SELECT repo_id,issue_number,comment_id,comment_text
+            FROM issue_comments;
+            """
+        )
+        comments = self.extracursor.fetchall()
+
+        if self.db.db_type == "postgres":
+            extras.execute_values(
+                self.db.cursor,
+                sql="""
+                INSERT INTO issue_comments_lang(repo_id,issue_number,comment_id,lang,prob,lang_rank)
+                VALUES %s 
+                ON CONFLICT DO NOTHING;
+                """,
+                argslist=self.parse_data(comments),
+                template="""(%(repo_id)s,
+                            %(issue_number)s,
+                            %(comment_id)s,
+                            %(lang)s,
+                            %(prob)s,
+                            %(lang_rank)s
+                )""",
+            )
+        else:
+            self.db.cursor.executemany(
+                """
+                INSERT INTO issue_comments_lang(repo_id,issue_number,comment_id,lang,prob,lang_rank)
+                VALUES (:repo_id,
+                    :issue_number,
+                    :comment_id,
+                    :lang,
+                    :prob,
+                    :lang_rank)
+                ON CONFLICT DO NOTHING;
+                """,
+                self.parse_data(comments),
+            )
+
+        self.db.connection.commit()
+        self.reset_cursor()
+
+    def fill_commit_comments(self):
+        self.logger.info("Parsing commit comments for language detection")
+        self.extracursor.execute(
+            """
+            SELECT repo_id,commit_id,comment_id,comment_text
+            FROM commit_comments;
+            """
+        )
+        comments = self.extracursor.fetchall()
+
+        if self.db.db_type == "postgres":
+            extras.execute_values(
+                self.db.cursor,
+                sql="""
+                INSERT INTO commit_comments_lang(repo_id,commit_id,comment_id,lang,prob,lang_rank)
+                VALUES %s 
+                ON CONFLICT DO NOTHING;
+                """,
+                argslist=self.parse_data(comments),
+                template="""(%(repo_id)s,
+                            %(commit_id)s,
+                            %(comment_id)s,
+                            %(lang)s,
+                            %(prob)s,
+                            %(lang_rank)s
+                )""",
+            )
+        else:
+            self.db.cursor.executemany(
+                """
+                INSERT INTO commit_comments_lang(repo_id,commit_id,comment_id,lang,prob,lang_rank)
+                VALUES (:repo_id,
+                    :commit_id,
+                    :comment_id,
+                    :lang,
+                    :prob,
+                    :lang_rank)
+                ON CONFLICT DO NOTHING;
+                """,
+                self.parse_data(comments),
+            )
+
+        self.db.connection.commit()
+        self.reset_cursor()
+
+    def fill_pullrequest_comments(self):
+        self.logger.info("Parsing PR comments for language detection")
+        self.extracursor.execute(
+            """
+            SELECT repo_id,pullrequest_number,comment_id,comment_text
+            FROM pullrequest_comments;
+            """
+        )
+        comments = self.extracursor.fetchall()
+
+        if self.db.db_type == "postgres":
+            extras.execute_values(
+                self.db.cursor,
+                sql="""
+                INSERT INTO pullrequest_comments_lang(repo_id,pullrequest_number,comment_id,lang,prob,lang_rank)
+                VALUES %s 
+                ON CONFLICT DO NOTHING;
+                """,
+                argslist=self.parse_data(comments),
+                template="""(%(repo_id)s,
+                            %(pullrequest_number)s,
+                            %(comment_id)s,
+                            %(lang)s,
+                            %(prob)s,
+                            %(lang_rank)s
+                )""",
+            )
+        else:
+            self.db.cursor.executemany(
+                """
+                INSERT INTO pullrequest_comments_lang(repo_id,pullrequest_number,comment_id,lang,prob,lang_rank)
+                VALUES (:repo_id,
+                    :pullrequest_number,
+                    :comment_id,
+                    :lang,
+                    :prob,
+                    :lang_rank)
+                ON CONFLICT DO NOTHING;
+                """,
+                self.parse_data(comments),
+            )
+
+        self.db.connection.commit()
+        self.reset_cursor()

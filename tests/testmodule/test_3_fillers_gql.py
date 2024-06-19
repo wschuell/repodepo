@@ -166,5 +166,5 @@ def test_complete_issues_pr(testdb):
             fail_on_wait=True, workers=workers, secondary_page_size=1
         )
     )
-
+    testdb.add_filler(generic.CommentLangFiller())
     testdb.fill_db()
