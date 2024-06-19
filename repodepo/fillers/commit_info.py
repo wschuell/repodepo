@@ -75,12 +75,12 @@ class CommitsFiller(fillers.Filler):
         if all_commits:
             self.db.cursor.execute(
                 """
-				SELECT s.name,r.owner,r.name,r.id
-				FROM repositories r
-				INNER JOIN sources s
-				ON s.id=r.source AND r.cloned
-				ORDER BY s.name,r.owner,r.name
-				;"""
+                SELECT s.name,r.owner,r.name,r.id
+                FROM repositories r
+                INNER JOIN sources s
+                ON s.id=r.source AND r.cloned
+                ORDER BY s.name,r.owner,r.name
+                ;"""
             )
             return [
                 {"source": r[0], "owner": r[1], "name": r[2], "repo_id": r[3]}
@@ -93,59 +93,59 @@ class CommitsFiller(fillers.Filler):
                 if self.db.db_type == "postgres":
                     self.db.cursor.execute(
                         """
-						SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id,extract(epoch from r.latest_commit_time)
-						FROM repositories r
-						INNER JOIN sources s
-						ON s.id=r.source AND r.cloned
-						EXCEPT
-						(SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id,extract(epoch from r.latest_commit_time)
-						FROM repositories r
-						INNER JOIN sources s
-						ON s.id=r.source AND r.cloned
-						INNER JOIN table_updates tu
-						ON tu.table_name=%s AND tu.repo_id=r.id AND tu.success)
-						ORDER BY sname,rowner,rname
-						;""",
+                        SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id,extract(epoch from r.latest_commit_time)
+                        FROM repositories r
+                        INNER JOIN sources s
+                        ON s.id=r.source AND r.cloned
+                        EXCEPT
+                        (SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id,extract(epoch from r.latest_commit_time)
+                        FROM repositories r
+                        INNER JOIN sources s
+                        ON s.id=r.source AND r.cloned
+                        INNER JOIN table_updates tu
+                        ON tu.table_name=%s AND tu.repo_id=r.id AND tu.success)
+                        ORDER BY sname,rowner,rname
+                        ;""",
                         (option,),
                     )
                 else:
                     self.db.cursor.execute(
                         """
-						SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
-						FROM repositories r
-						INNER JOIN sources s
-						ON s.id=r.source AND r.cloned
-						EXCEPT
-						SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
-						FROM repositories r
-						INNER JOIN sources s
-						ON s.id=r.source AND r.cloned
-						INNER JOIN table_updates tu
-						ON tu.table_name=? AND tu.repo_id=r.id AND tu.success
-						ORDER BY sname,rowner,rname
-						;""",
+                        SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
+                        FROM repositories r
+                        INNER JOIN sources s
+                        ON s.id=r.source AND r.cloned
+                        EXCEPT
+                        SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
+                        FROM repositories r
+                        INNER JOIN sources s
+                        ON s.id=r.source AND r.cloned
+                        INNER JOIN table_updates tu
+                        ON tu.table_name=? AND tu.repo_id=r.id AND tu.success
+                        ORDER BY sname,rowner,rname
+                        ;""",
                         (option,),
                     )
             else:
                 if self.db.db_type == "postgres":
                     self.db.cursor.execute(
                         """
-						SELECT s.name,r.owner,r.name,r.id,extract(epoch from r.latest_commit_time)
-						FROM repositories r
-						INNER JOIN sources s
-						ON s.id=r.source AND r.cloned
-						ORDER BY s.name,r.owner,r.name
-						;"""
+                        SELECT s.name,r.owner,r.name,r.id,extract(epoch from r.latest_commit_time)
+                        FROM repositories r
+                        INNER JOIN sources s
+                        ON s.id=r.source AND r.cloned
+                        ORDER BY s.name,r.owner,r.name
+                        ;"""
                     )
                 else:
                     self.db.cursor.execute(
                         """
-						SELECT s.name,r.owner,r.name,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
-						FROM repositories r
-						INNER JOIN sources s
-						ON s.id=r.source AND r.cloned
-						ORDER BY s.name,r.owner,r.name
-						;"""
+                        SELECT s.name,r.owner,r.name,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
+                        FROM repositories r
+                        INNER JOIN sources s
+                        ON s.id=r.source AND r.cloned
+                        ORDER BY s.name,r.owner,r.name
+                        ;"""
                     )
 
             return [
@@ -334,8 +334,8 @@ class CommitsFiller(fillers.Filler):
                         "commit_local_time": commit.commit_time
                         + 60 * commit.commit_time_offset,
                         "commit_time_offset": commit.commit_time_offset * 60,
-                        "sha": commit.hex,
-                        "parents": [pid.hex for pid in commit.parent_ids],
+                        "sha": commit.id,
+                        "parents": commit.parent_ids,
                         "repo_id": repo_id,
                         "message": commit.message,
                         "committer_email": commit.committer.email,
@@ -343,7 +343,7 @@ class CommitsFiller(fillers.Filler):
                     }
                 else:
                     # if isinstance(commit,dict):
-                    # 	commit = repo_obj.get(commit['sha'])
+                    #   commit = repo_obj.get(commit['sha'])
                     if commit.parents:
                         diff_obj = repo_obj.diff(
                             commit.parents[0], commit
@@ -366,8 +366,8 @@ class CommitsFiller(fillers.Filler):
                         "commit_local_time": commit.commit_time
                         + 60 * commit.commit_time_offset,
                         "commit_time_offset": commit.commit_time_offset * 60,
-                        "sha": commit.hex,
-                        "parents": [pid.hex for pid in commit.parent_ids],
+                        "sha": commit.id,
+                        "parents": commit.parent_ids,
                         "insertions": insertions,
                         "deletions": deletions,
                         "total": insertions + deletions,
@@ -398,7 +398,7 @@ class CommitsFiller(fillers.Filler):
                             tracked_args[commit.author.email] = True
                             tracked_args[commit.committer.email] = True
                         # update_dict = {commit.author.email:True,
-                        # 				commit.committer.email:True}
+                        #               commit.committer.email:True}
                         # tracked_args.update(update_dict)
 
                     elif group_by is None or group_by == "sha":
@@ -518,51 +518,51 @@ class CommitsFiller(fillers.Filler):
         if self.db.db_type == "postgres":
             self.db.cursor.execute(
                 """
-				INSERT INTO identity_types(name) SELECT 'email' WHERE NOT EXISTS (SELECT 1 FROM identity_types WHERE name='email')
-				ON CONFLICT DO NOTHING
-				;"""
+                INSERT INTO identity_types(name) SELECT 'email' WHERE NOT EXISTS (SELECT 1 FROM identity_types WHERE name='email')
+                ON CONFLICT DO NOTHING
+                ;"""
             )
             self.db.connection.commit()
 
             extras.execute_batch(
                 self.db.cursor,
                 """
-				INSERT INTO users(
-						creation_identity,
-						creation_identity_type_id)
-							SELECT %(email)s,id FROM identity_types WHERE name='email'
-					AND NOT EXISTS (SELECT 1 FROM identities i
-						INNER JOIN identity_types it
-						ON i.identity=%(email)s AND i.identity_type_id=it.id AND it.name='email')
-				ON CONFLICT DO NOTHING;
-				INSERT INTO identities(
-						attributes,
-						identity,
-						user_id,
-						identity_type_id) SELECT %(info)s,%(email)s,u.id,it.id
-						FROM users u
-						INNER JOIN identity_types it
-						ON it.name='email' AND u.creation_identity=%(email)s AND u.creation_identity_type_id=it.id
-				ON CONFLICT DO NOTHING;
-				INSERT INTO users(
-						creation_identity,
-						creation_identity_type_id)
-							SELECT %(committer_email)s,id FROM identity_types WHERE name='email'
-					AND NOT EXISTS (SELECT 1 FROM identities i
-						INNER JOIN identity_types it
-						ON i.identity=%(committer_email)s AND i.identity_type_id=it.id AND it.name='email')
-				ON CONFLICT DO NOTHING;
-				INSERT INTO identities(
-						attributes,
-						identity,
-						user_id,
-						identity_type_id) SELECT %(committer_info)s,%(committer_email)s,u.id,it.id
-						FROM users u
-						INNER JOIN identity_types it
-						ON it.name='email' AND u.creation_identity=%(committer_email)s AND u.creation_identity_type_id=it.id
-				ON CONFLICT DO NOTHING;
-				COMMIT;
-				""",
+                INSERT INTO users(
+                        creation_identity,
+                        creation_identity_type_id)
+                            SELECT %(email)s,id FROM identity_types WHERE name='email'
+                    AND NOT EXISTS (SELECT 1 FROM identities i
+                        INNER JOIN identity_types it
+                        ON i.identity=%(email)s AND i.identity_type_id=it.id AND it.name='email')
+                ON CONFLICT DO NOTHING;
+                INSERT INTO identities(
+                        attributes,
+                        identity,
+                        user_id,
+                        identity_type_id) SELECT %(info)s,%(email)s,u.id,it.id
+                        FROM users u
+                        INNER JOIN identity_types it
+                        ON it.name='email' AND u.creation_identity=%(email)s AND u.creation_identity_type_id=it.id
+                ON CONFLICT DO NOTHING;
+                INSERT INTO users(
+                        creation_identity,
+                        creation_identity_type_id)
+                            SELECT %(committer_email)s,id FROM identity_types WHERE name='email'
+                    AND NOT EXISTS (SELECT 1 FROM identities i
+                        INNER JOIN identity_types it
+                        ON i.identity=%(committer_email)s AND i.identity_type_id=it.id AND it.name='email')
+                ON CONFLICT DO NOTHING;
+                INSERT INTO identities(
+                        attributes,
+                        identity,
+                        user_id,
+                        identity_type_id) SELECT %(committer_info)s,%(committer_email)s,u.id,it.id
+                        FROM users u
+                        INNER JOIN identity_types it
+                        ON it.name='email' AND u.creation_identity=%(committer_email)s AND u.creation_identity_type_id=it.id
+                ON CONFLICT DO NOTHING;
+                COMMIT;
+                """,
                 (
                     {
                         "info": json.dumps({"name": c["author_name"]}),
@@ -578,8 +578,8 @@ class CommitsFiller(fillers.Filler):
         else:
             self.db.cursor.execute(
                 """
-				INSERT OR IGNORE INTO identity_types(name) SELECT 'email' WHERE NOT EXISTS (SELECT 1 FROM identity_types WHERE name='email')
-				;"""
+                INSERT OR IGNORE INTO identity_types(name) SELECT 'email' WHERE NOT EXISTS (SELECT 1 FROM identity_types WHERE name='email')
+                ;"""
             )
             self.db.connection.commit()
             for c in tr_gen:
@@ -591,56 +591,56 @@ class CommitsFiller(fillers.Filler):
                 }
                 self.db.cursor.execute(
                     """
-					INSERT OR IGNORE INTO users(
-							creation_identity,
-							creation_identity_type_id)
-								SELECT :email,id FROM identity_types WHERE name='email'
-						AND NOT EXISTS  (SELECT 1 FROM identities i
-							INNER JOIN identity_types it
-							ON i.identity=:email AND i.identity_type_id=it.id AND it.name='email')
-					;
-					""",
+                    INSERT OR IGNORE INTO users(
+                            creation_identity,
+                            creation_identity_type_id)
+                                SELECT :email,id FROM identity_types WHERE name='email'
+                        AND NOT EXISTS  (SELECT 1 FROM identities i
+                            INNER JOIN identity_types it
+                            ON i.identity=:email AND i.identity_type_id=it.id AND it.name='email')
+                    ;
+                    """,
                     info_dict,
                 )
                 self.db.cursor.execute(
                     """
-					INSERT OR IGNORE INTO identities(
-							attributes,
-							identity,
-							user_id,
-							identity_type_id) SELECT :info,:email,u.id,it.id
-							FROM users u
-							INNER JOIN identity_types it
-							ON it.name='email' AND u.creation_identity=:email AND u.creation_identity_type_id=it.id
-					;
-					""",
+                    INSERT OR IGNORE INTO identities(
+                            attributes,
+                            identity,
+                            user_id,
+                            identity_type_id) SELECT :info,:email,u.id,it.id
+                            FROM users u
+                            INNER JOIN identity_types it
+                            ON it.name='email' AND u.creation_identity=:email AND u.creation_identity_type_id=it.id
+                    ;
+                    """,
                     info_dict,
                 )
                 self.db.cursor.execute(
                     """
-					INSERT OR IGNORE INTO users(
-							creation_identity,
-							creation_identity_type_id)
-								SELECT :committer_email,id FROM identity_types WHERE name='email'
-						AND NOT EXISTS  (SELECT 1 FROM identities i
-							INNER JOIN identity_types it
-							ON i.identity=:committer_email AND i.identity_type_id=it.id AND it.name='email')
-					;
-					""",
+                    INSERT OR IGNORE INTO users(
+                            creation_identity,
+                            creation_identity_type_id)
+                                SELECT :committer_email,id FROM identity_types WHERE name='email'
+                        AND NOT EXISTS  (SELECT 1 FROM identities i
+                            INNER JOIN identity_types it
+                            ON i.identity=:committer_email AND i.identity_type_id=it.id AND it.name='email')
+                    ;
+                    """,
                     info_dict,
                 )
                 self.db.cursor.execute(
                     """
-					INSERT OR IGNORE INTO identities(
-							attributes,
-							identity,
-							user_id,
-							identity_type_id) SELECT :committer_info,:committer_email,u.id,it.id
-							FROM users u
-							INNER JOIN identity_types it
-							ON it.name='email' AND u.creation_identity=:committer_email AND u.creation_identity_type_id=it.id
-					;
-					""",
+                    INSERT OR IGNORE INTO identities(
+                            attributes,
+                            identity,
+                            user_id,
+                            identity_type_id) SELECT :committer_info,:committer_email,u.id,it.id
+                            FROM users u
+                            INNER JOIN identity_types it
+                            ON it.name='email' AND u.creation_identity=:committer_email AND u.creation_identity_type_id=it.id
+                    ;
+                    """,
                     info_dict,
                 )
                 self.db.connection.commit()
@@ -699,27 +699,27 @@ class CommitsFiller(fillers.Filler):
             extras.execute_batch(
                 self.db.cursor,
                 """
-				INSERT INTO commits(sha,author_id,committer_id,created_at,local_created_at,time_offset,committed_at,local_committed_at,time_offset_committed,insertions,deletions,message)
-					VALUES(%(sha)s,
-							(SELECT i.id FROM identities i
-								INNER JOIN identity_types it
-							 ON i.identity=%(author_email)s AND it.name='email' AND it.id=i.identity_type_id),
-							(SELECT i.id FROM identities i
-								INNER JOIN identity_types it
-							 ON i.identity=%(committer_email)s AND it.name='email' AND it.id=i.identity_type_id),
-							%(gmt_timestamp)s,
-							%(local_timestamp)s,
-							%(time_offset)s,
-							%(commit_gmt_timestamp)s,
-							%(commit_local_timestamp)s,
-							%(commit_time_offset)s,
-							%(insertions)s,
-							%(deletions)s,
-							%(message)s
-							)
-				ON CONFLICT DO NOTHING;
-				COMMIT;
-				""",
+                INSERT INTO commits(sha,author_id,committer_id,created_at,local_created_at,time_offset,committed_at,local_committed_at,time_offset_committed,insertions,deletions,message)
+                    VALUES(%(sha)s,
+                            (SELECT i.id FROM identities i
+                                INNER JOIN identity_types it
+                             ON i.identity=%(author_email)s AND it.name='email' AND it.id=i.identity_type_id),
+                            (SELECT i.id FROM identities i
+                                INNER JOIN identity_types it
+                             ON i.identity=%(committer_email)s AND it.name='email' AND it.id=i.identity_type_id),
+                            %(gmt_timestamp)s,
+                            %(local_timestamp)s,
+                            %(time_offset)s,
+                            %(commit_gmt_timestamp)s,
+                            %(commit_local_timestamp)s,
+                            %(commit_time_offset)s,
+                            %(insertions)s,
+                            %(deletions)s,
+                            %(message)s
+                            )
+                ON CONFLICT DO NOTHING;
+                COMMIT;
+                """,
                 (
                     dict(
                         local_timestamp=datetime.datetime.utcfromtimestamp(
@@ -742,25 +742,25 @@ class CommitsFiller(fillers.Filler):
         else:
             self.db.cursor.executemany(
                 """
-				INSERT OR IGNORE INTO commits(sha,author_id,committer_id,created_at,local_created_at,time_offset,committed_at,local_committed_at,time_offset_committed,insertions,deletions,message)
-					VALUES(:sha,
-							(SELECT i.id FROM identities i
-								INNER JOIN identity_types it
-							 ON i.identity=:author_email AND it.name='email' AND it.id=i.identity_type_id),
-							(SELECT i.id FROM identities i
-								INNER JOIN identity_types it
-							 ON i.identity=:committer_email AND it.name='email' AND it.id=i.identity_type_id),
-							:gmt_timestamp,
-							:local_timestamp,
-							:time_offset,
-							:commit_gmt_timestamp,
-							:commit_local_timestamp,
-							:commit_time_offset,
-							:insertions,
-							:deletions,
-							:message
-							);
-				""",
+                INSERT OR IGNORE INTO commits(sha,author_id,committer_id,created_at,local_created_at,time_offset,committed_at,local_committed_at,time_offset_committed,insertions,deletions,message)
+                    VALUES(:sha,
+                            (SELECT i.id FROM identities i
+                                INNER JOIN identity_types it
+                             ON i.identity=:author_email AND it.name='email' AND it.id=i.identity_type_id),
+                            (SELECT i.id FROM identities i
+                                INNER JOIN identity_types it
+                             ON i.identity=:committer_email AND it.name='email' AND it.id=i.identity_type_id),
+                            :gmt_timestamp,
+                            :local_timestamp,
+                            :time_offset,
+                            :commit_gmt_timestamp,
+                            :commit_local_timestamp,
+                            :commit_time_offset,
+                            :insertions,
+                            :deletions,
+                            :message
+                            );
+                """,
                 (
                     dict(
                         local_timestamp=datetime.datetime.utcfromtimestamp(
@@ -781,7 +781,7 @@ class CommitsFiller(fillers.Filler):
             #''',((c['sha'],c['author_email'],c['committer_email'],datetime.datetime.utcfromtimestamp(c['time']),c['insertions'],c['deletions'],c['message']) for c in tracked_gen(commit_info_list)))
 
         if not tracked_data["empty"]:
-            # 			repo_id = tracked_data['last_commit']['repo_id']
+            #           repo_id = tracked_data['last_commit']['repo_id']
             latest_commit_time = datetime.datetime.utcfromtimestamp(
                 tracked_data["latest_commit_time"]
             )
@@ -830,22 +830,22 @@ class CommitsFiller(fillers.Filler):
             extras.execute_batch(
                 self.db.cursor,
                 """
-				INSERT INTO commit_repos(commit_id,repo_id)
-					SELECT id,%(repo_id)s FROM commits WHERE sha=%(sha)s
+                INSERT INTO commit_repos(commit_id,repo_id)
+                    SELECT id,%(repo_id)s FROM commits WHERE sha=%(sha)s
 
-				ON CONFLICT DO NOTHING;
-				COMMIT;
-				""",
+                ON CONFLICT DO NOTHING;
+                COMMIT;
+                """,
                 tracked_gen(commit_info_list),
             )
 
         else:
             self.db.cursor.executemany(
                 """
-				INSERT OR IGNORE INTO commit_repos(commit_id,repo_id)
-					SELECT id,:repo_id FROM commits WHERE sha=:sha
-							;
-				""",
+                INSERT OR IGNORE INTO commit_repos(commit_id,repo_id)
+                    SELECT id,:repo_id FROM commits WHERE sha=:sha
+                            ;
+                """,
                 tracked_gen(commit_info_list),
             )
 
@@ -871,47 +871,47 @@ class CommitsFiller(fillers.Filler):
             self.db.connection.commit()
 
     # def fill_commit_orig_repo(self,commit_info_list,autocommit=True):
-    # 	'''
-    # 	Filling commits attribute is_orig_repo, based on forks table
-    # 	'''
+    #   '''
+    #   Filling commits attribute is_orig_repo, based on forks table
+    #   '''
 
-    # 	tracked_data = {'latest_commit_time':0,'empty':True}
-    # 	def tracked_gen(orig_gen):
-    # 		for c in orig_gen:
-    # 			tracked_data['last_commit'] = c
-    # 			tracked_data['empty'] = False
-    # 			tracked_data['latest_commit_time'] = max(tracked_data['latest_commit_time'],c['gmt_time'])
-    # 			yield c
+    #   tracked_data = {'latest_commit_time':0,'empty':True}
+    #   def tracked_gen(orig_gen):
+    #       for c in orig_gen:
+    #           tracked_data['last_commit'] = c
+    #           tracked_data['empty'] = False
+    #           tracked_data['latest_commit_time'] = max(tracked_data['latest_commit_time'],c['gmt_time'])
+    #           yield c
 
-    # 	if self.db.db_type == 'postgres':
-    # 		extras.execute_batch(self.db.cursor,'''
-    # 			INSERT INTO commit_repos(commit_id,repo_id)
-    # 				VALUES(
-    # 						(SELECT id FROM commits WHERE sha=%s),
-    # 						%s
-    # 						)
-    # 			ON CONFLICT DO NOTHING;
-    # 			''',((c['sha'],c['repo_id'],) for c in tracked_gen(commit_info_list)))
+    #   if self.db.db_type == 'postgres':
+    #       extras.execute_batch(self.db.cursor,'''
+    #           INSERT INTO commit_repos(commit_id,repo_id)
+    #               VALUES(
+    #                       (SELECT id FROM commits WHERE sha=%s),
+    #                       %s
+    #                       )
+    #           ON CONFLICT DO NOTHING;
+    #           ''',((c['sha'],c['repo_id'],) for c in tracked_gen(commit_info_list)))
 
-    # 	else:
-    # 		self.db.cursor.executemany('''
-    # 			INSERT OR IGNORE INTO commit_repos(commit_id,repo_id)
-    # 				VALUES(
-    # 						(SELECT id FROM commits WHERE sha=?),
-    # 						?
-    # 						);
-    # 			''',((c['sha'],c['repo_id'],) for c in tracked_gen(commit_info_list)))
+    #   else:
+    #       self.db.cursor.executemany('''
+    #           INSERT OR IGNORE INTO commit_repos(commit_id,repo_id)
+    #               VALUES(
+    #                       (SELECT id FROM commits WHERE sha=?),
+    #                       ?
+    #                       );
+    #           ''',((c['sha'],c['repo_id'],) for c in tracked_gen(commit_info_list)))
 
-    # 	if not tracked_data['empty']:
-    # 		repo_id = tracked_data['last_commit']['repo_id']
-    # 		latest_commit_time = datetime.datetime.utcfromtimestamp(tracked_data['latest_commit_time'])
-    # 		if self.db.db_type == 'postgres':
-    # 			self.db.cursor.execute('''INSERT INTO table_updates(repo_id,table_name,latest_commit_time) VALUES(%s,'commit_orig_repos',%s) ;''',(repo_id,latest_commit_time))
-    # 		else:
-    # 			self.db.cursor.execute('''INSERT INTO table_updates(repo_id,table_name,latest_commit_time) VALUES(?,'commit_orig_repos',?) ;''',(repo_id,latest_commit_time))
+    #   if not tracked_data['empty']:
+    #       repo_id = tracked_data['last_commit']['repo_id']
+    #       latest_commit_time = datetime.datetime.utcfromtimestamp(tracked_data['latest_commit_time'])
+    #       if self.db.db_type == 'postgres':
+    #           self.db.cursor.execute('''INSERT INTO table_updates(repo_id,table_name,latest_commit_time) VALUES(%s,'commit_orig_repos',%s) ;''',(repo_id,latest_commit_time))
+    #       else:
+    #           self.db.cursor.execute('''INSERT INTO table_updates(repo_id,table_name,latest_commit_time) VALUES(?,'commit_orig_repos',?) ;''',(repo_id,latest_commit_time))
 
-    # 	if autocommit:
-    # 		self.db.connection.commit()
+    #   if autocommit:
+    #       self.db.connection.commit()
 
     def fill_commit_parents(self, commit_info_list, repo_id, autocommit=True):
         """
@@ -945,27 +945,27 @@ class CommitsFiller(fillers.Filler):
             extras.execute_batch(
                 self.db.cursor,
                 """
-				INSERT INTO commit_parents(child_id,parent_id,rank)
-					SELECT cc.id,cp.id,%(rank)s FROM commits cc
-					INNER JOIN commits cp
-					ON cc.sha=%(child_id)s
-					AND cp.sha=%(parent_id)s
-				ON CONFLICT DO NOTHING;
-				COMMIT;
-				""",
+                INSERT INTO commit_parents(child_id,parent_id,rank)
+                    SELECT cc.id,cp.id,%(rank)s FROM commits cc
+                    INNER JOIN commits cp
+                    ON cc.sha=%(child_id)s
+                    AND cp.sha=%(parent_id)s
+                ON CONFLICT DO NOTHING;
+                COMMIT;
+                """,
                 transformed_list(commit_info_list),
             )
 
         else:
             self.db.cursor.executemany(
                 """
-				INSERT OR IGNORE INTO commit_parents(child_id,parent_id,rank)
+                INSERT OR IGNORE INTO commit_parents(child_id,parent_id,rank)
 
-					SELECT cc.id,cp.id,:rank FROM commits cc
-					INNER JOIN commits cp
-					ON cc.sha=:child_id
-					AND cp.sha=:parent_id;
-				""",
+                    SELECT cc.id,cp.id,:rank FROM commits cc
+                    INNER JOIN commits cp
+                    ON cc.sha=:child_id
+                    AND cp.sha=:parent_id;
+                """,
                 transformed_list(commit_info_list),
             )
 
@@ -1039,18 +1039,18 @@ class CommitsFiller(fillers.Filler):
                 )
                 self.db.cursor.execute(
                     """
-						UPDATE commit_repos SET is_orig_repo=true
-							WHERE is_orig_repo IS NULL
-								AND repo_id = (SELECT ccp.repo_id
-									FROM commit_repos ccp
-									INNER JOIN forks f
-									ON ccp.commit_id=commit_repos.commit_id AND f.forked_repo_id=ccp.repo_id
-									INNER JOIN commit_repos ccp2
-									ON ccp2.commit_id=commit_repos.commit_id AND f.forking_repo_id=ccp2.repo_id
-									ORDER BY f.fork_rank DESC
-									LIMIT 1
-									)
-						;"""
+                        UPDATE commit_repos SET is_orig_repo=true
+                            WHERE is_orig_repo IS NULL
+                                AND repo_id = (SELECT ccp.repo_id
+                                    FROM commit_repos ccp
+                                    INNER JOIN forks f
+                                    ON ccp.commit_id=commit_repos.commit_id AND f.forked_repo_id=ccp.repo_id
+                                    INNER JOIN commit_repos ccp2
+                                    ON ccp2.commit_id=commit_repos.commit_id AND f.forking_repo_id=ccp2.repo_id
+                                    ORDER BY f.fork_rank DESC
+                                    LIMIT 1
+                                    )
+                        ;"""
                 )
 
                 # update is_orig_repo to true for repos that are the only ones owning the commit
@@ -1060,11 +1060,11 @@ class CommitsFiller(fillers.Filler):
                 )
                 self.db.cursor.execute(
                     """
-						UPDATE commit_repos SET is_orig_repo=true
-							WHERE is_orig_repo IS NULL
-								AND (SELECT COUNT(*) FROM commit_repos ccp
-									WHERE ccp.commit_id=commit_repos.commit_id) = 1
-						;"""
+                        UPDATE commit_repos SET is_orig_repo=true
+                            WHERE is_orig_repo IS NULL
+                                AND (SELECT COUNT(*) FROM commit_repos ccp
+                                    WHERE ccp.commit_id=commit_repos.commit_id) = 1
+                        ;"""
                 )
 
                 # set to null where twice true for is_orig_repo
@@ -1073,14 +1073,14 @@ class CommitsFiller(fillers.Filler):
                 )
                 self.db.cursor.execute(
                     """
-						UPDATE commit_repos SET is_orig_repo=NULL
-							WHERE commit_id IN (
-								SELECT cr.commit_id FROM commit_repos cr
-								WHERE cr.is_orig_repo
-								GROUP BY cr.commit_id
-								HAVING COUNT(*)>=2
-									)
-						;"""
+                        UPDATE commit_repos SET is_orig_repo=NULL
+                            WHERE commit_id IN (
+                                SELECT cr.commit_id FROM commit_repos cr
+                                WHERE cr.is_orig_repo
+                                GROUP BY cr.commit_id
+                                HAVING COUNT(*)>=2
+                                    )
+                        ;"""
                 )
 
                 # REDO STEP1 update is_orig_repo to true for roots of fork trees
@@ -1089,18 +1089,18 @@ class CommitsFiller(fillers.Filler):
                 )
                 self.db.cursor.execute(
                     """
-						UPDATE commit_repos SET is_orig_repo=true
-							WHERE is_orig_repo IS NULL
-								AND repo_id = (SELECT ccp.repo_id
-									FROM commit_repos ccp
-									INNER JOIN forks f
-									ON ccp.commit_id=commit_repos.commit_id AND f.forked_repo_id=ccp.repo_id
-									INNER JOIN commit_repos ccp2
-									ON ccp2.commit_id=commit_repos.commit_id AND f.forking_repo_id=ccp2.repo_id
-									ORDER BY f.fork_rank DESC
-									LIMIT 1
-									)
-						;"""
+                        UPDATE commit_repos SET is_orig_repo=true
+                            WHERE is_orig_repo IS NULL
+                                AND repo_id = (SELECT ccp.repo_id
+                                    FROM commit_repos ccp
+                                    INNER JOIN forks f
+                                    ON ccp.commit_id=commit_repos.commit_id AND f.forked_repo_id=ccp.repo_id
+                                    INNER JOIN commit_repos ccp2
+                                    ON ccp2.commit_id=commit_repos.commit_id AND f.forking_repo_id=ccp2.repo_id
+                                    ORDER BY f.fork_rank DESC
+                                    LIMIT 1
+                                    )
+                        ;"""
                 )
 
                 # REDO STEP2 update is_orig_repo to true for repos that are the only ones owning the commit
@@ -1110,11 +1110,11 @@ class CommitsFiller(fillers.Filler):
                 )
                 self.db.cursor.execute(
                     """
-						UPDATE commit_repos SET is_orig_repo=true
-							WHERE is_orig_repo IS NULL
-								AND (SELECT COUNT(*) FROM commit_repos ccp
-									WHERE ccp.commit_id=commit_repos.commit_id) = 1
-						;"""
+                        UPDATE commit_repos SET is_orig_repo=true
+                            WHERE is_orig_repo IS NULL
+                                AND (SELECT COUNT(*) FROM commit_repos ccp
+                                    WHERE ccp.commit_id=commit_repos.commit_id) = 1
+                        ;"""
                 )
 
                 # update is_orig_repo to false for repos elsewhere in fork trees
@@ -1123,16 +1123,16 @@ class CommitsFiller(fillers.Filler):
                 )
                 self.db.cursor.execute(
                     """
-						UPDATE commit_repos SET is_orig_repo=false
-							WHERE is_orig_repo IS NULL
-								AND repo_id IN (SELECT ccp2.repo_id
-									FROM commit_repos ccp
-									INNER JOIN forks f
-									ON ccp.commit_id=commit_repos.commit_id AND f.forked_repo_id=ccp.repo_id
-									INNER JOIN commit_repos ccp2
-									ON ccp2.commit_id=commit_repos.commit_id AND f.forking_repo_id=ccp2.repo_id
-									)
-						;"""
+                        UPDATE commit_repos SET is_orig_repo=false
+                            WHERE is_orig_repo IS NULL
+                                AND repo_id IN (SELECT ccp2.repo_id
+                                    FROM commit_repos ccp
+                                    INNER JOIN forks f
+                                    ON ccp.commit_id=commit_repos.commit_id AND f.forked_repo_id=ccp.repo_id
+                                    INNER JOIN commit_repos ccp2
+                                    ON ccp2.commit_id=commit_repos.commit_id AND f.forking_repo_id=ccp2.repo_id
+                                    )
+                        ;"""
                 )
 
             else:
@@ -1142,7 +1142,7 @@ class CommitsFiller(fillers.Filler):
                 )
                 self.db.cursor.execute(
                     """
-						UPDATE commit_repos SET is_orig_repo=NULL;"""
+                        UPDATE commit_repos SET is_orig_repo=NULL;"""
                 )
 
                 # update is_orig_repo to true for roots of fork trees
@@ -1151,17 +1151,17 @@ class CommitsFiller(fillers.Filler):
                 )
                 self.db.cursor.execute(
                     """
-						UPDATE commit_repos SET is_orig_repo=true
-							WHERE repo_id = (SELECT ccp.repo_id
-									FROM commit_repos ccp
-									INNER JOIN forks f
-									ON ccp.commit_id=commit_repos.commit_id AND f.forked_repo_id=ccp.repo_id
-									INNER JOIN commit_repos ccp2
-									ON ccp2.commit_id=commit_repos.commit_id AND f.forking_repo_id=ccp2.repo_id
-									ORDER BY f.fork_rank DESC
-									LIMIT 1
-									)
-						;"""
+                        UPDATE commit_repos SET is_orig_repo=true
+                            WHERE repo_id = (SELECT ccp.repo_id
+                                    FROM commit_repos ccp
+                                    INNER JOIN forks f
+                                    ON ccp.commit_id=commit_repos.commit_id AND f.forked_repo_id=ccp.repo_id
+                                    INNER JOIN commit_repos ccp2
+                                    ON ccp2.commit_id=commit_repos.commit_id AND f.forking_repo_id=ccp2.repo_id
+                                    ORDER BY f.fork_rank DESC
+                                    LIMIT 1
+                                    )
+                        ;"""
                 )
 
                 # update is_orig_repo to true for repos that are the only ones owning the commit
@@ -1171,10 +1171,10 @@ class CommitsFiller(fillers.Filler):
                 )
                 self.db.cursor.execute(
                     """
-						UPDATE commit_repos SET is_orig_repo=true
-							WHERE (SELECT COUNT(*) FROM commit_repos ccp
-									WHERE ccp.commit_id=commit_repos.commit_id) = 1
-						;"""
+                        UPDATE commit_repos SET is_orig_repo=true
+                            WHERE (SELECT COUNT(*) FROM commit_repos ccp
+                                    WHERE ccp.commit_id=commit_repos.commit_id) = 1
+                        ;"""
                 )
 
                 # update is_orig_repo to false for repos elsewhere in fork trees
@@ -1183,47 +1183,47 @@ class CommitsFiller(fillers.Filler):
                 )
                 self.db.cursor.execute(
                     """
-						UPDATE commit_repos SET is_orig_repo=false
-							WHERE repo_id IN (SELECT ccp2.repo_id
-									FROM commit_repos ccp
-									INNER JOIN forks f
-									ON ccp.commit_id=commit_repos.commit_id AND f.forked_repo_id=ccp.repo_id
-									INNER JOIN commit_repos ccp2
-									ON ccp2.commit_id=commit_repos.commit_id AND f.forking_repo_id=ccp2.repo_id
-									)
-						;"""
+                        UPDATE commit_repos SET is_orig_repo=false
+                            WHERE repo_id IN (SELECT ccp2.repo_id
+                                    FROM commit_repos ccp
+                                    INNER JOIN forks f
+                                    ON ccp.commit_id=commit_repos.commit_id AND f.forked_repo_id=ccp.repo_id
+                                    INNER JOIN commit_repos ccp2
+                                    ON ccp2.commit_id=commit_repos.commit_id AND f.forking_repo_id=ccp2.repo_id
+                                    )
+                        ;"""
                 )
 
             # self.logger.info('Filling commit origin repository attribution: checking that no commit has 2 orig repos')
             # self.db.cursor.execute('''
-            # 		SELECT r.owner,r.name,COUNT(*) FROM repositories r
-            # 			INNER JOIN commit_repos cr2
-            # 				ON r.id=cr2.repo_id AND cr2.is_orig_repo
-            # 			INNER JOIN
-            # 				(SELECT cr.commit_id,COUNT(*) AS cnt FROM commit_repos cr
-            # 					WHERE cr.is_orig_repo
-            # 					GROUP BY cr.commit_id
-            # 					HAVING COUNT(*)>1) AS c
-            # 				ON c.commit_id=cr2.commit_id
-            # 			GROUP BY r.owner,r.name
-            # 		;
-            # 		''')
+            #       SELECT r.owner,r.name,COUNT(*) FROM repositories r
+            #           INNER JOIN commit_repos cr2
+            #               ON r.id=cr2.repo_id AND cr2.is_orig_repo
+            #           INNER JOIN
+            #               (SELECT cr.commit_id,COUNT(*) AS cnt FROM commit_repos cr
+            #                   WHERE cr.is_orig_repo
+            #                   GROUP BY cr.commit_id
+            #                   HAVING COUNT(*)>1) AS c
+            #               ON c.commit_id=cr2.commit_id
+            #           GROUP BY r.owner,r.name
+            #       ;
+            #       ''')
             # results = list(self.db.cursor.fetchall())
             # if len(results):
-            # 	error_str = 'Several repos are considered origin repos of the same commits. Repos in this situation: {}, First ten: {}'.format(len(results),['{}/{}:{}'.format(*r) for r in results[:10]])
-            # 	raise ValueError(error_str)
+            #   error_str = 'Several repos are considered origin repos of the same commits. Repos in this situation: {}, First ten: {}'.format(len(results),['{}/{}:{}'.format(*r) for r in results[:10]])
+            #   raise ValueError(error_str)
 
             self.logger.info(
                 "Filling commit origin repository attribution: updating commits table"
             )
             self.db.cursor.execute(
                 """
-					UPDATE commits SET repo_id=(
-							SELECT cp.repo_id FROM commit_repos cp
-								WHERE cp.commit_id=commits.id
-								AND cp.is_orig_repo)
-					;
-					"""
+                    UPDATE commits SET repo_id=(
+                            SELECT cp.repo_id FROM commit_repos cp
+                                WHERE cp.commit_id=commits.id
+                                AND cp.is_orig_repo)
+                    ;
+                    """
             )
 
             self.db.cursor.execute(
@@ -1255,10 +1255,10 @@ class CommitsFiller(fillers.Filler):
 
             self.db.cursor.execute(
                 """
-					UPDATE commits SET created_at=CURRENT_TIMESTAMP,original_created_at=COALESCE(original_created_at,commits.created_at)
-					WHERE created_at>CURRENT_TIMESTAMP
-					;
-					"""
+                    UPDATE commits SET created_at=CURRENT_TIMESTAMP,original_created_at=COALESCE(original_created_at,commits.created_at)
+                    WHERE created_at>CURRENT_TIMESTAMP
+                    ;
+                    """
             )
             updated_count_currenttime = self.db.cursor.rowcount
             self.logger.info(
@@ -1269,13 +1269,13 @@ class CommitsFiller(fillers.Filler):
 
             self.db.cursor.execute(
                 """
-					SELECT COUNT(*) FROM commits c
-							INNER JOIN commit_parents cp
-							ON cp.child_id =c.id
-							INNER JOIN commits c2
-							ON c2.id=cp.parent_id
-							AND c2.created_at >c.created_at
-					;"""
+                    SELECT COUNT(*) FROM commits c
+                            INNER JOIN commit_parents cp
+                            ON cp.child_id =c.id
+                            INNER JOIN commits c2
+                            ON c2.id=cp.parent_id
+                            AND c2.created_at >c.created_at
+                    ;"""
             )
 
             self.logger.info(
@@ -1287,28 +1287,28 @@ class CommitsFiller(fillers.Filler):
                 # Create table of conflictual parent/child pairs
                 self.db.cursor.execute(
                     """
-					CREATE TEMPORARY TABLE temp_conflict_pairs(
-						child_id BIGINT,
-						child_timestamp TIMESTAMP,
-						parent_id BIGINT,
-						parent_timestamp TIMESTAMP,
-						PRIMARY KEY(child_id,parent_id)
-					)
-					;"""
+                    CREATE TEMPORARY TABLE temp_conflict_pairs(
+                        child_id BIGINT,
+                        child_timestamp TIMESTAMP,
+                        parent_id BIGINT,
+                        parent_timestamp TIMESTAMP,
+                        PRIMARY KEY(child_id,parent_id)
+                    )
+                    ;"""
                 )
 
                 self.db.cursor.execute(
                     """
-					INSERT INTO temp_conflict_pairs(child_id,child_timestamp,parent_id,parent_timestamp)
-						SELECT c.id,c.created_at ,c2.id,c2.created_at  FROM commits c
-							INNER JOIN commit_parents cp
-							ON cp.child_id =c.id
-							INNER JOIN commits c2
-							ON c2.id=cp.parent_id
-							AND c2.created_at >c.created_at
-						ORDER BY c2.id,c.created_at DESC
-						LIMIT {batch_size}
-					;""".format(
+                    INSERT INTO temp_conflict_pairs(child_id,child_timestamp,parent_id,parent_timestamp)
+                        SELECT c.id,c.created_at ,c2.id,c2.created_at  FROM commits c
+                            INNER JOIN commit_parents cp
+                            ON cp.child_id =c.id
+                            INNER JOIN commits c2
+                            ON c2.id=cp.parent_id
+                            AND c2.created_at >c.created_at
+                        ORDER BY c2.id,c.created_at DESC
+                        LIMIT {batch_size}
+                    ;""".format(
                         batch_size=int(batch_size)
                     )
                 )
@@ -1324,81 +1324,81 @@ class CommitsFiller(fillers.Filler):
 
                 self.db.cursor.execute(
                     """
-					CREATE TEMPORARY TABLE temp_conflict_levels(
-						commit_id BIGINT PRIMARY KEY,
-						as_child INT,
-						as_parent INT
-					)
-					;"""
+                    CREATE TEMPORARY TABLE temp_conflict_levels(
+                        commit_id BIGINT PRIMARY KEY,
+                        as_child INT,
+                        as_parent INT
+                    )
+                    ;"""
                 )
 
                 self.db.cursor.execute(
                     """
-					WITH RECURSIVE parent_tree(child_id,ref_time,ancestor_id,ancestor_time) AS (
-							SELECT tcp.child_id,tcp.child_timestamp,tcp.child_id,tcp.child_timestamp
-								FROM temp_conflict_pairs tcp
-						UNION
-							SELECT tcp.parent_id,tcp.parent_timestamp,tcp.parent_id,tcp.parent_timestamp
-								FROM temp_conflict_pairs tcp
-						UNION
-							SELECT pt.child_id,pt.ref_time,cp.parent_id,c.created_at FROM commit_parents cp
-							INNER JOIN parent_tree pt
-							ON cp.child_id=pt.ancestor_id
-							INNER JOIN commits c
-							ON c.id=cp.parent_id
-						)
-					INSERT INTO temp_conflict_levels(commit_id,as_child)
-						SELECT pt.child_id,SUM(CASE WHEN pt.ref_time < pt.ancestor_time THEN 1 ELSE 0 END) AS cnt FROM parent_tree pt
-								GROUP BY pt.child_id
-					;"""
+                    WITH RECURSIVE parent_tree(child_id,ref_time,ancestor_id,ancestor_time) AS (
+                            SELECT tcp.child_id,tcp.child_timestamp,tcp.child_id,tcp.child_timestamp
+                                FROM temp_conflict_pairs tcp
+                        UNION
+                            SELECT tcp.parent_id,tcp.parent_timestamp,tcp.parent_id,tcp.parent_timestamp
+                                FROM temp_conflict_pairs tcp
+                        UNION
+                            SELECT pt.child_id,pt.ref_time,cp.parent_id,c.created_at FROM commit_parents cp
+                            INNER JOIN parent_tree pt
+                            ON cp.child_id=pt.ancestor_id
+                            INNER JOIN commits c
+                            ON c.id=cp.parent_id
+                        )
+                    INSERT INTO temp_conflict_levels(commit_id,as_child)
+                        SELECT pt.child_id,SUM(CASE WHEN pt.ref_time < pt.ancestor_time THEN 1 ELSE 0 END) AS cnt FROM parent_tree pt
+                                GROUP BY pt.child_id
+                    ;"""
                 )
 
                 if self.db.db_type == "postgres":
                     self.db.cursor.execute(
                         """
-						WITH RECURSIVE child_tree(parent_id,ref_time,offspring_id,offspring_time) AS (
-								SELECT tcp.child_id,tcp.child_timestamp,tcp.child_id,tcp.child_timestamp
-									FROM temp_conflict_pairs tcp
-							UNION
-								SELECT tcp.parent_id,tcp.parent_timestamp,tcp.parent_id,tcp.parent_timestamp
-									FROM temp_conflict_pairs tcp
-							UNION
-								SELECT ct.parent_id,ct.ref_time,cp.child_id,c.created_at FROM commit_parents cp
-								INNER JOIN child_tree ct
-								ON cp.parent_id=ct.offspring_id
-								INNER JOIN commits c
-								ON c.id=cp.child_id
-							)
-						UPDATE temp_conflict_levels
-							SET as_parent=children.cnt
-							FROM (SELECT ct.parent_id,SUM(CASE WHEN ct.ref_time > ct.offspring_time THEN 1 ELSE 0 END) AS cnt FROM child_tree ct
-									--WHERE ct.ref_time > ct.offspring_time
-									GROUP BY ct.parent_id) AS children
-							WHERE commit_id=children.parent_id
-						;"""
+                        WITH RECURSIVE child_tree(parent_id,ref_time,offspring_id,offspring_time) AS (
+                                SELECT tcp.child_id,tcp.child_timestamp,tcp.child_id,tcp.child_timestamp
+                                    FROM temp_conflict_pairs tcp
+                            UNION
+                                SELECT tcp.parent_id,tcp.parent_timestamp,tcp.parent_id,tcp.parent_timestamp
+                                    FROM temp_conflict_pairs tcp
+                            UNION
+                                SELECT ct.parent_id,ct.ref_time,cp.child_id,c.created_at FROM commit_parents cp
+                                INNER JOIN child_tree ct
+                                ON cp.parent_id=ct.offspring_id
+                                INNER JOIN commits c
+                                ON c.id=cp.child_id
+                            )
+                        UPDATE temp_conflict_levels
+                            SET as_parent=children.cnt
+                            FROM (SELECT ct.parent_id,SUM(CASE WHEN ct.ref_time > ct.offspring_time THEN 1 ELSE 0 END) AS cnt FROM child_tree ct
+                                    --WHERE ct.ref_time > ct.offspring_time
+                                    GROUP BY ct.parent_id) AS children
+                            WHERE commit_id=children.parent_id
+                        ;"""
                     )
                 else:
                     self.db.cursor.execute(
                         """
-						WITH RECURSIVE child_tree(parent_id,ref_time,offspring_id,offspring_time) AS (
-								SELECT tcp.child_id,tcp.child_timestamp,tcp.child_id,tcp.child_timestamp
-									FROM temp_conflict_pairs tcp
-							UNION
-								SELECT tcp.parent_id,tcp.parent_timestamp,tcp.parent_id,tcp.parent_timestamp
-									FROM temp_conflict_pairs tcp
-							UNION
-								SELECT ct.parent_id,ct.ref_time,cp.child_id,c.created_at FROM commit_parents cp
-								INNER JOIN child_tree ct
-								ON cp.parent_id=ct.offspring_id
-								INNER JOIN commits c
-								ON c.id=cp.child_id
-							),
-						aggreg_children AS (SELECT ct.parent_id,SUM(CASE WHEN ct.ref_time > ct.offspring_time THEN 1 ELSE 0 END) AS cnt FROM child_tree ct
-									GROUP BY ct.parent_id)
-						UPDATE temp_conflict_levels
-							SET as_parent=(SELECT cnt FROM aggreg_children WHERE commit_id=aggreg_children.parent_id)
-							WHERE EXISTS (SELECT cnt FROM aggreg_children WHERE commit_id=aggreg_children.parent_id)
-						;"""
+                        WITH RECURSIVE child_tree(parent_id,ref_time,offspring_id,offspring_time) AS (
+                                SELECT tcp.child_id,tcp.child_timestamp,tcp.child_id,tcp.child_timestamp
+                                    FROM temp_conflict_pairs tcp
+                            UNION
+                                SELECT tcp.parent_id,tcp.parent_timestamp,tcp.parent_id,tcp.parent_timestamp
+                                    FROM temp_conflict_pairs tcp
+                            UNION
+                                SELECT ct.parent_id,ct.ref_time,cp.child_id,c.created_at FROM commit_parents cp
+                                INNER JOIN child_tree ct
+                                ON cp.parent_id=ct.offspring_id
+                                INNER JOIN commits c
+                                ON c.id=cp.child_id
+                            ),
+                        aggreg_children AS (SELECT ct.parent_id,SUM(CASE WHEN ct.ref_time > ct.offspring_time THEN 1 ELSE 0 END) AS cnt FROM child_tree ct
+                                    GROUP BY ct.parent_id)
+                        UPDATE temp_conflict_levels
+                            SET as_parent=(SELECT cnt FROM aggreg_children WHERE commit_id=aggreg_children.parent_id)
+                            WHERE EXISTS (SELECT cnt FROM aggreg_children WHERE commit_id=aggreg_children.parent_id)
+                        ;"""
                     )
 
                 self.db.cursor.execute(
@@ -1413,68 +1413,68 @@ class CommitsFiller(fillers.Filler):
 
                 self.db.cursor.execute(
                     """
-					CREATE TEMPORARY TABLE temp_conflict_new_values(
-					commit_id BIGINT PRIMARY KEY,
-					created_at TIMESTAMP
-					)
-					;"""
+                    CREATE TEMPORARY TABLE temp_conflict_new_values(
+                    commit_id BIGINT PRIMARY KEY,
+                    created_at TIMESTAMP
+                    )
+                    ;"""
                 )
 
                 self.db.cursor.execute(
                     """
-					INSERT INTO temp_conflict_new_values(commit_id,created_at)
-						SELECT tcp.parent_id,MIN(tcp.child_timestamp)
-							FROM temp_conflict_pairs tcp
-							INNER JOIN temp_conflict_levels tclp
-							ON tclp.commit_id=tcp.parent_id
-							INNER JOIN temp_conflict_levels tclc
-							ON tclc.commit_id=tcp.child_id
-							--AND tclp.as_parent+tclp.as_child > tclc.as_parent+tclc.as_child
-							AND (tclp.as_parent > tclc.as_child OR tcp.parent_timestamp<'2000-01-01')
-						GROUP BY tcp.parent_id
-					ON CONFLICT DO NOTHING
-					;"""
+                    INSERT INTO temp_conflict_new_values(commit_id,created_at)
+                        SELECT tcp.parent_id,MIN(tcp.child_timestamp)
+                            FROM temp_conflict_pairs tcp
+                            INNER JOIN temp_conflict_levels tclp
+                            ON tclp.commit_id=tcp.parent_id
+                            INNER JOIN temp_conflict_levels tclc
+                            ON tclc.commit_id=tcp.child_id
+                            --AND tclp.as_parent+tclp.as_child > tclc.as_parent+tclc.as_child
+                            AND (tclp.as_parent > tclc.as_child OR tcp.parent_timestamp<'2000-01-01')
+                        GROUP BY tcp.parent_id
+                    ON CONFLICT DO NOTHING
+                    ;"""
                 )
 
                 self.db.cursor.execute(
                     """
-					INSERT INTO temp_conflict_new_values(commit_id,created_at)
-						SELECT tcp.child_id,MAX(tcp.parent_timestamp)
-							FROM temp_conflict_pairs tcp
-							INNER JOIN temp_conflict_levels tclp
-							ON tclp.commit_id=tcp.parent_id
-							INNER JOIN temp_conflict_levels tclc
-							ON tclc.commit_id=tcp.child_id
-							--AND tclp.as_parent+tclp.as_child <= tclc.as_parent+tclc.as_child
-							AND (tclp.as_parent <= tclc.as_child OR tcp.child_timestamp<'2000-01-01')
-						GROUP BY tcp.child_id
-					ON CONFLICT DO NOTHING
-					;"""
+                    INSERT INTO temp_conflict_new_values(commit_id,created_at)
+                        SELECT tcp.child_id,MAX(tcp.parent_timestamp)
+                            FROM temp_conflict_pairs tcp
+                            INNER JOIN temp_conflict_levels tclp
+                            ON tclp.commit_id=tcp.parent_id
+                            INNER JOIN temp_conflict_levels tclc
+                            ON tclc.commit_id=tcp.child_id
+                            --AND tclp.as_parent+tclp.as_child <= tclc.as_parent+tclc.as_child
+                            AND (tclp.as_parent <= tclc.as_child OR tcp.child_timestamp<'2000-01-01')
+                        GROUP BY tcp.child_id
+                    ON CONFLICT DO NOTHING
+                    ;"""
                 )
 
                 # Update
                 if self.db.db_type == "postgres":
                     self.db.cursor.execute(
                         """
-						UPDATE commits SET created_at=nv.created_at,original_created_at=COALESCE(original_created_at,commits.created_at)
-						FROM temp_conflict_new_values nv
-						WHERE commits.id=nv.commit_id
-						AND commits.created_at != nv.created_at
-						;
-						"""
+                        UPDATE commits SET created_at=nv.created_at,original_created_at=COALESCE(original_created_at,commits.created_at)
+                        FROM temp_conflict_new_values nv
+                        WHERE commits.id=nv.commit_id
+                        AND commits.created_at != nv.created_at
+                        ;
+                        """
                     )
                 else:
                     self.db.cursor.execute(
                         """
-						UPDATE commits SET created_at=(SELECT nv.created_at FROM temp_conflict_new_values nv
-													WHERE commits.id=nv.commit_id
-													AND commits.created_at != nv.created_at),
-										original_created_at=COALESCE(original_created_at,commits.created_at)
-						WHERE EXISTS (SELECT nv.created_at FROM temp_conflict_new_values nv
-										WHERE commits.id=nv.commit_id
-										AND commits.created_at != nv.created_at)
-						;
-						"""
+                        UPDATE commits SET created_at=(SELECT nv.created_at FROM temp_conflict_new_values nv
+                                                    WHERE commits.id=nv.commit_id
+                                                    AND commits.created_at != nv.created_at),
+                                        original_created_at=COALESCE(original_created_at,commits.created_at)
+                        WHERE EXISTS (SELECT nv.created_at FROM temp_conflict_new_values nv
+                                        WHERE commits.id=nv.commit_id
+                                        AND commits.created_at != nv.created_at)
+                        ;
+                        """
                     )
                 updated_count_parents = self.db.cursor.rowcount
                 updated_count = updated_count_parents
@@ -1483,20 +1483,20 @@ class CommitsFiller(fillers.Filler):
 
                 self.db.cursor.execute(
                     """
-					DROP TABLE temp_conflict_pairs
-					;"""
+                    DROP TABLE temp_conflict_pairs
+                    ;"""
                 )
 
                 self.db.cursor.execute(
                     """
-					DROP TABLE temp_conflict_levels
-					;"""
+                    DROP TABLE temp_conflict_levels
+                    ;"""
                 )
 
                 self.db.cursor.execute(
                     """
-					DROP TABLE temp_conflict_new_values
-					;"""
+                    DROP TABLE temp_conflict_new_values
+                    ;"""
                 )
 
                 self.logger.info(
@@ -1510,11 +1510,11 @@ class CommitsFiller(fillers.Filler):
 
                 self.db.cursor.execute(
                     """
-					UPDATE commits SET original_created_at=NULL
-					WHERE original_created_at IS NOT NULL
-					AND created_at=original_created_at
-					;
-					"""
+                    UPDATE commits SET original_created_at=NULL
+                    WHERE original_created_at IS NOT NULL
+                    AND created_at=original_created_at
+                    ;
+                    """
                 )
                 self.logger.info(
                     "Reset to NULL original_created_at for {} commits because matching created_at".format(
@@ -1526,13 +1526,13 @@ class CommitsFiller(fillers.Filler):
 
                 self.db.cursor.execute(
                     """
-					SELECT COUNT(*) FROM commits c
-							INNER JOIN commit_parents cp
-							ON cp.child_id =c.id
-							INNER JOIN commits c2
-							ON c2.id=cp.parent_id
-							AND c2.created_at >c.created_at
-					;"""
+                    SELECT COUNT(*) FROM commits c
+                            INNER JOIN commit_parents cp
+                            ON cp.child_id =c.id
+                            INNER JOIN commits c2
+                            ON c2.id=cp.parent_id
+                            AND c2.created_at >c.created_at
+                    ;"""
                 )
 
                 self.logger.info(
