@@ -334,8 +334,8 @@ class CommitsFiller(fillers.Filler):
                         "commit_local_time": commit.commit_time
                         + 60 * commit.commit_time_offset,
                         "commit_time_offset": commit.commit_time_offset * 60,
-                        "sha": commit.id,
-                        "parents": commit.parent_ids,
+                        "sha": str(commit.id),
+                        "parents": [str(ci) for ci in commit.parent_ids],
                         "repo_id": repo_id,
                         "message": commit.message,
                         "committer_email": commit.committer.email,
@@ -366,8 +366,8 @@ class CommitsFiller(fillers.Filler):
                         "commit_local_time": commit.commit_time
                         + 60 * commit.commit_time_offset,
                         "commit_time_offset": commit.commit_time_offset * 60,
-                        "sha": commit.id,
-                        "parents": commit.parent_ids,
+                        "sha": str(commit.id),
+                        "parents": [str(ci) for ci in commit.parent_ids],
                         "insertions": insertions,
                         "deletions": deletions,
                         "total": insertions + deletions,
@@ -495,13 +495,15 @@ class CommitsFiller(fillers.Filler):
         tracked_data = {"latest_commit_time": 0, "empty": True}
 
         def tracked_gen(orig_gen):
+            if isinstance(orig_gen, list):
+                orig_gen = iter(orig_gen)
             while True:
                 try:
                     c = next(orig_gen)
                     tracked_data["empty"] = False
                     tracked_data["last_commit"] = c
                     tracked_data["latest_commit_time"] = max(
-                        tracked_data["latest_commit_time"], c["gmt_time"]
+                        tracked_data["latest_commit_time"], float(c["gmt_time"])
                     )
                     yield c
                 except StopIteration:
@@ -650,8 +652,8 @@ class CommitsFiller(fillers.Filler):
 
         if not tracked_data["empty"]:
             # repo_id = tracked_data['last_commit']['repo_id']
-            latest_commit_time = datetime.datetime.utcfromtimestamp(
-                tracked_data["latest_commit_time"]
+            latest_commit_time = datetime.datetime.fromtimestamp(
+                tracked_data["latest_commit_time"], datetime.UTC
             )
         else:
             latest_commit_time = None
@@ -678,13 +680,15 @@ class CommitsFiller(fillers.Filler):
         tracked_data = {"latest_commit_time": 0, "empty": True}
 
         def tracked_gen(orig_gen):
+            if isinstance(orig_gen, list):
+                orig_gen = iter(orig_gen)
             while True:
                 try:
                     c = next(orig_gen)
                     tracked_data["last_commit"] = c
                     tracked_data["empty"] = False
                     tracked_data["latest_commit_time"] = max(
-                        tracked_data["latest_commit_time"], c["gmt_time"]
+                        tracked_data["latest_commit_time"], float(c["gmt_time"])
                     )
                     yield c
                 except StopIteration:
@@ -722,22 +726,24 @@ class CommitsFiller(fillers.Filler):
                 """,
                 (
                     dict(
-                        local_timestamp=datetime.datetime.utcfromtimestamp(
-                            c["local_time"]
+                        local_timestamp=datetime.datetime.fromtimestamp(
+                            c["local_time"], datetime.UTC
                         ),
-                        gmt_timestamp=datetime.datetime.utcfromtimestamp(c["gmt_time"]),
-                        commit_local_timestamp=datetime.datetime.utcfromtimestamp(
-                            c["commit_local_time"]
+                        gmt_timestamp=datetime.datetime.fromtimestamp(
+                            float(c["gmt_time"]), datetime.UTC
                         ),
-                        commit_gmt_timestamp=datetime.datetime.utcfromtimestamp(
-                            c["commit_gmt_time"]
+                        commit_local_timestamp=datetime.datetime.fromtimestamp(
+                            c["commit_local_time"], datetime.UTC
+                        ),
+                        commit_gmt_timestamp=datetime.datetime.fromtimestamp(
+                            float(c["commit_gmt_time"]), datetime.UTC
                         ),
                         **c
                     )
                     for c in tracked_gen(commit_info_list)
                 ),
             )
-            # ''',((c['sha'],c['author_email'],c['committer_email'],datetime.datetime.utcfromtimestamp(c['time']),c['insertions'],c['deletions'],c['message']) for c in tracked_gen(commit_info_list)))
+            # ''',((c['sha'],c['author_email'],c['committer_email'],datetime.datetime.fromtimestamp(c['time']),c['insertions'],c['deletions'],c['message']) for c in tracked_gen(commit_info_list)))
 
         else:
             self.db.cursor.executemany(
@@ -763,27 +769,29 @@ class CommitsFiller(fillers.Filler):
                 """,
                 (
                     dict(
-                        local_timestamp=datetime.datetime.utcfromtimestamp(
-                            c["local_time"]
+                        local_timestamp=datetime.datetime.fromtimestamp(
+                            c["local_time"], datetime.UTC
                         ),
-                        gmt_timestamp=datetime.datetime.utcfromtimestamp(c["gmt_time"]),
-                        commit_local_timestamp=datetime.datetime.utcfromtimestamp(
-                            c["commit_local_time"]
+                        gmt_timestamp=datetime.datetime.fromtimestamp(
+                            float(c["gmt_time"]), datetime.UTC
                         ),
-                        commit_gmt_timestamp=datetime.datetime.utcfromtimestamp(
-                            c["commit_gmt_time"]
+                        commit_local_timestamp=datetime.datetime.fromtimestamp(
+                            c["commit_local_time"], datetime.UTC
+                        ),
+                        commit_gmt_timestamp=datetime.datetime.fromtimestamp(
+                            float(c["commit_gmt_time"]), datetime.UTC
                         ),
                         **c
                     )
                     for c in tracked_gen(commit_info_list)
                 ),
             )
-            #''',((c['sha'],c['author_email'],c['committer_email'],datetime.datetime.utcfromtimestamp(c['time']),c['insertions'],c['deletions'],c['message']) for c in tracked_gen(commit_info_list)))
+            #''',((c['sha'],c['author_email'],c['committer_email'],datetime.datetime.fromtimestamp(c['time']),c['insertions'],c['deletions'],c['message']) for c in tracked_gen(commit_info_list)))
 
         if not tracked_data["empty"]:
             #           repo_id = tracked_data['last_commit']['repo_id']
-            latest_commit_time = datetime.datetime.utcfromtimestamp(
-                tracked_data["latest_commit_time"]
+            latest_commit_time = datetime.datetime.fromtimestamp(
+                tracked_data["latest_commit_time"], datetime.UTC
             )
         else:
             latest_commit_time = None
@@ -809,13 +817,15 @@ class CommitsFiller(fillers.Filler):
         tracked_data = {"latest_commit_time": 0, "empty": True}
 
         def tracked_gen(orig_gen):
+            if isinstance(orig_gen, list):
+                orig_gen = iter(orig_gen)
             while True:
                 try:
                     c = next(orig_gen)
                     tracked_data["last_commit"] = c
                     tracked_data["empty"] = False
                     tracked_data["latest_commit_time"] = max(
-                        tracked_data["latest_commit_time"], c["gmt_time"]
+                        tracked_data["latest_commit_time"], float(c["gmt_time"])
                     )
                     yield c
                 except StopIteration:
@@ -851,8 +861,8 @@ class CommitsFiller(fillers.Filler):
 
         if not tracked_data["empty"]:
             # repo_id = tracked_data['last_commit']['repo_id']
-            latest_commit_time = datetime.datetime.utcfromtimestamp(
-                tracked_data["latest_commit_time"]
+            latest_commit_time = datetime.datetime.fromtimestamp(
+                tracked_data["latest_commit_time"], datetime.UTC
             )
         else:
             latest_commit_time = None
@@ -877,6 +887,8 @@ class CommitsFiller(fillers.Filler):
 
     #   tracked_data = {'latest_commit_time':0,'empty':True}
     #   def tracked_gen(orig_gen):
+    # if isinstance(orig_gen, list):
+    #     orig_gen = iter(orig_gen)
     #       for c in orig_gen:
     #           tracked_data['last_commit'] = c
     #           tracked_data['empty'] = False
@@ -904,7 +916,7 @@ class CommitsFiller(fillers.Filler):
 
     #   if not tracked_data['empty']:
     #       repo_id = tracked_data['last_commit']['repo_id']
-    #       latest_commit_time = datetime.datetime.utcfromtimestamp(tracked_data['latest_commit_time'])
+    #       latest_commit_time = datetime.datetime.fromtimestamp(tracked_data['latest_commit_time'])
     #       if self.db.db_type == 'postgres':
     #           self.db.cursor.execute('''INSERT INTO table_updates(repo_id,table_name,latest_commit_time) VALUES(%s,'commit_orig_repos',%s) ;''',(repo_id,latest_commit_time))
     #       else:
@@ -922,13 +934,15 @@ class CommitsFiller(fillers.Filler):
         tracked_data = {"latest_commit_time": 0, "empty": True}
 
         def transformed_list(orig_gen):
+            if isinstance(orig_gen, list):
+                orig_gen = iter(orig_gen)
             while True:
                 try:
                     c = next(orig_gen)
                     tracked_data["last_commit"] = c
                     tracked_data["empty"] = False
                     tracked_data["latest_commit_time"] = max(
-                        tracked_data["latest_commit_time"], c["gmt_time"]
+                        tracked_data["latest_commit_time"], float(c["gmt_time"])
                     )
                     c_id = c["sha"]
                     for r, p_id in enumerate(c["parents"]):
@@ -971,8 +985,8 @@ class CommitsFiller(fillers.Filler):
 
         if not tracked_data["empty"]:
             # repo_id = tracked_data['last_commit']['repo_id']
-            latest_commit_time = datetime.datetime.utcfromtimestamp(
-                tracked_data["latest_commit_time"]
+            latest_commit_time = datetime.datetime.fromtimestamp(
+                tracked_data["latest_commit_time"], datetime.UTC
             )
         else:
             latest_commit_time = None
