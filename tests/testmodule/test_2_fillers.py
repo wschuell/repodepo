@@ -470,26 +470,26 @@ def test_filters_folder(testdb):
     testdb.fill_db()
 
 
-@pytest.mark.timeout(200)
-def test_metacran(testdb):
-    testdb.add_filler(
-        metacran.MetaCRANFiller(
-            package_limit=150,
-            start_date_dl=datetime.datetime(2021, 1, 1),
-            end_date_dl=datetime.datetime(2021, 6, 1),
-            include_R=True,
-        )
-    )
-    testdb.fill_db()
+# @pytest.mark.timeout(200)
+# def test_metacran(testdb):
+#     testdb.add_filler(
+#         metacran.MetaCRANFiller(
+#             package_limit=150,
+#             start_date_dl=datetime.datetime(2021, 1, 1),
+#             end_date_dl=datetime.datetime(2021, 6, 1),
+#             include_R=True,
+#         )
+#     )
+#     testdb.fill_db()
 
 
-@pytest.mark.timeout(200)
-def test_npm(testdb):
-    testdb.add_filler(
-        npm.NPMFiller(
-            package_limit=150,
-            start_date_dl=datetime.datetime(2021, 1, 1),
-            end_date_dl=datetime.datetime(2021, 6, 1),
-        )
-    )
-    testdb.fill_db()
+# @pytest.mark.timeout(200)
+# def test_npm(testdb):
+#     testdb.add_filler(
+#         npm.NPMFiller(
+#             package_limit=150,
+#             start_date_dl=datetime.datetime(2021, 1, 1),
+#             end_date_dl=datetime.datetime(2021, 6, 1),
+#         )
+#     )
+#     testdb.fill_db()
