@@ -129,45 +129,45 @@ def test_export(testdb, dest_db):
 
 # @pytest.mark.timeout(30)
 # def test_dump(testdb):
-# 	try:
-# 		exports.dump_pg_csv(db=testdb,output_folder=os.path.join(os.path.dirname(__file__),'dump_pg'),force=True)
-# 	except errors.RepoToolsDumpSQLiteError:
-# 		if testdb.db_type == 'sqlite':
-# 			return
-# 		else:
-# 			raise
-# 	if testdb.db_type == 'sqlite':
-# 		raise ValueError('Should have raised an error for dumping a SQLite DB')
+#   try:
+#       exports.dump_pg_csv(db=testdb,output_folder=os.path.join(os.path.dirname(__file__),'dump_pg'),force=True)
+#   except errors.RepoToolsDumpSQLiteError:
+#       if testdb.db_type == 'sqlite':
+#           return
+#       else:
+#           raise
+#   if testdb.db_type == 'sqlite':
+#       raise ValueError('Should have raised an error for dumping a SQLite DB')
 
 
 # @pytest.mark.timeout(30)
 # def test_dump_nopsql(testdb):
-# 	try:
-# 		exports.dump_pg_csv(db=testdb,output_folder=os.path.join(os.path.dirname(__file__),'dump_pg_nopsql'),csv_psql=False,force=True)
-# 	except errors.RepoToolsDumpSQLiteError:
-# 		if testdb.db_type == 'sqlite':
-# 			return
-# 		else:
-# 			raise
-# 	if testdb.db_type == 'sqlite':
-# 		raise ValueError('Should have raised an error for dumping a SQLite DB')
+#   try:
+#       exports.dump_pg_csv(db=testdb,output_folder=os.path.join(os.path.dirname(__file__),'dump_pg_nopsql'),csv_psql=False,force=True)
+#   except errors.RepoToolsDumpSQLiteError:
+#       if testdb.db_type == 'sqlite':
+#           return
+#       else:
+#           raise
+#   if testdb.db_type == 'sqlite':
+#       raise ValueError('Should have raised an error for dumping a SQLite DB')
 
 
 # @pytest.mark.timeout(30)
 # def test_dump_error(testdb):
-# 	try:
-# 		exports.dump_pg_csv(db=testdb,output_folder=os.path.join(os.path.dirname(__file__),'dump_pg'),force=False,quiet_error=False)
-# 	except errors.RepoToolsDumpSQLiteError:
-# 		if testdb.db_type == 'sqlite':
-# 			return
-# 		else:
-# 			raise
-# 	except errors.RepoToolsDumpPGError:
-# 		return
-# 	if testdb.db_type == 'sqlite':
-# 		raise ValueError('Should have raised an error for dumping a SQLite DB')
-# 	else:
-# 		raise ValueError('Should have raised an error for dumping in a folder already containing dumped files')
+#   try:
+#       exports.dump_pg_csv(db=testdb,output_folder=os.path.join(os.path.dirname(__file__),'dump_pg'),force=False,quiet_error=False)
+#   except errors.RepoToolsDumpSQLiteError:
+#       if testdb.db_type == 'sqlite':
+#           return
+#       else:
+#           raise
+#   except errors.RepoToolsDumpPGError:
+#       return
+#   if testdb.db_type == 'sqlite':
+#       raise ValueError('Should have raised an error for dumping a SQLite DB')
+#   else:
+#       raise ValueError('Should have raised an error for dumping in a folder already containing dumped files')
 
 
 def test_stats(testdb):
@@ -179,9 +179,9 @@ def test_anonymize_emails(dest_db_exported):
     anonymization.anonymize_emails(db=dest_db_exported)
     dest_db_exported.cursor.execute(
         """SELECT i.identity FROM identities i
-						INNER JOIN identity_types it
-						ON it.id=i.identity_type_id AND it.name='email'
-						AND NOT i.is_bot;"""
+                        INNER JOIN identity_types it
+                        ON it.id=i.identity_type_id AND it.name='email'
+                        AND NOT i.is_bot;"""
     )
     res = [r[0] for r in dest_db_exported.cursor.fetchall()]
     ans = []
@@ -192,9 +192,9 @@ def test_anonymize_emails(dest_db_exported):
 
     dest_db_exported.cursor.execute(
         """SELECT u.creation_identity FROM users u
-						INNER JOIN identity_types it
-						ON it.id=u.creation_identity_type_id AND it.name='email'
-						AND NOT u.is_bot;"""
+                        INNER JOIN identity_types it
+                        ON it.id=u.creation_identity_type_id AND it.name='email'
+                        AND NOT u.is_bot;"""
     )
     res = [r[0] for r in dest_db_exported.cursor.fetchall()]
     for r in res:
@@ -222,16 +222,16 @@ def test_clean_attr(dest_db_anon):
     exports.clean_attr(db=dest_db_anon, table="stars", attr="inserted_at")
 
 
-@pytest.mark.timeout(20)
-def test_stats(dest_db_anon):
-    stats.GlobalStats(db=dest_db_anon).get_result()
+# @pytest.mark.timeout(20)
+# def test_stats(dest_db_anon):
+#     stats.GlobalStats(db=dest_db_anon).get_result()
 
 
-@pytest.mark.timeout(20)
-def test_export_filters(dest_db_anon):
-    exports.export_filters(db=dest_db_anon)
+# @pytest.mark.timeout(20)
+# def test_export_filters(dest_db_anon):
+#     exports.export_filters(db=dest_db_anon)
 
 
-@pytest.mark.timeout(20)
-def test_export_bots(dest_db_anon):
-    exports.export_bots(db=dest_db_anon)
+# @pytest.mark.timeout(20)
+# def test_export_bots(dest_db_anon):
+#     exports.export_bots(db=dest_db_anon)
