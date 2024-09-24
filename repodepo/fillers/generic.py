@@ -1176,6 +1176,8 @@ class ClonesFiller(fillers.Filler):
         sources=None,
         rm_first=False,
         clone_folder=None,
+        repo_list=None,
+        check_clone_folder=True,
         **kwargs,
     ):
         """
@@ -1191,6 +1193,8 @@ class ClonesFiller(fillers.Filler):
         self.rm_first = rm_first
         self.precheck_cloned = precheck_cloned
         self.clone_folder = clone_folder
+        self.check_clone_folder = check_clone_folder
+        self.repo_list = repo_list
 
         self.ssh_key = ssh_key
         if ssh_sources is None:
@@ -1214,7 +1218,7 @@ class ClonesFiller(fillers.Filler):
             self.data_folder = self.db.data_folder
         if self.clone_folder is None:
             self.clone_folder = self.db.clone_folder
-        elif self.clone_folder != self.db.clone_folder:
+        elif self.check_clone_folder and self.clone_folder != self.db.clone_folder:
             raise ValueError(
                 "Clone folder for ClonesFiller should not be different than db.clone_folder. This ensures safe clones renaming when detecting change in repo name."
             )
@@ -1292,7 +1296,10 @@ class ClonesFiller(fillers.Filler):
         self.clone_all()
 
     def clone_all(self):
-        repo_list = self.get_repo_list()
+        if self.repo_list is None:
+            repo_list = self.get_repo_list()
+        else:
+            repo_list = self.repo_list
         for i, r in enumerate(repo_list):
             source, source_urlroot, owner, name = r
             self.logger.info("Repo {}/{}".format(i + 1, len(repo_list)))

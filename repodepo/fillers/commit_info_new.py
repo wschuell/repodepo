@@ -233,6 +233,7 @@ class CommitsGitLogFiller(commit_info.CommitsFiller):
         name,
         source,
         owner,
+        clone_folder=None,
         basic_info_only=False,
         repo_id=None,
         after_time=None,
@@ -244,10 +245,24 @@ class CommitsGitLogFiller(commit_info.CommitsFiller):
         Listing the commits of a repository
         if after time is set to an int (unix time def) or datetime.datetime instead of None, only commits strictly after given time. Commits are listed by default from most recent to least.
         """
+
         if isinstance(after_time, datetime.datetime):
             after_time = datetime.datetime.timestamp(after_time)
+        if clone_folder is None:
+            clone_folder = self.clone_folder
+        repo_folder = os.path.join(clone_folder, source, owner, name)
+        if self.clone_absent and not os.path.exists(repo_folder):
+            self.clone_repo(
+                source=source, name=name, owner=owner, clone_folder=clone_folder
+            )
 
-        repo_obj = self.get_repo(source=source, name=name, owner=owner, engine="pygit2")
+        repo_obj = self.get_repo(
+            source=source,
+            name=name,
+            owner=owner,
+            engine="pygit2",
+            repo_folder=repo_folder,
+        )
         if (
             repo_id is None
         ):  # Letting the possibility to preset repo_id to avoid cursor recursive usage

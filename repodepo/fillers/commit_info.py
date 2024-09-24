@@ -7,6 +7,8 @@ import json
 import git
 import itertools
 import psutil
+import shutil
+import tempfile
 import subprocess
 
 from .. import fillers
@@ -30,14 +32,25 @@ class CommitsFiller(fillers.Filler):
         fix_created_at=False,
         workers=None,
         workers_commit_threshold=500,
+        sequential=False,
+        clone_absent=False,
+        clone_folder=None,
+        clean_repo=False,
+        temp_repodir=False,
         **kwargs
     ):
         self.force = force
+        self.temp_repodir = temp_repodir
+        self.clone_folder = clone_folder
+        self.clone_absent = clone_absent
+        self.sequential = sequential
         self.allbranches = allbranches
         self.only_null_commit_origs = only_null_commit_origs
         self.all_commits = all_commits
         self.created_at_batchsize = created_at_batchsize
         self.fix_created_at = fix_created_at
+        self.url_roots = dict()
+        self.clean_repo = clean_repo
         if workers is None:
             try:
                 nb_cpu = psutil.Process().cpu_affinity()
@@ -56,16 +69,22 @@ class CommitsFiller(fillers.Filler):
         if self.data_folder is None:
             self.data_folder = self.db.data_folder
         data_folder = self.data_folder
-        self.clone_folder = self.db.clone_folder
+        if self.clone_folder is None:
+            self.clone_folder = self.db.clone_folder
 
         # create folder if needed
         if not os.path.exists(data_folder):
             os.makedirs(data_folder)
-
-        pass
+        if not os.path.exists(self.clone_folder):
+            os.makedirs(self.clone_folder)
 
     def apply(self):
-        self.fill_commit_info(force=self.force, all_commits=self.all_commits)
+        if self.sequential:
+            self.fill_commit_info_sequential(
+                force=self.force, all_commits=self.all_commits
+            )
+        else:
+            self.fill_commit_info(force=self.force, all_commits=self.all_commits)
         self.fill_commit_orig_repo(only_null=self.only_null_commit_origs)
         if self.fix_created_at:
             self.fill_commit_created_at(batch_size=self.created_at_batchsize)
@@ -73,15 +92,28 @@ class CommitsFiller(fillers.Filler):
 
     def get_repo_list(self, all_commits=False, option=None):
         if all_commits:
-            self.db.cursor.execute(
-                """
-                SELECT s.name,r.owner,r.name,r.id
-                FROM repositories r
-                INNER JOIN sources s
-                ON s.id=r.source AND r.cloned
-                ORDER BY s.name,r.owner,r.name
-                ;"""
-            )
+            if self.db.db_type == "postgres":
+                self.db.cursor.execute(
+                    """
+                    SELECT s.name,r.owner,r.name,r.id
+                    FROM repositories r
+                    INNER JOIN sources s
+                    ON s.id=r.source AND (r.cloned OR %(clone_check)s)
+                    ORDER BY s.name,r.owner,r.name
+                    ;""",
+                    dict(clone_check=not self.clone_absent),
+                )
+            else:
+                self.db.cursor.execute(
+                    """
+                    SELECT s.name,r.owner,r.name,r.id
+                    FROM repositories r
+                    INNER JOIN sources s
+                    ON s.id=r.source AND (r.cloned OR NOT :clone_check)
+                    ORDER BY s.name,r.owner,r.name
+                    ;""",
+                    dict(clone_check=not self.clone_absent),
+                )
             return [
                 {"source": r[0], "owner": r[1], "name": r[2], "repo_id": r[3]}
                 for r in self.db.cursor.fetchall()
@@ -96,17 +128,17 @@ class CommitsFiller(fillers.Filler):
                         SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id,extract(epoch from r.latest_commit_time)
                         FROM repositories r
                         INNER JOIN sources s
-                        ON s.id=r.source AND r.cloned
+                        ON s.id=r.source AND (r.cloned OR NOT %(clone_check)s)
                         EXCEPT
                         (SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id,extract(epoch from r.latest_commit_time)
                         FROM repositories r
                         INNER JOIN sources s
-                        ON s.id=r.source AND r.cloned
+                        ON s.id=r.source AND (r.cloned OR NOT %(clone_check)s)
                         INNER JOIN table_updates tu
-                        ON tu.table_name=%s AND tu.repo_id=r.id AND tu.success)
+                        ON tu.table_name=%(option)s AND tu.repo_id=r.id AND tu.success)
                         ORDER BY sname,rowner,rname
                         ;""",
-                        (option,),
+                        dict(option=option, clone_check=not self.clone_absent),
                     )
                 else:
                     self.db.cursor.execute(
@@ -114,17 +146,17 @@ class CommitsFiller(fillers.Filler):
                         SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
                         FROM repositories r
                         INNER JOIN sources s
-                        ON s.id=r.source AND r.cloned
+                        ON s.id=r.source AND (r.cloned OR NOT :clone_check)
                         EXCEPT
                         SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
                         FROM repositories r
                         INNER JOIN sources s
-                        ON s.id=r.source AND r.cloned
+                        ON s.id=r.source AND (r.cloned OR NOT :clone_check)
                         INNER JOIN table_updates tu
-                        ON tu.table_name=? AND tu.repo_id=r.id AND tu.success
+                        ON tu.table_name=:option AND tu.repo_id=r.id AND tu.success
                         ORDER BY sname,rowner,rname
                         ;""",
-                        (option,),
+                        dict(option=option, clone_check=not self.clone_absent),
                     )
             else:
                 if self.db.db_type == "postgres":
@@ -133,9 +165,10 @@ class CommitsFiller(fillers.Filler):
                         SELECT s.name,r.owner,r.name,r.id,extract(epoch from r.latest_commit_time)
                         FROM repositories r
                         INNER JOIN sources s
-                        ON s.id=r.source AND r.cloned
+                        ON s.id=r.source AND (r.cloned OR NOT %(clone_check)s)
                         ORDER BY s.name,r.owner,r.name
-                        ;"""
+                        ;""",
+                        dict(clone_check=not self.clone_absent),
                     )
                 else:
                     self.db.cursor.execute(
@@ -143,9 +176,10 @@ class CommitsFiller(fillers.Filler):
                         SELECT s.name,r.owner,r.name,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
                         FROM repositories r
                         INNER JOIN sources s
-                        ON s.id=r.source AND r.cloned
+                        ON s.id=r.source AND (r.cloned OR NOT :clone_check)
                         ORDER BY s.name,r.owner,r.name
-                        ;"""
+                        ;""",
+                        dict(clone_check=not self.clone_absent),
                     )
 
             return [
@@ -159,11 +193,10 @@ class CommitsFiller(fillers.Filler):
                 for r in self.db.cursor.fetchall()
             ]
 
-    def fill_commit_info(self, force=False, all_commits=False):
+    def fill_commit_info(self, force=False, all_commits=False, repo_list=None):
         """
         Filling in authors, commits and parenthood using Database object methods
         """
-
         self.db.cursor.execute(
             """SELECT MAX(updated_at) FROM full_updates WHERE update_type='commits';"""
         )
@@ -173,13 +206,25 @@ class CommitsFiller(fillers.Filler):
             """SELECT MAX(updated_at) FROM table_updates WHERE table_name='clones' AND success;"""
         )
         last_dl = self.db.cursor.fetchone()[0]
-
+        if not self.refresh_list and repo_list is None:
+            repo_list = self.get_repo_list(
+                all_commits=all_commits, option="commit_parents"
+            )
+            # for repo_info in repo_list:
+            #     self.fill_commit_info(
+            #         repo_list=[repo_info],
+            #         all_commits=all_commits,
+            #         force=force,
+            #     )
+            # return
         if force or (last_fu is None) or (last_dl is not None and last_fu < last_dl):
             self.logger.info("Filling in identities")
 
-            for repo_info in self.get_repo_list(
-                all_commits=all_commits, option="identities"
-            ):
+            if self.refresh_list:
+                repo_list = self.get_repo_list(
+                    all_commits=all_commits, option="identities"
+                )
+            for repo_info in repo_list:
                 self.logger.info(
                     "Filling identities info for {source}/{owner}/{name}".format(
                         **repo_info
@@ -200,9 +245,8 @@ class CommitsFiller(fillers.Filler):
                     raise
             self.logger.info("Filling in commits")
 
-            for repo_info in self.get_repo_list(
-                all_commits=all_commits, option="commits"
-            ):
+            repo_list = self.get_repo_list(all_commits=all_commits, option="commits")
+            for repo_info in repo_list:
                 self.logger.info(
                     "Filling commits info for {source}/{owner}/{name}".format(
                         **repo_info
@@ -223,9 +267,10 @@ class CommitsFiller(fillers.Filler):
 
             self.logger.info("Filling in repository commit ownership")
 
-            for repo_info in self.get_repo_list(
+            repo_list = self.get_repo_list(
                 all_commits=all_commits, option="commit_repos"
-            ):
+            )
+            for repo_info in repo_list:
                 self.logger.info(
                     "Filling commit ownership info for {source}/{owner}/{name}".format(
                         **repo_info
@@ -246,9 +291,10 @@ class CommitsFiller(fillers.Filler):
 
             self.logger.info("Filling in commit parents")
 
-            for repo_info in self.get_repo_list(
+            repo_list = self.get_repo_list(
                 all_commits=all_commits, option="commit_parents"
-            ):
+            )
+            for repo_info in repo_list:
                 self.logger.info(
                     "Filling commit parenthood info for {source}/{owner}/{name}".format(
                         **repo_info
@@ -274,11 +320,153 @@ class CommitsFiller(fillers.Filler):
         else:
             self.logger.info("Skipping filling of commits info")
 
+    def fill_commit_info_sequential(self, force=False, all_commits=False):
+        """
+        Filling in authors, commits and parenthood using Database object methods
+        Sequential: all steps for each repo one after the other rather than all repos for one step
+        """
+        self.db.cursor.execute(
+            """SELECT MAX(updated_at) FROM full_updates WHERE update_type='commits';"""
+        )
+        last_fu = self.db.cursor.fetchone()[0]
+
+        self.db.cursor.execute(
+            """SELECT MAX(updated_at) FROM table_updates WHERE table_name='clones' AND success;"""
+        )
+        last_dl = self.db.cursor.fetchone()[0]
+        repo_list = self.get_repo_list(all_commits=all_commits, option="commit_parents")
+        if force or (last_fu is None) or (last_dl is not None and last_fu < last_dl):
+            for repo_info in repo_list:
+                with tempfile.TemporaryDirectory() as temp_clonedir:
+                    if self.temp_repodir:
+                        clone_folder = temp_clonedir
+                    else:
+                        clone_folder = None
+                    self.logger.info(
+                        "Filling identities info for {source}/{owner}/{name}".format(
+                            **repo_info
+                        )
+                    )
+                    commit_list = self.list_commits(
+                        group_by="authors",
+                        basic_info_only=True,
+                        allbranches=self.allbranches,
+                        clone_folder=clone_folder,
+                        **repo_info
+                    )
+                    try:
+                        self.fill_authors(
+                            commit_list,
+                            repo_id=repo_info["repo_id"],
+                        )
+                    except:
+                        self.logger.error("Error with {}".format(repo_info))
+                        raise
+                    self.logger.info(
+                        "Filling commits info for {source}/{owner}/{name}".format(
+                            **repo_info
+                        )
+                    )
+                    commit_list = self.list_commits(
+                        basic_info_only=False,
+                        allbranches=self.allbranches,
+                        clone_folder=clone_folder,
+                        **repo_info
+                    )
+
+                try:
+                    self.fill_commits(
+                        commit_list,
+                        repo_id=repo_info["repo_id"],
+                    )
+                except:
+                    self.logger.error("Error with {}".format(repo_info))
+                    raise
+
+                self.logger.info(
+                    "Filling commit ownership info for {source}/{owner}/{name}".format(
+                        **repo_info
+                    )
+                )
+                try:
+                    self.fill_commit_repos(
+                        commit_list,
+                        repo_id=repo_info["repo_id"],
+                    )
+                except:
+                    self.logger.error("Error with {}".format(repo_info))
+                    raise
+
+                self.logger.info(
+                    "Filling commit parenthood info for {source}/{owner}/{name}".format(
+                        **repo_info
+                    )
+                )
+                try:
+                    self.fill_commit_parents(
+                        commit_list,
+                        repo_id=repo_info["repo_id"],
+                    )
+                except:
+                    self.logger.error("Error with {}".format(repo_info))
+                    raise
+
+                if self.clean_repo and not self.temp_repodir:
+                    try:
+                        repo_folder = os.path.join(
+                            clone_folder,
+                            repo_info["source"],
+                            repo_info["owner"],
+                            repo_info["name"],
+                        )
+                        shutil.rmtree(repo_folder)
+                    except:
+                        self.logger.error("Clone folder absent: {}".format(repo_folder))
+
+            self.db.cursor.execute(
+                """INSERT INTO full_updates(update_type,updated_at) VALUES('commits',(SELECT CURRENT_TIMESTAMP));"""
+            )
+            self.db.connection.commit()
+        else:
+            self.logger.info("Skipping filling of commits info")
+
+    def clone_repo(self, source, name, owner, clone_folder=None):
+        if clone_folder is None:
+            clone_folder = self.clone_folder
+        if source not in self.url_roots.keys():
+            if self.db.db_type == "postgres":
+                self.db.cursor.execute(
+                    """
+                    SELECT url_root FROM sources where name=%(source)s;
+                    """,
+                    dict(source=source),
+                )
+            else:
+                self.db.cursor.execute(
+                    """
+                    SELECT url_root FROM sources where name=:source;
+                    """,
+                    dict(source=source),
+                )
+            self.url_roots[source] = self.db.cursor.fetchall()[0][0]
+        source_urlroot = self.url_roots[source]
+        clone_filler = generic.ClonesFiller(
+            repo_list=[(source, source_urlroot, owner, name)],
+            db=self.db,
+            precheck_cloned=False,
+            force=False,
+            check_clone_folder=False,
+            clone_folder=clone_folder,
+        )
+        clone_filler.prepare()
+        clone_filler.apply()
+
     def list_commits(
         self,
         name,
         source,
         owner,
+        clone_folder=None,
         basic_info_only=False,
         repo_id=None,
         after_time=None,
@@ -292,8 +480,22 @@ class CommitsFiller(fillers.Filler):
         """
         if isinstance(after_time, datetime.datetime):
             after_time = datetime.datetime.timestamp(after_time)
+        if clone_folder is None:
+            clone_folder = self.clone_folder
 
-        repo_obj = self.get_repo(source=source, name=name, owner=owner, engine="pygit2")
+        repo_folder = os.path.join(clone_folder, source, owner, name)
+        if self.clone_absent and not os.path.exists(repo_folder):
+            self.clone_repo(
+                source=source, name=name, owner=owner, clone_folder=clone_folder
+            )
+
+        repo_obj = self.get_repo(
+            source=source,
+            name=name,
+            owner=owner,
+            engine="pygit2",
+            repo_folder=repo_folder,
+        )
         if (
             repo_id is None
         ):  # Letting the possibility to preset repo_id to avoid cursor recursive usage
@@ -461,11 +663,12 @@ class CommitsFiller(fillers.Filler):
             while True:
                 yield next(wrapper_gen)
 
-    def get_repo(self, name, source, owner, engine="pygit2"):
+    def get_repo(self, name, source, owner, engine="pygit2", repo_folder=None):
         """
         Returns the pygit2 repository object
         """
-        repo_folder = os.path.join(self.clone_folder, source, owner, name)
+        if repo_folder is None:
+            repo_folder = os.path.join(self.clone_folder, source, owner, name)
         if not os.path.exists(repo_folder):
             raise ValueError(
                 "Repository {}/{}/{} not found in cloned_repos folder".format(
@@ -495,6 +698,8 @@ class CommitsFiller(fillers.Filler):
         tracked_data = {"latest_commit_time": 0, "empty": True}
 
         def tracked_gen(orig_gen):
+            if isinstance(orig_gen, tuple):
+                orig_gen = iter(orig_gen)
             if isinstance(orig_gen, list):
                 orig_gen = iter(orig_gen)
             while True:
@@ -680,6 +885,8 @@ class CommitsFiller(fillers.Filler):
         tracked_data = {"latest_commit_time": 0, "empty": True}
 
         def tracked_gen(orig_gen):
+            if isinstance(orig_gen, tuple):
+                orig_gen = iter(list(orig_gen))
             if isinstance(orig_gen, list):
                 orig_gen = iter(orig_gen)
             while True:
@@ -817,6 +1024,8 @@ class CommitsFiller(fillers.Filler):
         tracked_data = {"latest_commit_time": 0, "empty": True}
 
         def tracked_gen(orig_gen):
+            if isinstance(orig_gen, tuple):
+                orig_gen = iter(list(orig_gen))
             if isinstance(orig_gen, list):
                 orig_gen = iter(orig_gen)
             while True:
@@ -934,6 +1143,8 @@ class CommitsFiller(fillers.Filler):
         tracked_data = {"latest_commit_time": 0, "empty": True}
 
         def transformed_list(orig_gen):
+            if isinstance(orig_gen, tuple):
+                orig_gen = iter(list(orig_gen))
             if isinstance(orig_gen, list):
                 orig_gen = iter(orig_gen)
             while True:
