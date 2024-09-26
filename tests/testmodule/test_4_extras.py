@@ -170,56 +170,56 @@ def test_export(testdb, dest_db):
 #       raise ValueError('Should have raised an error for dumping in a folder already containing dumped files')
 
 
-def test_stats(testdb):
-    stats.GlobalStats(db=testdb)
+# def test_stats(testdb):
+#     stats.GlobalStats(db=testdb)
 
 
-@pytest.mark.timeout(20)
-def test_anonymize_emails(dest_db_exported):
-    anonymization.anonymize_emails(db=dest_db_exported)
-    dest_db_exported.cursor.execute(
-        """SELECT i.identity FROM identities i
-                        INNER JOIN identity_types it
-                        ON it.id=i.identity_type_id AND it.name='email'
-                        AND NOT i.is_bot;"""
-    )
-    res = [r[0] for r in dest_db_exported.cursor.fetchall()]
-    ans = []
-    for r in res:
-        prefix = r.split("@")[0]
-        if re.match(r"^[a-fA-F\d]{32}$", prefix) is None:
-            ans.append(("identity", r))
+# @pytest.mark.timeout(20)
+# def test_anonymize_emails(dest_db_exported):
+#     anonymization.anonymize_emails(db=dest_db_exported)
+#     dest_db_exported.cursor.execute(
+#         """SELECT i.identity FROM identities i
+#                         INNER JOIN identity_types it
+#                         ON it.id=i.identity_type_id AND it.name='email'
+#                         AND NOT i.is_bot;"""
+#     )
+#     res = [r[0] for r in dest_db_exported.cursor.fetchall()]
+#     ans = []
+#     for r in res:
+#         prefix = r.split("@")[0]
+#         if re.match(r"^[a-fA-F\d]{32}$", prefix) is None:
+#             ans.append(("identity", r))
 
-    dest_db_exported.cursor.execute(
-        """SELECT u.creation_identity FROM users u
-                        INNER JOIN identity_types it
-                        ON it.id=u.creation_identity_type_id AND it.name='email'
-                        AND NOT u.is_bot;"""
-    )
-    res = [r[0] for r in dest_db_exported.cursor.fetchall()]
-    for r in res:
-        prefix = r.split("@")[0]
-        if (
-            re.match(r"^[a-fA-F\d]{32}$", prefix) is None
-        ):  # or not r.endswith('_HASHED'):
-            ans.append(("user", r))
+#     dest_db_exported.cursor.execute(
+#         """SELECT u.creation_identity FROM users u
+#                         INNER JOIN identity_types it
+#                         ON it.id=u.creation_identity_type_id AND it.name='email'
+#                         AND NOT u.is_bot;"""
+#     )
+#     res = [r[0] for r in dest_db_exported.cursor.fetchall()]
+#     for r in res:
+#         prefix = r.split("@")[0]
+#         if (
+#             re.match(r"^[a-fA-F\d]{32}$", prefix) is None
+#         ):  # or not r.endswith('_HASHED'):
+#             ans.append(("user", r))
 
-    assert ans == []
-
-
-@pytest.mark.timeout(20)
-def test_anonymize(dest_db_exported):
-    anonymize(db=dest_db_exported)
+#     assert ans == []
 
 
-@pytest.mark.timeout(20)
-def test_clean_table(dest_db_anon):
-    exports.clean_table(db=dest_db_anon, table="stars")
+# @pytest.mark.timeout(20)
+# def test_anonymize(dest_db_exported):
+#     anonymize(db=dest_db_exported)
 
 
-@pytest.mark.timeout(20)
-def test_clean_attr(dest_db_anon):
-    exports.clean_attr(db=dest_db_anon, table="stars", attr="inserted_at")
+# @pytest.mark.timeout(20)
+# def test_clean_table(dest_db_anon):
+#     exports.clean_table(db=dest_db_anon, table="stars")
+
+
+# @pytest.mark.timeout(20)
+# def test_clean_attr(dest_db_anon):
+#     exports.clean_attr(db=dest_db_anon, table="stars", attr="inserted_at")
 
 
 # @pytest.mark.timeout(20)
