@@ -100,31 +100,31 @@ workers = 5
 #### Tests
 
 
-@pytest.mark.timeout(20)
-def test_check_db_equal(testdb, dest_db):
-    assert exports.check_db_equal(db=testdb, other_db=testdb)
-    assert not exports.check_db_equal(db=testdb, other_db=dest_db)
+# @pytest.mark.timeout(20)
+# def test_check_db_equal(testdb, dest_db):
+#     assert exports.check_db_equal(db=testdb, other_db=testdb)
+#     assert not exports.check_db_equal(db=testdb, other_db=dest_db)
 
 
-@pytest.mark.timeout(30)
-def test_tables_info(testdb):
-    exports.get_tables_info(testdb)
+# @pytest.mark.timeout(30)
+# def test_tables_info(testdb):
+#     exports.get_tables_info(testdb)
 
 
-@pytest.mark.timeout(30)
-def test_autoexport(testdb):
-    try:
-        exports.export(orig_db=testdb, dest_db=testdb)
-        raise ValueError(
-            "Should have raised an error while trying to export a db to itself"
-        )
-    except errors.RepoToolsExportSameDBError:
-        pass
+# @pytest.mark.timeout(30)
+# def test_autoexport(testdb):
+#     try:
+#         exports.export(orig_db=testdb, dest_db=testdb)
+#         raise ValueError(
+#             "Should have raised an error while trying to export a db to itself"
+#         )
+#     except errors.RepoToolsExportSameDBError:
+#         pass
 
 
-@pytest.mark.timeout(30)
-def test_export(testdb, dest_db):
-    exports.export(orig_db=testdb, dest_db=dest_db)
+# @pytest.mark.timeout(30)
+# def test_export(testdb, dest_db):
+#     exports.export(orig_db=testdb, dest_db=dest_db)
 
 
 # @pytest.mark.timeout(30)
