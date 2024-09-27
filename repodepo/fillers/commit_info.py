@@ -860,7 +860,7 @@ class CommitsFiller(fillers.Filler):
         if not tracked_data["empty"]:
             # repo_id = tracked_data['last_commit']['repo_id']
             latest_commit_time = datetime.datetime.fromtimestamp(
-                tracked_data["latest_commit_time"], datetime.UTC
+                tracked_data["latest_commit_time"], datetime.timezone.utc
             )
         else:
             latest_commit_time = None
@@ -936,16 +936,16 @@ class CommitsFiller(fillers.Filler):
                 (
                     dict(
                         local_timestamp=datetime.datetime.fromtimestamp(
-                            c["local_time"], datetime.UTC
+                            c["local_time"], datetime.timezone.utc
                         ),
                         gmt_timestamp=datetime.datetime.fromtimestamp(
-                            float(c["gmt_time"]), datetime.UTC
+                            float(c["gmt_time"]), datetime.timezone.utc
                         ),
                         commit_local_timestamp=datetime.datetime.fromtimestamp(
-                            c["commit_local_time"], datetime.UTC
+                            c["commit_local_time"], datetime.timezone.utc
                         ),
                         commit_gmt_timestamp=datetime.datetime.fromtimestamp(
-                            float(c["commit_gmt_time"]), datetime.UTC
+                            float(c["commit_gmt_time"]), datetime.timezone.utc
                         ),
                         **c
                     )
@@ -979,16 +979,16 @@ class CommitsFiller(fillers.Filler):
                 (
                     dict(
                         local_timestamp=datetime.datetime.fromtimestamp(
-                            c["local_time"], datetime.UTC
+                            c["local_time"], datetime.timezone.utc
                         ),
                         gmt_timestamp=datetime.datetime.fromtimestamp(
-                            float(c["gmt_time"]), datetime.UTC
+                            float(c["gmt_time"]), datetime.timezone.utc
                         ),
                         commit_local_timestamp=datetime.datetime.fromtimestamp(
-                            c["commit_local_time"], datetime.UTC
+                            c["commit_local_time"], datetime.timezone.utc
                         ),
                         commit_gmt_timestamp=datetime.datetime.fromtimestamp(
-                            float(c["commit_gmt_time"]), datetime.UTC
+                            float(c["commit_gmt_time"]), datetime.timezone.utc
                         ),
                         **c
                     )
@@ -1000,7 +1000,7 @@ class CommitsFiller(fillers.Filler):
         if not tracked_data["empty"]:
             #           repo_id = tracked_data['last_commit']['repo_id']
             latest_commit_time = datetime.datetime.fromtimestamp(
-                tracked_data["latest_commit_time"], datetime.UTC
+                tracked_data["latest_commit_time"], datetime.timezone.utc
             )
         else:
             latest_commit_time = None
@@ -1073,7 +1073,7 @@ class CommitsFiller(fillers.Filler):
         if not tracked_data["empty"]:
             # repo_id = tracked_data['last_commit']['repo_id']
             latest_commit_time = datetime.datetime.fromtimestamp(
-                tracked_data["latest_commit_time"], datetime.UTC
+                tracked_data["latest_commit_time"], datetime.timezone.utc
             )
         else:
             latest_commit_time = None
@@ -1199,7 +1199,7 @@ class CommitsFiller(fillers.Filler):
         if not tracked_data["empty"]:
             # repo_id = tracked_data['last_commit']['repo_id']
             latest_commit_time = datetime.datetime.fromtimestamp(
-                tracked_data["latest_commit_time"], datetime.UTC
+                tracked_data["latest_commit_time"], datetime.timezone.utc
             )
         else:
             latest_commit_time = None
