@@ -37,9 +37,11 @@ class CommitsFiller(fillers.Filler):
         clone_folder=None,
         clean_repo=False,
         temp_repodir=False,
+        refresh_list=True,
         **kwargs
     ):
         self.force = force
+        self.refresh_list = refresh_list
         self.temp_repodir = temp_repodir
         self.clone_folder = clone_folder
         self.clone_absent = clone_absent

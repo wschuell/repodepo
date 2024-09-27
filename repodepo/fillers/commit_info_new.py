@@ -300,3 +300,26 @@ class CommitsGitLogFiller(commit_info.CommitsFiller):
                         insertion_info=insertion_info,
                     )
             return commits
+
+
+class NewCommitsFiller(CommitsGitLogFiller):
+    """
+    Just different default values: sequential + temp dir
+    """
+
+    def __init__(
+        self,
+        sequential=True,
+        clone_absent=True,
+        clean_repo=True,
+        temp_repodir=True,
+        **kwargs,
+    ):
+        CommitsGitLogFiller.__init__(
+            self,
+            sequential=sequential,
+            clone_absent=clone_absent,
+            clean_repo=clean_repo,
+            temp_repodir=temp_repodir,
+            **kwargs,
+        )

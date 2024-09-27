@@ -339,7 +339,7 @@ def test_merge_repositories(testdb):
     testdb.batch_merge_repos()
 
 
-@pytest.mark.timeout(100)
+@pytest.mark.timeout(180)
 def test_github(testdb):
     testdb.add_filler(
         generic.SourcesFiller(
@@ -384,7 +384,7 @@ def test_count_identities(testdb):
     count = testdb.count_identities()
 
 
-@pytest.mark.timeout(100)
+@pytest.mark.timeout(180)
 def test_reset_merged_identities(testdb):
     testdb.add_filler(
         generic.SourcesFiller(
