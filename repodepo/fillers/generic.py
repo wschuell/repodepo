@@ -1178,6 +1178,7 @@ class ClonesFiller(fillers.Filler):
         clone_folder=None,
         repo_list=None,
         check_clone_folder=True,
+        raise_error=False,
         **kwargs,
     ):
         """
@@ -1195,7 +1196,7 @@ class ClonesFiller(fillers.Filler):
         self.clone_folder = clone_folder
         self.check_clone_folder = check_clone_folder
         self.repo_list = repo_list
-
+        self.raise_error = raise_error
         self.ssh_key = ssh_key
         if ssh_sources is None:
             self.ssh_sources = {}
@@ -1498,6 +1499,8 @@ class ClonesFiller(fillers.Filler):
                     self.logger.info(err_txt)
                     self.db.log_error(err_txt)
                     success = False
+                    if self.raise_error:
+                        raise
             except ValueError as e:
                 if str(e).startswith("malformed URL"):
                     err_txt = "Error for repo {}/{}/{}: {}".format(

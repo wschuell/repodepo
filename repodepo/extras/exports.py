@@ -64,8 +64,8 @@ def get_tables_info(db, as_yml=False, keep_dbinfo=False):
     if db.db_type == "postgres":
         db.cursor.execute(
             """SELECT c.table_name,c.column_name FROM information_schema.columns c
-							WHERE c.table_schema = (SELECT current_schema())
-							ORDER BY c.table_name,c.ordinal_position ;"""
+                            WHERE c.table_schema = (SELECT current_schema())
+                            ORDER BY c.table_name,c.ordinal_position ;"""
         )
         for tab, col in db.cursor.fetchall():
             try:
@@ -75,8 +75,8 @@ def get_tables_info(db, as_yml=False, keep_dbinfo=False):
     else:
         db.cursor.execute(
             """SELECT name FROM sqlite_master
-			WHERE type='table';
-			"""
+            WHERE type='table';
+            """
         )
         ans = {t[0]: [] for t in db.cursor.fetchall()}
         for t in ans.keys():
@@ -95,7 +95,15 @@ def get_tables_info(db, as_yml=False, keep_dbinfo=False):
 
 
 def get_table_data(
-    table, columns, db, batch_size=None, use_multiqueries=False, page_size=None
+    table,
+    columns,
+    db,
+    batch_size=None,
+    use_multiqueries=False,
+    page_size=None,
+    query="""
+            SELECT {columns} FROM {table}
+            """,
 ):
     """
     gets a generator outputing the rows of the table
@@ -117,33 +125,22 @@ def get_table_data(
         check_sqlname_safe(c)
 
     if batch_size is None:
-        cursor.execute(
-            """
-			SELECT {columns} FROM {table}
-			;""".format(
-                columns=",".join(columns), table=table
-            )
-        )
+        cursor.execute(query.format(columns=",".join(columns), table=table))
         return cursor.fetchall()
     else:
 
         def ans_gen():
             counter = 0
             if not use_multiqueries:
-                cursor.execute(
-                    """
-						SELECT {columns} FROM {table}
-					;""".format(
-                        columns=",".join(columns), table=table
-                    )
-                )
+                cursor.execute(query.format(columns=",".join(columns), table=table))
             while True:
                 if use_multiqueries:
                     cursor.execute(
-                        """
-							SELECT {columns} FROM {table}
-							LIMIT {limit} OFFSET {offset}
-						;""".format(
+                        (
+                            query
+                            + """LIMIT {limit} OFFSET {offset}
+                                                ;"""
+                        ).format(
                             columns=",".join(columns),
                             table=table,
                             limit=batch_size,
@@ -181,8 +178,8 @@ def insert_table_data(table, columns, db, table_data, page_size=10**5):
         psycopg2.extras.execute_batch(
             db.cursor,
             """
-			INSERT INTO {table}({columns}) VALUES ({separators}) ON CONFLICT DO NOTHING
-			;""".format(
+            INSERT INTO {table}({columns}) VALUES ({separators}) ON CONFLICT DO NOTHING
+            ;""".format(
                 columns=",".join(columns),
                 table=table,
                 separators=",".join(["%s" for _ in columns]),
@@ -193,8 +190,8 @@ def insert_table_data(table, columns, db, table_data, page_size=10**5):
     else:
         db.cursor.executemany(
             """
-			INSERT OR IGNORE INTO {table}({columns}) VALUES ({separators})
-			;""".format(
+            INSERT OR IGNORE INTO {table}({columns}) VALUES ({separators})
+            ;""".format(
                 columns=",".join(columns),
                 table=table,
                 separators=",".join(["?" for _ in columns]),
@@ -208,28 +205,28 @@ def fix_sequences(db):
         db.logger.info("Fixing sequences")
         db.cursor.execute(
             """
-				SELECT 'SELECT SETVAL(' ||
-						quote_literal(quote_ident(PGT.schemaname) || '.' || quote_ident(S.relname)) ||
-						', COALESCE(MAX(' ||quote_ident(C.attname)|| '), 1) ) FROM ' ||
-						quote_ident(PGT.schemaname)|| '.'||quote_ident(T.relname)|| ';'
-				FROM pg_class AS S,
-					pg_namespace AS NS,
-					pg_depend AS D,
-					pg_class AS T,
-					pg_attribute AS C,
-					pg_tables AS PGT
-				WHERE S.relkind = 'S'
-					AND S.relnamespace = NS.oid
-					AND NS.nspname = (SELECT current_schema())
-					AND S.oid = D.objid
-					AND D.refobjid = T.oid
-					AND D.refobjid = C.attrelid
-					AND D.refobjsubid = C.attnum
-					AND T.relname = PGT.tablename
-					AND PGT.schemaname=(SELECT current_schema())
-				ORDER BY S.relname;
-				--adapted from https://wiki.postgresql.org/wiki/Fixing_Sequences
-			"""
+                SELECT 'SELECT SETVAL(' ||
+                        quote_literal(quote_ident(PGT.schemaname) || '.' || quote_ident(S.relname)) ||
+                        ', COALESCE(MAX(' ||quote_ident(C.attname)|| '), 1) ) FROM ' ||
+                        quote_ident(PGT.schemaname)|| '.'||quote_ident(T.relname)|| ';'
+                FROM pg_class AS S,
+                    pg_namespace AS NS,
+                    pg_depend AS D,
+                    pg_class AS T,
+                    pg_attribute AS C,
+                    pg_tables AS PGT
+                WHERE S.relkind = 'S'
+                    AND S.relnamespace = NS.oid
+                    AND NS.nspname = (SELECT current_schema())
+                    AND S.oid = D.objid
+                    AND D.refobjid = T.oid
+                    AND D.refobjid = C.attrelid
+                    AND D.refobjsubid = C.attnum
+                    AND T.relname = PGT.tablename
+                    AND PGT.schemaname=(SELECT current_schema())
+                ORDER BY S.relname;
+                --adapted from https://wiki.postgresql.org/wiki/Fixing_Sequences
+            """
         )
         commands = [r[0] for r in db.cursor.fetchall()]
         for c in commands:
@@ -690,7 +687,7 @@ BEGIN;
 {enable_trig}
 
 COMMIT;
-	""".format(
+    """.format(
             disable_trig=disable_triggers_cmd(db=db, tables_info=tables_info),
             enable_trig=enable_triggers_cmd(db=db, tables_info=tables_info),
             copy_tables=copy_tables_str,
@@ -745,35 +742,35 @@ echo 'Database name? (default rust_repos)'
 read DBNAME
 if [ -z "$DBNAME" ]
 then
-	DBNAME="rust_repos"
+    DBNAME="rust_repos"
 fi
 
 echo 'Database host? (default localhost)'
 read DBHOST
 if [ -z "$DBHOST" ]
 then
-	DBHOST="localhost"
+    DBHOST="localhost"
 fi
 
 echo 'Database port? (default 5432)'
 read DBPORT
 if [ -z "$DBPORT" ]
 then
-	DBPORT="5432"
+    DBPORT="5432"
 fi
 
 echo 'Database user? (default postgres)'
 read DBUSER
 if [ -z "$DBUSER" ]
 then
-	DBUSER="postgres"
+    DBUSER="postgres"
 fi
 
 echo "Create database $DBNAME? (empty=yes)"
 read DBCREATE
 if [ -z "$DBCREATE" ]
 then
-	psql -q -h $DBHOST --port=$DBPORT --user=$DBUSER -c "create database $DBNAME;"
+    psql -q -h $DBHOST --port=$DBPORT --user=$DBUSER -c "create database $DBNAME;"
 fi
 
 psql -q -h $DBHOST --port=$DBPORT --user=$DBUSER $DBNAME < schema.sql
@@ -797,12 +794,12 @@ def export_filters(db, folder=None, overwrite=False):
     # packages
     db.cursor.execute(
         """
-		SELECT s.name,p.name FROM filtered_deps_package fdp
-		INNER JOIN packages p
-		ON p.id=fdp.package_id
-		INNER JOIN sources s
-		ON s.id=p.source_id
-		;"""
+        SELECT s.name,p.name FROM filtered_deps_package fdp
+        INNER JOIN packages p
+        ON p.id=fdp.package_id
+        INNER JOIN sources s
+        ON s.id=p.source_id
+        ;"""
     )
 
     res = list(db.cursor.fetchall())
@@ -822,12 +819,12 @@ def export_filters(db, folder=None, overwrite=False):
     # repos
     db.cursor.execute(
         """
-		SELECT s.name,r.owner,r.name FROM filtered_deps_repo fdr
-		INNER JOIN repositories r
-		ON r.id=fdr.repo_id
-		INNER JOIN sources s
-		ON s.id=r.source
-		;"""
+        SELECT s.name,r.owner,r.name FROM filtered_deps_repo fdr
+        INNER JOIN repositories r
+        ON r.id=fdr.repo_id
+        INNER JOIN sources s
+        ON s.id=r.source
+        ;"""
     )
 
     res = list(db.cursor.fetchall())
@@ -849,16 +846,16 @@ def export_filters(db, folder=None, overwrite=False):
     # repo_edges
     db.cursor.execute(
         """
-		SELECT ss.name,rs.owner,rs.name,sd.name,rd.owner,rd.name FROM filtered_deps_repoedges fdre
-		INNER JOIN repositories rs
-		ON rs.id=fdre.repo_source_id 
-		INNER JOIN sources ss
-		ON ss.id=rs.source
-		INNER JOIN repositories rd
-		ON rd.id=fdre.repo_dest_id 
-		INNER JOIN sources sd
-		ON sd.id=rd.source
-		;"""
+        SELECT ss.name,rs.owner,rs.name,sd.name,rd.owner,rd.name FROM filtered_deps_repoedges fdre
+        INNER JOIN repositories rs
+        ON rs.id=fdre.repo_source_id 
+        INNER JOIN sources ss
+        ON ss.id=rs.source
+        INNER JOIN repositories rd
+        ON rd.id=fdre.repo_dest_id 
+        INNER JOIN sources sd
+        ON sd.id=rd.source
+        ;"""
     )
 
     res = list(db.cursor.fetchall())
@@ -888,16 +885,16 @@ def export_filters(db, folder=None, overwrite=False):
     # package_edges
     db.cursor.execute(
         """
-		SELECT ss.name,ps.name,sd.name,pd.name FROM filtered_deps_packageedges fdpe
-		INNER JOIN packages ps
-		ON ps.id=fdpe.package_source_id 
-		INNER JOIN sources ss
-		ON ss.id=ps.source_id
-		INNER JOIN packages pd
-		ON pd.id=fdpe.package_dest_id 
-		INNER JOIN sources sd
-		ON sd.id=pd.source_id
-		;"""
+        SELECT ss.name,ps.name,sd.name,pd.name FROM filtered_deps_packageedges fdpe
+        INNER JOIN packages ps
+        ON ps.id=fdpe.package_source_id 
+        INNER JOIN sources ss
+        ON ss.id=ps.source_id
+        INNER JOIN packages pd
+        ON pd.id=fdpe.package_dest_id 
+        INNER JOIN sources sd
+        ON sd.id=pd.source_id
+        ;"""
     )
 
     res = list(db.cursor.fetchall())
@@ -924,11 +921,11 @@ def export_bots(db, folder=None):
 
     db.cursor.execute(
         """
-		SELECT it.name,i.identity FROM identities i
-		INNER JOIN identity_types it
-		ON it.id=i.identity_type_id
-		AND i.is_bot
-		;"""
+        SELECT it.name,i.identity FROM identities i
+        INNER JOIN identity_types it
+        ON it.id=i.identity_type_id
+        AND i.is_bot
+        ;"""
     )
 
     with open(os.path.join(folder, "bots.csv"), "w") as f:
@@ -1016,3 +1013,88 @@ def generate_tables_file(filepath, db):
                         f.write(f"# - {c}\n")
                     else:
                         f.write(f" - {c}\n")
+
+
+def merge_export_commits(
+    orig_db,
+    dest_db,
+    page_size=10**5,
+    ignore_error=False,
+    force=False,
+    batch_size=10**6,
+):
+    """
+    Exporting data from one database to another, being SQLite or PostgreSQL for both
+    """
+    tables_info = dict()
+    if check_db_equal(orig_db, dest_db):
+        # orig_db.logger.info('Cannot export to self, skipping')
+        raise errors.RepoToolsExportSameDBError
+    else:
+        orig_db.cursor.execute(
+            """SELECT info_content FROM _dbinfo WHERE info_type='uuid';"""
+        )
+        orig_uuid = orig_db.cursor.fetchone()[0]
+
+        dest_db.cursor.execute(
+            """SELECT info_content FROM _dbinfo WHERE info_type='exported_from';"""
+        )
+        exportedfrom_uuid = dest_db.cursor.fetchone()
+        if exportedfrom_uuid is not None:
+            exportedfrom_uuid = exportedfrom_uuid[0]
+
+        if orig_uuid is None:
+            raise errors.RepoToolsError("No UUID for origin database")
+        else:
+            if dest_db.db_type == "postgres":
+                dest_db.cursor.execute(
+                    disable_triggers_cmd(db=dest_db, tables_info=tables_info_dest)
+                )
+                if dest_db.connection.server_version >= 90600:
+                    dest_db.cursor.execute(
+                        """SET SESSION idle_in_transaction_session_timeout = 0;"""
+                    )
+                else:
+                    dest_db.logger.warning(
+                        "You may experience failure of export due to parameter idle_in_transaction_session_timeout not existing in PostgreSQL<9.6"
+                    )
+            try:
+                for t, columns in tables_info.items():
+                    check_sqlname_safe(t)
+
+                    dest_db.logger.info("Merging table {}".format(t))
+                    # table_data = get_table_data(
+                    #     table=t,
+                    #     columns=columns,
+                    #     db=orig_db,
+                    #     batch_size=batch_size,
+                    #     page_size=page_size,
+                    # )  # as a generator
+                    # insert_table_data(
+                    #     table=t,
+                    #     columns=columns,
+                    #     db=dest_db,
+                    #     table_data=table_data,
+                    #     page_size=page_size,
+                    # )
+
+                    dest_db.connection.commit()
+                    # else:
+                    #     dest_db.logger.info(
+                    #         "Skipping table {}, not in schema of destination DB".format(
+                    #             t
+                    #         )
+                    #     )
+                if dest_db.db_type == "postgres":
+                    dest_db.cursor.execute(
+                        enable_triggers_cmd(db=dest_db, tables_info=tables_info_dest)
+                    )
+                    fix_sequences(db=dest_db)
+            except:
+                # closing connection manually because idle_in_transaction_session_timeout is infinite
+                try:
+                    dest_db.connection.close()
+                except:
+                    pass
+                raise
+            dest_db.connection.commit()

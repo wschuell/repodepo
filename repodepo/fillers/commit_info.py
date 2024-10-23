@@ -130,14 +130,24 @@ class CommitsFiller(fillers.Filler):
                         SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id,extract(epoch from r.latest_commit_time)
                         FROM repositories r
                         INNER JOIN sources s
-                        ON s.id=r.source AND (r.cloned OR NOT %(clone_check)s)
+                        ON s.id=r.source AND (r.cloned OR (NOT %(clone_check)s))
                         EXCEPT
                         (SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id,extract(epoch from r.latest_commit_time)
                         FROM repositories r
                         INNER JOIN sources s
-                        ON s.id=r.source AND (r.cloned OR NOT %(clone_check)s)
+                        ON s.id=r.source AND (r.cloned OR (NOT %(clone_check)s))
                         INNER JOIN table_updates tu
                         ON tu.table_name=%(option)s AND tu.repo_id=r.id AND tu.success)
+                        EXCEPT
+                        (SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id,extract(epoch from r.latest_commit_time)
+                        FROM repositories r
+                        INNER JOIN sources s
+                        ON s.id=r.source AND (r.cloned OR (NOT %(clone_check)s))
+                        INNER JOIN table_updates tu
+                        ON tu.table_name='clones' AND tu.repo_id=r.id
+                        GROUP BY s.name ,r.owner  ,r.name  ,r.id,extract(epoch from r.latest_commit_time)
+                        HAVING NOT BOOL_AND(tu.success)
+                        )
                         ORDER BY sname,rowner,rname
                         ;""",
                         dict(option=option, clone_check=not self.clone_absent),
@@ -148,14 +158,23 @@ class CommitsFiller(fillers.Filler):
                         SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
                         FROM repositories r
                         INNER JOIN sources s
-                        ON s.id=r.source AND (r.cloned OR NOT :clone_check)
+                        ON s.id=r.source AND (r.cloned OR (NOT :clone_check))
                         EXCEPT
                         SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
                         FROM repositories r
                         INNER JOIN sources s
-                        ON s.id=r.source AND (r.cloned OR NOT :clone_check)
+                        ON s.id=r.source AND (r.cloned OR ( NOT :clone_check))
                         INNER JOIN table_updates tu
                         ON tu.table_name=:option AND tu.repo_id=r.id AND tu.success
+                        EXCEPT
+                        SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
+                        FROM repositories r
+                        INNER JOIN sources s
+                        ON s.id=r.source AND (r.cloned OR ( NOT :clone_check))
+                        INNER JOIN table_updates tu
+                        ON tu.table_name='clones' AND tu.repo_id=r.id
+                        GROUP BY s.name ,r.owner  ,r.name  ,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
+                        HAVING NOT BOOL_AND(tu.success)
                         ORDER BY sname,rowner,rname
                         ;""",
                         dict(option=option, clone_check=not self.clone_absent),
@@ -167,7 +186,7 @@ class CommitsFiller(fillers.Filler):
                         SELECT s.name,r.owner,r.name,r.id,extract(epoch from r.latest_commit_time)
                         FROM repositories r
                         INNER JOIN sources s
-                        ON s.id=r.source AND (r.cloned OR NOT %(clone_check)s)
+                        ON s.id=r.source AND (r.cloned OR ( NOT %(clone_check)s))
                         ORDER BY s.name,r.owner,r.name
                         ;""",
                         dict(clone_check=not self.clone_absent),
@@ -178,7 +197,7 @@ class CommitsFiller(fillers.Filler):
                         SELECT s.name,r.owner,r.name,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
                         FROM repositories r
                         INNER JOIN sources s
-                        ON s.id=r.source AND (r.cloned OR NOT :clone_check)
+                        ON s.id=r.source AND (r.cloned OR ( NOT :clone_check))
                         ORDER BY s.name,r.owner,r.name
                         ;""",
                         dict(clone_check=not self.clone_absent),
@@ -349,13 +368,17 @@ class CommitsFiller(fillers.Filler):
                             **repo_info
                         )
                     )
-                    commit_list = self.list_commits(
-                        group_by="authors",
-                        basic_info_only=True,
-                        allbranches=self.allbranches,
-                        clone_folder=clone_folder,
-                        **repo_info
-                    )
+                    try:
+                        commit_list = self.list_commits(
+                            group_by="authors",
+                            basic_info_only=True,
+                            allbranches=self.allbranches,
+                            clone_folder=clone_folder,
+                            **repo_info
+                        )
+                    except pygit2.GitError:
+                        self.logger.error("Not cloned: {}".format(repo_info))
+                        continue
                     try:
                         self.fill_authors(
                             commit_list,
@@ -706,6 +729,8 @@ class CommitsFiller(fillers.Filler):
                 orig_gen = iter(orig_gen)
             while True:
                 try:
+                    if orig_gen is None:
+                        return
                     c = next(orig_gen)
                     tracked_data["empty"] = False
                     tracked_data["last_commit"] = c
@@ -893,6 +918,8 @@ class CommitsFiller(fillers.Filler):
                 orig_gen = iter(orig_gen)
             while True:
                 try:
+                    if orig_gen is None:
+                        return
                     c = next(orig_gen)
                     tracked_data["last_commit"] = c
                     tracked_data["empty"] = False
@@ -1032,6 +1059,8 @@ class CommitsFiller(fillers.Filler):
                 orig_gen = iter(orig_gen)
             while True:
                 try:
+                    if orig_gen is None:
+                        return
                     c = next(orig_gen)
                     tracked_data["last_commit"] = c
                     tracked_data["empty"] = False
@@ -1151,6 +1180,8 @@ class CommitsFiller(fillers.Filler):
                 orig_gen = iter(orig_gen)
             while True:
                 try:
+                    if orig_gen is None:
+                        return
                     c = next(orig_gen)
                     tracked_data["last_commit"] = c
                     tracked_data["empty"] = False

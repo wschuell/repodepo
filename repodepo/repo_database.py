@@ -65,6 +65,17 @@ sqlite3.register_adapter(bool, int)
 sqlite3.register_converter("BOOLEAN", lambda v: bool(int(v)))
 
 
+def adapt_timeobj(timeobj):
+    # return (
+    #     3600 * timeobj.hour + 60 * timeobj.minute + timeobj.second
+    # ) * 10**6 + timeobj.microsecond
+    return timeobj.strftime("%Y-%m-%dT%H:%M:%S.%f")
+
+
+# Converts DT.time to TEXT when inserting
+sqlite3.register_adapter(datetime.datetime, adapt_timeobj)
+
+
 def convert_timestamp(val):
     """
     adapted from https://github.com/python/cpython/blob/main/Lib/sqlite3/dbapi2.py

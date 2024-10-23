@@ -582,6 +582,138 @@ class RepoToRepoDeps(Getter):
             return ans_mat
 
 
+class PackageToPackageDeps(RepoToRepoDeps):
+    def query(self):
+        if self.db.db_type == "postgres":
+            return """
+				SELECT DISTINCT
+					dep_q.package_id AS depending_package_id,
+					package_q1.package_rank AS depending_package_rank,
+					dep_q.do_package_id AS depending_on_package_id,
+					package_q2.package_rank AS depending_on_package_rank,
+					(1./COALESCE(COUNT(*) OVER (PARTITION BY dep_q.package_id),1))::DOUBLE PRECISION
+				FROM
+					(SELECT p.id AS package_id,p_do.id AS do_package_id,pv.id AS version_id
+						FROM package_dependencies pd
+						INNER JOIN package_versions pv
+						ON pd.depending_version =pv.id
+						AND pv.created_at <= %(ref_time)s
+						INNER JOIN packages p
+						ON pv.package_id=p.id
+						INNER JOIN packages p_do
+						ON pd.depending_on_package=p_do.id
+						AND p_do.id != p.id
+						AND (NOT %(filter_deps)s OR pv.package_id NOT IN (SELECT package_id FROM filtered_deps_package))
+						LEFT OUTER JOIN filtered_deps_packageedges fdpe
+						ON (NOT %(filter_deps)s OR (pv.package_id=fdpe.package_source_id AND p_do.id=fdpe.package_dest_id))
+						WHERE (NOT %(filter_deps)s OR fdpe.package_dest_id IS NULL)
+					) AS dep_q
+				INNER JOIN (
+					SELECT DISTINCT FIRST_VALUE(id) OVER (PARTITION BY package_id ORDER BY created_at DESC,version_str DESC) AS last_v_id
+					FROM package_versions pv
+					WHERE pv.created_at <= %(ref_time)s
+					) AS lastv_q
+				ON dep_q.version_id=lastv_q.last_v_id
+				INNER JOIN (
+					SELECT id AS package_id,
+					RANK() OVER
+						(ORDER BY id) AS package_rank
+					FROM packages pp
+					) AS package_q1
+				ON dep_q.package_id=package_q1.package_id
+				INNER JOIN (
+					SELECT id AS package_id,
+					RANK() OVER
+						(ORDER BY id) AS package_rank
+					FROM packages pp
+					) AS package_q2
+				ON dep_q.do_package_id=package_q2.package_id
+			;"""
+        else:
+            return """
+				SELECT DISTINCT
+					dep_q.package_id AS depending_package_id,
+					package_q1.package_rank AS depending_package_rank,
+					dep_q.do_package_id AS depending_on_package_id,
+					package_q2.package_rank AS depending_on_package_rank,
+					(1./COALESCE(COUNT(*) OVER (PARTITION BY dep_q.package_id),1))::DOUBLE PRECISION
+				FROM
+					(SELECT p.id AS package_id,p_do.id AS do_package_id,pv.id AS version_id
+						FROM package_dependencies pd
+						INNER JOIN package_versions pv
+						ON pd.depending_version =pv.id
+						AND pv.created_at <= :ref_time 
+						INNER JOIN packages p
+						ON pv.package_id=p.id
+						INNER JOIN packages p_do
+						ON pd.depending_on_package=p_do.id
+						AND p_do.id != p.id
+						AND (NOT :filter_deps  OR pv.package_id NOT IN (SELECT package_id FROM filtered_deps_package))
+						LEFT OUTER JOIN filtered_deps_packageedges fdpe
+						ON (NOT :filter_deps  OR (pv.package_id=fdpe.package_source_id AND p_do.id=fdpe.package_dest_id))
+						WHERE (NOT :filter_deps  OR fdpe.package_dest_id IS NULL)
+					) AS dep_q
+				INNER JOIN (
+					SELECT DISTINCT FIRST_VALUE(id) OVER (PARTITION BY package_id ORDER BY created_at DESC,version_str DESC) AS last_v_id
+					FROM package_versions pv
+					WHERE pv.created_at <= :ref_time 
+					) AS lastv_q
+				ON dep_q.version_id=lastv_q.last_v_id
+				INNER JOIN (
+					SELECT id AS package_id,
+					RANK() OVER
+						(ORDER BY id) AS package_rank
+					FROM packages pp
+					) AS package_q1
+				ON dep_q.package_id=package_q1.package_id
+				INNER JOIN (
+					SELECT id AS package_id,
+					RANK() OVER
+						(ORDER BY id) AS package_rank
+					FROM packages pp
+					) AS package_q2
+				ON dep_q.do_package_id=package_q2.package_id
+			;"""
+
+    def parse_results(self, query_result):
+        data = []
+        coords_r = []
+        coords_r_do = []
+        for repo_id, repo_rank, do_repo_id, do_repo_rank, val in query_result:
+            data.append(val)
+            coords_r.append(repo_rank - 1)
+            coords_r_do.append(do_repo_rank - 1)
+        return {"data": data, "coords_p": coords_r, "coords_p_do": coords_r_do}
+
+    def get(self, db, raw_result=False, **kwargs):
+        db.cursor.execute("SELECT COUNT(*) FROM packages p;")
+        r_max = db.cursor.fetchone()[0]
+        db.cursor.execute(self.query(), self.query_attributes())
+        # query_result = list(db.cursor.fetchall())
+        # self.parse_results(query_result=query_result)
+        if raw_result:
+            return (
+                {
+                    "package_id": rid,
+                    "package_rank": rrk,
+                    "dep_id": did,
+                    "dep_rank": drk,
+                    "value": val,
+                }
+                for (rid, rrk, did, drk, val) in db.cursor.fetchall()
+            )
+        else:
+            parsed_results = self.parse_results(query_result=db.cursor.fetchall())
+            ans_mat = sparse.csr_matrix(
+                (
+                    parsed_results["data"],
+                    (parsed_results["coords_p"], parsed_results["coords_p_do"]),
+                ),
+                shape=(r_max, r_max),
+            )
+            return ans_mat
+
+
 class OrgMembers(DevToRepo):
     def query(self):
         if self.db.db_type == "postgres":
