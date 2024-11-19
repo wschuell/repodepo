@@ -39,8 +39,10 @@ class CommitsFiller(fillers.Filler):
         temp_repodir=False,
         refresh_list=True,
         solve_orig_repo=True,
+        full_updates_notif=True,
         **kwargs
     ):
+        self.full_updates_notif = full_updates_notif
         self.force = force
         self.solve_orig_repo = solve_orig_repo
         self.refresh_list = refresh_list
@@ -337,9 +339,10 @@ class CommitsFiller(fillers.Filler):
                     self.logger.error("Error with {}".format(repo_info))
                     raise
 
-            self.db.cursor.execute(
-                """INSERT INTO full_updates(update_type,updated_at) VALUES('commits',(SELECT CURRENT_TIMESTAMP));"""
-            )
+            if self.full_updates_notif:
+                self.db.cursor.execute(
+                    """INSERT INTO full_updates(update_type,updated_at) VALUES('commits',(SELECT CURRENT_TIMESTAMP));"""
+                )
             self.db.connection.commit()
         else:
             self.logger.info("Skipping filling of commits info")
@@ -451,9 +454,10 @@ class CommitsFiller(fillers.Filler):
                     except:
                         self.logger.error("Clone folder absent: {}".format(repo_folder))
 
-            self.db.cursor.execute(
-                """INSERT INTO full_updates(update_type,updated_at) VALUES('commits',(SELECT CURRENT_TIMESTAMP));"""
-            )
+            if self.full_updates_notif:
+                self.db.cursor.execute(
+                    """INSERT INTO full_updates(update_type,updated_at) VALUES('commits',(SELECT CURRENT_TIMESTAMP));"""
+                )
             self.db.connection.commit()
         else:
             self.logger.info("Skipping filling of commits info")
@@ -1486,10 +1490,10 @@ class CommitsFiller(fillers.Filler):
                     ;
                     """
             )
-
-            self.db.cursor.execute(
-                """INSERT INTO full_updates(update_type) VALUES('commits orig repos');"""
-            )
+            if self.full_updates_notif:
+                self.db.cursor.execute(
+                    """INSERT INTO full_updates(update_type) VALUES('commits orig repos');"""
+                )
 
             if autocommit:
                 self.db.connection.commit()
@@ -1802,9 +1806,10 @@ class CommitsFiller(fillers.Filler):
                     )
                 )
 
-            self.db.cursor.execute(
-                """INSERT INTO full_updates(update_type) VALUES('commits created_at');"""
-            )
+            if self.full_updates_notif:
+                self.db.cursor.execute(
+                    """INSERT INTO full_updates(update_type) VALUES('commits created_at');"""
+                )
 
             self.logger.info("Fixed commits created_at")
             if autocommit:
