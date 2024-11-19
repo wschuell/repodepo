@@ -84,16 +84,16 @@ class ProjectGetter(Getter):
 
         if project_id is not None:
             # if isinstance(project_id,str):
-            # 	projectname = project_id
-            # 	if len(project_id.split('/')) == 2:
-            # 		owner,name = project_id.split('/')
-            # 		source = 'GitHub'
-            # 	else:
-            # 		source,owner,name = project_id.split('/')
+            #   projectname = project_id
+            #   if len(project_id.split('/')) == 2:
+            #       owner,name = project_id.split('/')
+            #       source = 'GitHub'
+            #   else:
+            #       source,owner,name = project_id.split('/')
 
-            # 	project_id = db.get_repo_id(source=source,name=name,owner=owner)
-            # 	if project_id is None:
-            # 		raise ValueError('No such repository: {}'.format(projectname))
+            #   project_id = db.get_repo_id(source=source,name=name,owner=owner)
+            #   if project_id is None:
+            #       raise ValueError('No such repository: {}'.format(projectname))
 
             project_id = self.clean_id(db=db, project_id=project_id)
 
@@ -102,19 +102,19 @@ class ProjectGetter(Getter):
 
             ###query_proj
             # if db.db_type == 'postgres':
-            # 	db.cursor.execute('''
-            # 		SELECT COUNT(*),date_trunc(%(time_window)s, starred_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM stars c
-            # 		WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
-            # 		AND repo_id=%(project_id)s
-            # 		GROUP BY time_stamp
-            # 		''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+            #   db.cursor.execute('''
+            #       SELECT COUNT(*),date_trunc(%(time_window)s, starred_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM stars c
+            #       WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
+            #       AND repo_id=%(project_id)s
+            #       GROUP BY time_stamp
+            #       ''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
             # else:
-            # 	db.cursor.execute('''
-            # 		SELECT COUNT(*),date(datetime(starred_at,:startoftw),:offsettw) AS time_stamp FROM stars c
-            # 		WHERE datetime(:start_date) <= starred_at AND starred_at < datetime(:end_date)
-            # 		AND repo_id=:project_id
-            # 		GROUP BY time_stamp
-            # 		''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+            #   db.cursor.execute('''
+            #       SELECT COUNT(*),date(datetime(starred_at,:startoftw),:offsettw) AS time_stamp FROM stars c
+            #       WHERE datetime(:start_date) <= starred_at AND starred_at < datetime(:end_date)
+            #       AND repo_id=:project_id
+            #       GROUP BY time_stamp
+            #       ''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 
             # query_result = list(db.cursor.fetchall())
             query_result = self.query_proj(
@@ -127,7 +127,7 @@ class ProjectGetter(Getter):
 
             # #correcting for datetime issue in sqlite:
             # if db.db_type == 'sqlite':
-            # 	query_result = [(val,datetime.datetime.strptime(val_d,'%Y-%m-%d')) for val,val_d in query_result]
+            #   query_result = [(val,datetime.datetime.strptime(val_d,'%Y-%m-%d')) for val,val_d in query_result]
 
             df = pd.DataFrame(
                 data=query_result, columns=(self.measure_name, "timestamp")
@@ -148,31 +148,31 @@ class ProjectGetter(Getter):
             if db.db_type == "postgres":
                 db.cursor.execute(
                     """
-					SELECT COALESCE(
-						(SELECT COALESCE(r.created_at,MIN(p.created_at))
-						FROM repositories r
-						LEFT OUTER JOIN packages p
-						ON p.repo_id = r.id
-						WHERE r.id=%(rid)s
-						GROUP BY r.id,r.created_at)
-						,%(dt)s::timestamp)
-					;
-					""",
+                    SELECT COALESCE(
+                        (SELECT COALESCE(r.created_at,MIN(p.created_at))
+                        FROM repositories r
+                        LEFT OUTER JOIN packages p
+                        ON p.repo_id = r.id
+                        WHERE r.id=%(rid)s
+                        GROUP BY r.id,r.created_at)
+                        ,%(dt)s::timestamp)
+                    ;
+                    """,
                     {"dt": convert_date(df_index_min), "rid": project_id},
                 )
             else:
                 db.cursor.execute(
                     """
-					SELECT COALESCE(
-						(SELECT COALESCE(r.created_at,MIN(p.created_at))
-						FROM repositories r
-						LEFT OUTER JOIN packages p
-						ON p.repo_id = r.id
-						WHERE r.id=:rid
-						GROUP BY r.id,r.created_at)
-					,datetime(:dt))
-					;
-					""",
+                    SELECT COALESCE(
+                        (SELECT COALESCE(r.created_at,MIN(p.created_at))
+                        FROM repositories r
+                        LEFT OUTER JOIN packages p
+                        ON p.repo_id = r.id
+                        WHERE r.id=:rid
+                        GROUP BY r.id,r.created_at)
+                    ,datetime(:dt))
+                    ;
+                    """,
                     {"dt": convert_date_str(df_index_min), "rid": project_id},
                 )
             created_at = db.cursor.fetchone()[0]
@@ -233,22 +233,22 @@ class ProjectGetter(Getter):
 
                 # ###query_aggregated
                 # if db.db_type == 'postgres':
-                # 	db.cursor.execute('''
-                # 		SELECT COUNT(*),date_trunc(%(time_window)s, starred_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM stars c
-                # 		WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
-                # 		GROUP BY time_stamp
-                # 		''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+                #   db.cursor.execute('''
+                #       SELECT COUNT(*),date_trunc(%(time_window)s, starred_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM stars c
+                #       WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
+                #       GROUP BY time_stamp
+                #       ''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
                 # else:
-                # 	db.cursor.execute('''
-                # 		SELECT COUNT(*),date(datetime(starred_at,:startoftw),:offsettw) AS time_stamp FROM stars c
-                # 		WHERE datetime(:start_date) <= starred_at AND starred_at < datetime(:end_date)
-                # 		GROUP BY time_stamp
-                # 		''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+                #   db.cursor.execute('''
+                #       SELECT COUNT(*),date(datetime(starred_at,:startoftw),:offsettw) AS time_stamp FROM stars c
+                #       WHERE datetime(:start_date) <= starred_at AND starred_at < datetime(:end_date)
+                #       GROUP BY time_stamp
+                #       ''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 
                 # query_result = list(db.cursor.fetchall())
                 # #correcting for datetime issue in sqlite:
                 # if db.db_type == 'sqlite':
-                # 	query_result = [(val,datetime.datetime.strptime(val_d,'%Y-%m-%d')) for val,val_d in query_result]
+                #   query_result = [(val,datetime.datetime.strptime(val_d,'%Y-%m-%d')) for val,val_d in query_result]
                 query_result = self.query_aggregated(
                     db=db,
                     start_date=start_date,
@@ -266,9 +266,9 @@ class ProjectGetter(Getter):
                 df.sort_values(by="timestamp", inplace=True)
 
                 # if not df.empty:
-                # 	df_index_min = df.index.min()
+                #   df_index_min = df.index.min()
                 # else:
-                # 	df_index_min = round_datetime_upper(end_date,time_window=time_window,strict=True) + datetime.timedelta(days=1)
+                #   df_index_min = round_datetime_upper(end_date,time_window=time_window,strict=True) + datetime.timedelta(days=1)
 
                 start_date_idx = start_date
                 end_date_idx = end_date
@@ -318,17 +318,17 @@ class ProjectGetter(Getter):
                 if time_window is None:
                     # ###query_notimeinfo
                     # if db.db_type == 'postgres':
-                    # 	db.cursor.execute('''
-                    # 		SELECT COUNT(*),repo_id FROM stars c
-                    # 		WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
-                    # 		GROUP BY repo_id
-                    # 		''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+                    #   db.cursor.execute('''
+                    #       SELECT COUNT(*),repo_id FROM stars c
+                    #       WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
+                    #       GROUP BY repo_id
+                    #       ''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
                     # else:
-                    # 	db.cursor.execute('''
-                    # 		SELECT COUNT(*),repo_id FROM stars c
-                    # 		WHERE :start_date <= starred_at AND starred_at < :end_date
-                    # 		GROUP BY repo_id
-                    # 		''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+                    #   db.cursor.execute('''
+                    #       SELECT COUNT(*),repo_id FROM stars c
+                    #       WHERE :start_date <= starred_at AND starred_at < :end_date
+                    #       GROUP BY repo_id
+                    #       ''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 
                     # query_result = list(db.cursor.fetchall())
 
@@ -373,26 +373,26 @@ class ProjectGetter(Getter):
                     return df
                 else:  # time_window not None
                     # if time_window is None:
-                    # 	time_window = 'month'
+                    #   time_window = 'month'
 
                     # ###query_all
                     # if db.db_type == 'postgres':
-                    # 	db.cursor.execute('''
-                    # 		SELECT COUNT(*),date_trunc(%(time_window)s, starred_at) AS time_stamp,repo_id FROM stars c
-                    # 		WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
-                    # 		GROUP BY time_stamp,repo_id
-                    # 		''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+                    #   db.cursor.execute('''
+                    #       SELECT COUNT(*),date_trunc(%(time_window)s, starred_at) AS time_stamp,repo_id FROM stars c
+                    #       WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
+                    #       GROUP BY time_stamp,repo_id
+                    #       ''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
                     # else:
-                    # 	db.cursor.execute('''
-                    # 		SELECT COUNT(*),date(datetime(starred_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM stars c
-                    # 		WHERE datetime(:start_date) <= starred_at AND starred_at < datetime(:end_date)
-                    # 		GROUP BY time_stamp,repo_id
-                    # 		''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
+                    #   db.cursor.execute('''
+                    #       SELECT COUNT(*),date(datetime(starred_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM stars c
+                    #       WHERE datetime(:start_date) <= starred_at AND starred_at < datetime(:end_date)
+                    #       GROUP BY time_stamp,repo_id
+                    #       ''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'project_id':project_id,'include_bots':self.include_bots})
 
                     # query_result = list(db.cursor.fetchall())
                     # #correcting for datetime issue in sqlite:
                     # if db.db_type == 'sqlite':
-                    # 	query_result = [(val,datetime.datetime.strptime(val_d,'%Y-%m-%d'),val_u) for val,val_d,val_u in query_result]
+                    #   query_result = [(val,datetime.datetime.strptime(val_d,'%Y-%m-%d'),val_u) for val,val_d,val_u in query_result]
 
                     query_result = self.query_all(
                         db=db,
@@ -475,11 +475,11 @@ class Forks(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date_trunc(%(time_window)s, forked_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM forks c
-				WHERE %(start_date)s <= forked_at AND forked_at < %(end_date)s
-				AND forked_repo_id=%(project_id)s
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date_trunc(%(time_window)s, forked_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM forks c
+                WHERE %(start_date)s <= forked_at AND forked_at < %(end_date)s
+                AND forked_repo_id=%(project_id)s
+                GROUP BY time_stamp
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -493,11 +493,11 @@ class Forks(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date(datetime(forked_at,:startoftw),:offsettw) AS time_stamp FROM forks c
-				WHERE datetime(:start_date) <= forked_at AND forked_at < datetime(:end_date)
-				AND forked_repo_id=:project_id
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date(datetime(forked_at,:startoftw),:offsettw) AS time_stamp FROM forks c
+                WHERE datetime(:start_date) <= forked_at AND forked_at < datetime(:end_date)
+                AND forked_repo_id=:project_id
+                GROUP BY time_stamp
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -522,10 +522,10 @@ class Forks(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date_trunc(%(time_window)s, forked_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM forks c
-				WHERE %(start_date)s <= forked_at AND forked_at < %(end_date)s
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date_trunc(%(time_window)s, forked_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM forks c
+                WHERE %(start_date)s <= forked_at AND forked_at < %(end_date)s
+                GROUP BY time_stamp
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -539,10 +539,10 @@ class Forks(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date(datetime(forked_at,:startoftw),:offsettw) AS time_stamp FROM forks c
-				WHERE datetime(:start_date) <= forked_at AND forked_at < datetime(:end_date)
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date(datetime(forked_at,:startoftw),:offsettw) AS time_stamp FROM forks c
+                WHERE datetime(:start_date) <= forked_at AND forked_at < datetime(:end_date)
+                GROUP BY time_stamp
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -568,10 +568,10 @@ class Forks(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),forked_repo_id FROM forks c
-				WHERE %(start_date)s <= forked_at AND forked_at < %(end_date)s
-				GROUP BY forked_repo_id
-				""",
+                SELECT COUNT(*),forked_repo_id FROM forks c
+                WHERE %(start_date)s <= forked_at AND forked_at < %(end_date)s
+                GROUP BY forked_repo_id
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -585,10 +585,10 @@ class Forks(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),forked_repo_id FROM forks c
-				WHERE :start_date <= forked_at AND forked_at < :end_date
-				GROUP BY forked_repo_id
-				""",
+                SELECT COUNT(*),forked_repo_id FROM forks c
+                WHERE :start_date <= forked_at AND forked_at < :end_date
+                GROUP BY forked_repo_id
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -605,10 +605,10 @@ class Forks(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date_trunc(%(time_window)s, forked_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp,forked_repo_id FROM forks c
-				WHERE %(start_date)s <= forked_at AND forked_at < %(end_date)s
-				GROUP BY time_stamp,forked_repo_id
-				""",
+                SELECT COUNT(*),date_trunc(%(time_window)s, forked_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp,forked_repo_id FROM forks c
+                WHERE %(start_date)s <= forked_at AND forked_at < %(end_date)s
+                GROUP BY time_stamp,forked_repo_id
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -622,10 +622,10 @@ class Forks(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date(datetime(forked_at,:startoftw),:offsettw) AS time_stamp,forked_repo_id FROM forks c
-				WHERE datetime(:start_date) <= forked_at AND forked_at < datetime(:end_date)
-				GROUP BY time_stamp,forked_repo_id
-				""",
+                SELECT COUNT(*),date(datetime(forked_at,:startoftw),:offsettw) AS time_stamp,forked_repo_id FROM forks c
+                WHERE datetime(:start_date) <= forked_at AND forked_at < datetime(:end_date)
+                GROUP BY time_stamp,forked_repo_id
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -668,11 +668,11 @@ class Stars(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date_trunc(%(time_window)s, starred_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM stars c
-				WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
-				AND repo_id=%(project_id)s
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date_trunc(%(time_window)s, starred_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM stars c
+                WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
+                AND repo_id=%(project_id)s
+                GROUP BY time_stamp
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -686,11 +686,11 @@ class Stars(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date(datetime(starred_at,:startoftw),:offsettw) AS time_stamp FROM stars c
-				WHERE datetime(:start_date) <= starred_at AND starred_at < datetime(:end_date)
-				AND repo_id=:project_id
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date(datetime(starred_at,:startoftw),:offsettw) AS time_stamp FROM stars c
+                WHERE datetime(:start_date) <= starred_at AND starred_at < datetime(:end_date)
+                AND repo_id=:project_id
+                GROUP BY time_stamp
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -715,10 +715,10 @@ class Stars(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date_trunc(%(time_window)s, starred_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM stars c
-				WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date_trunc(%(time_window)s, starred_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM stars c
+                WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
+                GROUP BY time_stamp
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -732,10 +732,10 @@ class Stars(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date(datetime(starred_at,:startoftw),:offsettw) AS time_stamp FROM stars c
-				WHERE datetime(:start_date) <= starred_at AND starred_at < datetime(:end_date)
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date(datetime(starred_at,:startoftw),:offsettw) AS time_stamp FROM stars c
+                WHERE datetime(:start_date) <= starred_at AND starred_at < datetime(:end_date)
+                GROUP BY time_stamp
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -761,10 +761,10 @@ class Stars(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),repo_id FROM stars c
-				WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
-				GROUP BY repo_id
-				""",
+                SELECT COUNT(*),repo_id FROM stars c
+                WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
+                GROUP BY repo_id
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -778,10 +778,10 @@ class Stars(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),repo_id FROM stars c
-				WHERE :start_date <= starred_at AND starred_at < :end_date
-				GROUP BY repo_id
-				""",
+                SELECT COUNT(*),repo_id FROM stars c
+                WHERE :start_date <= starred_at AND starred_at < :end_date
+                GROUP BY repo_id
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -798,10 +798,10 @@ class Stars(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date_trunc(%(time_window)s, starred_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp,repo_id FROM stars c
-				WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
-				GROUP BY time_stamp,repo_id
-				""",
+                SELECT COUNT(*),date_trunc(%(time_window)s, starred_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp,repo_id FROM stars c
+                WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
+                GROUP BY time_stamp,repo_id
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -815,10 +815,10 @@ class Stars(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date(datetime(starred_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM stars c
-				WHERE datetime(:start_date) <= starred_at AND starred_at < datetime(:end_date)
-				GROUP BY time_stamp,repo_id
-				""",
+                SELECT COUNT(*),date(datetime(starred_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM stars c
+                WHERE datetime(:start_date) <= starred_at AND starred_at < datetime(:end_date)
+                GROUP BY time_stamp,repo_id
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -835,6 +835,61 @@ class Stars(ProjectGetter):
             query_result = [
                 (val, datetime.datetime.strptime(val_d, "%Y-%m-%d"), val_u)
                 for val, val_d, val_u in query_result
+            ]
+        return query_result
+
+
+#########################
+# stargazers
+#########################
+class Stargazers(Stars):
+    """
+    Stargazers per project per time (equal to stars if not aggregated)
+    """
+
+    measure_name = "stargazers"
+
+    def query_aggregated(self, db, time_window, start_date, end_date, project_id=None):
+        if db.db_type == "postgres":
+            db.cursor.execute(
+                """
+                SELECT COUNT(DISTINCT login),date_trunc(%(time_window)s, starred_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM stars c
+                WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
+                GROUP BY time_stamp
+                """,
+                {
+                    "startoftw": self.start_of_tw(time_window),
+                    "offsettw": self.offset_tw(time_window),
+                    "time_window": time_window,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "project_id": project_id,
+                    "include_bots": self.include_bots,
+                },
+            )
+        else:
+            db.cursor.execute(
+                """
+                SELECT COUNT(DISTINCT login),date(datetime(starred_at,:startoftw),:offsettw) AS time_stamp FROM stars c
+                WHERE datetime(:start_date) <= starred_at AND starred_at < datetime(:end_date)
+                GROUP BY time_stamp
+                """,
+                {
+                    "startoftw": self.start_of_tw(time_window),
+                    "offsettw": self.offset_tw(time_window),
+                    "time_window": time_window,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "project_id": project_id,
+                    "include_bots": self.include_bots,
+                },
+            )
+        query_result = list(db.cursor.fetchall())
+        # correcting for datetime issue in sqlite:
+        if db.db_type == "sqlite":
+            query_result = [
+                (val, datetime.datetime.strptime(val_d, "%Y-%m-%d"))
+                for val, val_d in query_result
             ]
         return query_result
 
@@ -861,12 +916,12 @@ class StarsCommunity(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date_trunc(%(time_window)s, starred_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM stars c
-				WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
-				AND repo_id=%(project_id)s
-				AND identity_id IS NOT NULL
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date_trunc(%(time_window)s, starred_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM stars c
+                WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
+                AND repo_id=%(project_id)s
+                AND identity_id IS NOT NULL
+                GROUP BY time_stamp
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -880,12 +935,12 @@ class StarsCommunity(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date(datetime(starred_at,:startoftw),:offsettw) AS time_stamp FROM stars c
-				WHERE datetime(:start_date) <= starred_at AND starred_at < datetime(:end_date)
-				AND repo_id=:project_id
-				AND identity_id IS NOT NULL
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date(datetime(starred_at,:startoftw),:offsettw) AS time_stamp FROM stars c
+                WHERE datetime(:start_date) <= starred_at AND starred_at < datetime(:end_date)
+                AND repo_id=:project_id
+                AND identity_id IS NOT NULL
+                GROUP BY time_stamp
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -910,11 +965,11 @@ class StarsCommunity(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date_trunc(%(time_window)s, starred_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM stars c
-				WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
-				AND identity_id IS NOT NULL
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date_trunc(%(time_window)s, starred_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM stars c
+                WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
+                AND identity_id IS NOT NULL
+                GROUP BY time_stamp
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -928,11 +983,11 @@ class StarsCommunity(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date(datetime(starred_at,:startoftw),:offsettw) AS time_stamp FROM stars c
-				WHERE datetime(:start_date) <= starred_at AND starred_at < datetime(:end_date)
-				AND identity_id IS NOT NULL
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date(datetime(starred_at,:startoftw),:offsettw) AS time_stamp FROM stars c
+                WHERE datetime(:start_date) <= starred_at AND starred_at < datetime(:end_date)
+                AND identity_id IS NOT NULL
+                GROUP BY time_stamp
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -958,11 +1013,11 @@ class StarsCommunity(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),repo_id FROM stars c
-				WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
-				AND identity_id IS NOT NULL
-				GROUP BY repo_id
-				""",
+                SELECT COUNT(*),repo_id FROM stars c
+                WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
+                AND identity_id IS NOT NULL
+                GROUP BY repo_id
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -976,11 +1031,11 @@ class StarsCommunity(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),repo_id FROM stars c
-				WHERE :start_date <= starred_at AND starred_at < :end_date
-				AND identity_id IS NOT NULL
-				GROUP BY repo_id
-				""",
+                SELECT COUNT(*),repo_id FROM stars c
+                WHERE :start_date <= starred_at AND starred_at < :end_date
+                AND identity_id IS NOT NULL
+                GROUP BY repo_id
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -997,11 +1052,11 @@ class StarsCommunity(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date_trunc(%(time_window)s, starred_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp,repo_id FROM stars c
-				WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
-				AND identity_id IS NOT NULL
-				GROUP BY time_stamp,repo_id
-				""",
+                SELECT COUNT(*),date_trunc(%(time_window)s, starred_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp,repo_id FROM stars c
+                WHERE %(start_date)s <= starred_at AND starred_at < %(end_date)s
+                AND identity_id IS NOT NULL
+                GROUP BY time_stamp,repo_id
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -1015,11 +1070,11 @@ class StarsCommunity(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date(datetime(starred_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM stars c
-				WHERE datetime(:start_date) <= starred_at AND starred_at < datetime(:end_date)
-				AND identity_id IS NOT NULL
-				GROUP BY time_stamp,repo_id
-				""",
+                SELECT COUNT(*),date(datetime(starred_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM stars c
+                WHERE datetime(:start_date) <= starred_at AND starred_at < datetime(:end_date)
+                AND identity_id IS NOT NULL
+                GROUP BY time_stamp,repo_id
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -1062,14 +1117,14 @@ class Commits(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date_trunc(%(time_window)s, c.created_at) + CONCAT('1 ',%(time_window)s)::interval AS time_stamp FROM commits c
-				INNER JOIN identities i
-				ON %(start_date)s <= c.created_at AND c.created_at < %(end_date)s
-				AND c.repo_id=%(project_id)s
-				AND i.id=c.author_id
-				AND (%(include_bots)s OR NOT i.is_bot)
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date_trunc(%(time_window)s, c.created_at) + CONCAT('1 ',%(time_window)s)::interval AS time_stamp FROM commits c
+                INNER JOIN identities i
+                ON %(start_date)s <= c.created_at AND c.created_at < %(end_date)s
+                AND c.repo_id=%(project_id)s
+                AND i.id=c.author_id
+                AND (%(include_bots)s OR NOT i.is_bot)
+                GROUP BY time_stamp
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -1083,14 +1138,14 @@ class Commits(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date(datetime(c.created_at,:startoftw),:offsettw) AS time_stamp FROM commits c
-				INNER JOIN identities i
-				ON datetime(:start_date) <= c.created_at AND c.created_at < datetime(:end_date)
-				AND i.id=c.author_id
-				AND (:include_bots OR NOT i.is_bot)
-				AND c.repo_id=:project_id
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date(datetime(c.created_at,:startoftw),:offsettw) AS time_stamp FROM commits c
+                INNER JOIN identities i
+                ON datetime(:start_date) <= c.created_at AND c.created_at < datetime(:end_date)
+                AND i.id=c.author_id
+                AND (:include_bots OR NOT i.is_bot)
+                AND c.repo_id=:project_id
+                GROUP BY time_stamp
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -1114,13 +1169,13 @@ class Commits(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date_trunc(%(time_window)s, c.created_at) + CONCAT('1 ',%(time_window)s)::interval AS time_stamp FROM commits c
-				INNER JOIN identities i
-				ON %(start_date)s <= c.created_at AND c.created_at < %(end_date)s
-				AND i.id=c.author_id
-				AND (%(include_bots)s OR NOT i.is_bot)
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date_trunc(%(time_window)s, c.created_at) + CONCAT('1 ',%(time_window)s)::interval AS time_stamp FROM commits c
+                INNER JOIN identities i
+                ON %(start_date)s <= c.created_at AND c.created_at < %(end_date)s
+                AND i.id=c.author_id
+                AND (%(include_bots)s OR NOT i.is_bot)
+                GROUP BY time_stamp
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -1134,13 +1189,13 @@ class Commits(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date(datetime(c.created_at,:startoftw),:offsettw) AS time_stamp FROM commits c
-				INNER JOIN identities i
-				ON datetime(:start_date) <= c.created_at AND c.created_at < datetime(:end_date)
-				AND i.id=c.author_id
-				AND (:include_bots OR NOT i.is_bot)
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date(datetime(c.created_at,:startoftw),:offsettw) AS time_stamp FROM commits c
+                INNER JOIN identities i
+                ON datetime(:start_date) <= c.created_at AND c.created_at < datetime(:end_date)
+                AND i.id=c.author_id
+                AND (:include_bots OR NOT i.is_bot)
+                GROUP BY time_stamp
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -1166,14 +1221,14 @@ class Commits(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),repo_id FROM commits c
-				INNER JOIN identities i
-				ON %(start_date)s <= c.created_at AND c.created_at < %(end_date)s
-				AND i.id=c.author_id
-				AND (%(include_bots)s OR NOT i.is_bot)
-				AND repo_id IS NOT NULL
-				GROUP BY repo_id
-				""",
+                SELECT COUNT(*),repo_id FROM commits c
+                INNER JOIN identities i
+                ON %(start_date)s <= c.created_at AND c.created_at < %(end_date)s
+                AND i.id=c.author_id
+                AND (%(include_bots)s OR NOT i.is_bot)
+                AND repo_id IS NOT NULL
+                GROUP BY repo_id
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -1187,14 +1242,14 @@ class Commits(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),repo_id FROM commits c
-				INNER JOIN identities i
-				ON datetime(:start_date) <= c.created_at AND c.created_at < datetime(:end_date)
-				AND i.id=c.author_id
-				AND (:include_bots OR NOT i.is_bot)
-				AND repo_id IS NOT NULL
-				GROUP BY repo_id
-				""",
+                SELECT COUNT(*),repo_id FROM commits c
+                INNER JOIN identities i
+                ON datetime(:start_date) <= c.created_at AND c.created_at < datetime(:end_date)
+                AND i.id=c.author_id
+                AND (:include_bots OR NOT i.is_bot)
+                AND repo_id IS NOT NULL
+                GROUP BY repo_id
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -1211,14 +1266,14 @@ class Commits(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date_trunc(%(time_window)s, c.created_at) + CONCAT('1 ',%(time_window)s)::interval AS time_stamp,repo_id FROM commits c
-				INNER JOIN identities i
-				ON %(start_date)s <= c.created_at AND c.created_at < %(end_date)s
-				AND i.id=c.author_id
-				AND (%(include_bots)s OR NOT i.is_bot)
-				AND repo_id IS NOT NULL
-				GROUP BY time_stamp,repo_id
-				""",
+                SELECT COUNT(*),date_trunc(%(time_window)s, c.created_at) + CONCAT('1 ',%(time_window)s)::interval AS time_stamp,repo_id FROM commits c
+                INNER JOIN identities i
+                ON %(start_date)s <= c.created_at AND c.created_at < %(end_date)s
+                AND i.id=c.author_id
+                AND (%(include_bots)s OR NOT i.is_bot)
+                AND repo_id IS NOT NULL
+                GROUP BY time_stamp,repo_id
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -1232,14 +1287,14 @@ class Commits(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date(datetime(c.created_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM commits c
-				INNER JOIN identities i
-				ON datetime(:start_date) <= c.created_at AND c.created_at < datetime(:end_date)
-				AND i.id=c.author_id
-				AND (:include_bots OR NOT i.is_bot)
-				AND repo_id IS NOT NULL
-				GROUP BY time_stamp,repo_id
-				""",
+                SELECT COUNT(*),date(datetime(c.created_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM commits c
+                INNER JOIN identities i
+                ON datetime(:start_date) <= c.created_at AND c.created_at < datetime(:end_date)
+                AND i.id=c.author_id
+                AND (:include_bots OR NOT i.is_bot)
+                AND repo_id IS NOT NULL
+                GROUP BY time_stamp,repo_id
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -1279,15 +1334,15 @@ class LastCommit(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT MAX(c.created_at),date_trunc(%(time_window)s, c.created_at) + CONCAT('1 ',%(time_window)s)::interval AS time_stamp FROM commits c
-				INNER JOIN identities i
-				ON c.created_at < %(end_date)s
-				AND c.repo_id=%(project_id)s
-				AND i.id=c.author_id
-				AND (%(include_bots)s OR NOT i.is_bot)
-				GROUP BY time_stamp
-				HAVING date_trunc(%(time_window)s, c.created_at) + CONCAT('1 ',%(time_window)s)::interval>=%(start_date)s
-				""",
+                SELECT MAX(c.created_at),date_trunc(%(time_window)s, c.created_at) + CONCAT('1 ',%(time_window)s)::interval AS time_stamp FROM commits c
+                INNER JOIN identities i
+                ON c.created_at < %(end_date)s
+                AND c.repo_id=%(project_id)s
+                AND i.id=c.author_id
+                AND (%(include_bots)s OR NOT i.is_bot)
+                GROUP BY time_stamp
+                HAVING date_trunc(%(time_window)s, c.created_at) + CONCAT('1 ',%(time_window)s)::interval>=%(start_date)s
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -1301,15 +1356,15 @@ class LastCommit(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT MAX(c.created_at),date(datetime(c.created_at,:startoftw),:offsettw) AS time_stamp FROM commits c
-				INNER JOIN identities i
-				ON c.created_at < datetime(:end_date)
-				AND i.id=c.author_id
-				AND (:include_bots OR NOT i.is_bot)
-				AND c.repo_id=:project_id
-				GROUP BY time_stamp
-				HAVING date(datetime(c.created_at,:startoftw),:offsettw)>=:start_date
-				""",
+                SELECT MAX(c.created_at),date(datetime(c.created_at,:startoftw),:offsettw) AS time_stamp FROM commits c
+                INNER JOIN identities i
+                ON c.created_at < datetime(:end_date)
+                AND i.id=c.author_id
+                AND (:include_bots OR NOT i.is_bot)
+                AND c.repo_id=:project_id
+                GROUP BY time_stamp
+                HAVING date(datetime(c.created_at,:startoftw),:offsettw)>=:start_date
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -1333,14 +1388,14 @@ class LastCommit(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT MAX(c.created_at),date_trunc(%(time_window)s, c.created_at) + CONCAT('1 ',%(time_window)s)::interval AS time_stamp FROM commits c
-				INNER JOIN identities i
-				ON c.created_at < %(end_date)s
-				AND i.id=c.author_id
-				AND (%(include_bots)s OR NOT i.is_bot)
-				GROUP BY time_stamp
-				HAVING date_trunc(%(time_window)s, c.created_at) + CONCAT('1 ',%(time_window)s)::interval>=%(start_date)s
-				""",
+                SELECT MAX(c.created_at),date_trunc(%(time_window)s, c.created_at) + CONCAT('1 ',%(time_window)s)::interval AS time_stamp FROM commits c
+                INNER JOIN identities i
+                ON c.created_at < %(end_date)s
+                AND i.id=c.author_id
+                AND (%(include_bots)s OR NOT i.is_bot)
+                GROUP BY time_stamp
+                HAVING date_trunc(%(time_window)s, c.created_at) + CONCAT('1 ',%(time_window)s)::interval>=%(start_date)s
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -1354,14 +1409,14 @@ class LastCommit(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT MAX(c.created_at),date(datetime(c.created_at,:startoftw),:offsettw) AS time_stamp FROM commits c
-				INNER JOIN identities i
-				ON c.created_at < datetime(:end_date)
-				AND i.id=c.author_id
-				AND (:include_bots OR NOT i.is_bot)
-				GROUP BY time_stamp
-				HAVING date(datetime(c.created_at,:startoftw),:offsettw)>=:start_date
-				""",
+                SELECT MAX(c.created_at),date(datetime(c.created_at,:startoftw),:offsettw) AS time_stamp FROM commits c
+                INNER JOIN identities i
+                ON c.created_at < datetime(:end_date)
+                AND i.id=c.author_id
+                AND (:include_bots OR NOT i.is_bot)
+                GROUP BY time_stamp
+                HAVING date(datetime(c.created_at,:startoftw),:offsettw)>=:start_date
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -1387,14 +1442,14 @@ class LastCommit(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT MAX(c.created_at),repo_id FROM commits c
-				INNER JOIN identities i
-				ON c.created_at < %(end_date)s
-				AND i.id=c.author_id
-				AND (%(include_bots)s OR NOT i.is_bot)
-				AND repo_id IS NOT NULL
-				GROUP BY repo_id
-				""",
+                SELECT MAX(c.created_at),repo_id FROM commits c
+                INNER JOIN identities i
+                ON c.created_at < %(end_date)s
+                AND i.id=c.author_id
+                AND (%(include_bots)s OR NOT i.is_bot)
+                AND repo_id IS NOT NULL
+                GROUP BY repo_id
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -1408,14 +1463,14 @@ class LastCommit(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT MAX(c.created_at),repo_id FROM commits c
-				INNER JOIN identities i
-				ON c.created_at < datetime(:end_date)
-				AND i.id=c.author_id
-				AND (:include_bots OR NOT i.is_bot)
-				AND repo_id IS NOT NULL
-				GROUP BY repo_id
-				""",
+                SELECT MAX(c.created_at),repo_id FROM commits c
+                INNER JOIN identities i
+                ON c.created_at < datetime(:end_date)
+                AND i.id=c.author_id
+                AND (:include_bots OR NOT i.is_bot)
+                AND repo_id IS NOT NULL
+                GROUP BY repo_id
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -1432,15 +1487,15 @@ class LastCommit(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT MAX(c.created_at),date_trunc(%(time_window)s, c.created_at) + CONCAT('1 ',%(time_window)s)::interval AS time_stamp,repo_id FROM commits c
-				INNER JOIN identities i
-				ON c.created_at < %(end_date)s
-				AND i.id=c.author_id
-				AND (%(include_bots)s OR NOT i.is_bot)
-				AND repo_id IS NOT NULL
-				GROUP BY time_stamp,repo_id
-				HAVING date_trunc(%(time_window)s, c.created_at) + CONCAT('1 ',%(time_window)s)::interval>=%(start_date)s
-				""",
+                SELECT MAX(c.created_at),date_trunc(%(time_window)s, c.created_at) + CONCAT('1 ',%(time_window)s)::interval AS time_stamp,repo_id FROM commits c
+                INNER JOIN identities i
+                ON c.created_at < %(end_date)s
+                AND i.id=c.author_id
+                AND (%(include_bots)s OR NOT i.is_bot)
+                AND repo_id IS NOT NULL
+                GROUP BY time_stamp,repo_id
+                HAVING date_trunc(%(time_window)s, c.created_at) + CONCAT('1 ',%(time_window)s)::interval>=%(start_date)s
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -1454,15 +1509,15 @@ class LastCommit(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT MAX(c.created_at),date(datetime(c.created_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM commits c
-				INNER JOIN identities i
-				ON c.created_at < datetime(:end_date)
-				AND i.id=c.author_id
-				AND (:include_bots OR NOT i.is_bot)
-				AND repo_id IS NOT NULL
-				GROUP BY time_stamp,repo_id
-				HAVING date(datetime(c.created_at,:startoftw),:offsettw)>=:start_date
-				""",
+                SELECT MAX(c.created_at),date(datetime(c.created_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM commits c
+                INNER JOIN identities i
+                ON c.created_at < datetime(:end_date)
+                AND i.id=c.author_id
+                AND (:include_bots OR NOT i.is_bot)
+                AND repo_id IS NOT NULL
+                GROUP BY time_stamp,repo_id
+                HAVING date(datetime(c.created_at,:startoftw),:offsettw)>=:start_date
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -1500,18 +1555,18 @@ class Developers(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval AS time_stamp FROM
-				(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
-				INNER JOIN identities i
-				ON i.id=cc.author_id
-				--AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
-				AND cc.repo_id=%(project_id)s
-				AND ( %(include_bots)s OR NOT i.is_bot)
-				GROUP BY i.user_id,cc.repo_id
-				HAVING %(start_date)s <= MIN(cc.created_at) AND MIN(cc.created_at) < %(end_date)s
-				) AS c
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval AS time_stamp FROM
+                (SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
+                INNER JOIN identities i
+                ON i.id=cc.author_id
+                --AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
+                AND cc.repo_id=%(project_id)s
+                AND ( %(include_bots)s OR NOT i.is_bot)
+                GROUP BY i.user_id,cc.repo_id
+                HAVING %(start_date)s <= MIN(cc.created_at) AND MIN(cc.created_at) < %(end_date)s
+                ) AS c
+                GROUP BY time_stamp
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -1525,18 +1580,18 @@ class Developers(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM
-				(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
-				INNER JOIN identities i
-				ON i.id=cc.author_id
-				--AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
-				AND cc.repo_id=:project_id
-				AND ( :include_bots OR NOT i.is_bot)
-				GROUP BY i.user_id,cc.repo_id
-				HAVING datetime(:start_date) <= MIN(cc.created_at) AND MIN(cc.created_at) < datetime(:end_date)
-				) AS c
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM
+                (SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
+                INNER JOIN identities i
+                ON i.id=cc.author_id
+                --AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
+                AND cc.repo_id=:project_id
+                AND ( :include_bots OR NOT i.is_bot)
+                GROUP BY i.user_id,cc.repo_id
+                HAVING datetime(:start_date) <= MIN(cc.created_at) AND MIN(cc.created_at) < datetime(:end_date)
+                ) AS c
+                GROUP BY time_stamp
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -1560,18 +1615,18 @@ class Developers(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval AS time_stamp FROM
-				(SELECT MIN(cc.created_at) AS created_at,i.user_id--,cc.repo_id
-				FROM commits cc
-				INNER JOIN identities i
-				ON i.id=cc.author_id
-				AND cc.repo_id IS NOT NULL
-				AND ( %(include_bots)s OR NOT i.is_bot)
-				GROUP BY i.user_id--,cc.repo_id
-				HAVING %(start_date)s <= MIN(cc.created_at) AND MIN(cc.created_at) < %(end_date)s
-				) AS c
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval AS time_stamp FROM
+                (SELECT MIN(cc.created_at) AS created_at,i.user_id--,cc.repo_id
+                FROM commits cc
+                INNER JOIN identities i
+                ON i.id=cc.author_id
+                AND cc.repo_id IS NOT NULL
+                AND ( %(include_bots)s OR NOT i.is_bot)
+                GROUP BY i.user_id--,cc.repo_id
+                HAVING %(start_date)s <= MIN(cc.created_at) AND MIN(cc.created_at) < %(end_date)s
+                ) AS c
+                GROUP BY time_stamp
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -1584,18 +1639,18 @@ class Developers(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM
-				(SELECT MIN(cc.created_at) AS created_at,i.user_id--,cc.repo_id
-				FROM commits cc
-				INNER JOIN identities i
-				ON i.id=cc.author_id
-				AND cc.repo_id IS NOT NULL
-				AND ( :include_bots OR NOT i.is_bot)
-				GROUP BY i.user_id--,cc.repo_id
-				HAVING datetime(:start_date) <= MIN(cc.created_at) AND MIN(cc.created_at) < datetime(:end_date)
-				) AS c
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM
+                (SELECT MIN(cc.created_at) AS created_at,i.user_id--,cc.repo_id
+                FROM commits cc
+                INNER JOIN identities i
+                ON i.id=cc.author_id
+                AND cc.repo_id IS NOT NULL
+                AND ( :include_bots OR NOT i.is_bot)
+                GROUP BY i.user_id--,cc.repo_id
+                HAVING datetime(:start_date) <= MIN(cc.created_at) AND MIN(cc.created_at) < datetime(:end_date)
+                ) AS c
+                GROUP BY time_stamp
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -1608,31 +1663,31 @@ class Developers(ProjectGetter):
 
         ### Previous version: number of new links dev->repo
         # if db.db_type == 'postgres':
-        # 	db.cursor.execute('''
-        # 		SELECT COUNT(*),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval AS time_stamp FROM
-        # 		(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
-        # 		INNER JOIN identities i
-        # 		ON i.id=cc.author_id
-        # 		AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
-        # 		AND cc.repo_id IS NOT NULL
-        # 		AND ( %(include_bots)s OR NOT i.is_bot)
-        # 		GROUP BY i.user_id,cc.repo_id
-        # 		) AS c
-        # 		GROUP BY time_stamp
-        # 		''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
+        #   db.cursor.execute('''
+        #       SELECT COUNT(*),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval AS time_stamp FROM
+        #       (SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
+        #       INNER JOIN identities i
+        #       ON i.id=cc.author_id
+        #       AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
+        #       AND cc.repo_id IS NOT NULL
+        #       AND ( %(include_bots)s OR NOT i.is_bot)
+        #       GROUP BY i.user_id,cc.repo_id
+        #       ) AS c
+        #       GROUP BY time_stamp
+        #       ''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
         # else:
-        # 	db.cursor.execute('''
-        # 		SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM
-        # 		(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
-        # 		INNER JOIN identities i
-        # 		ON i.id=cc.author_id
-        # 		AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
-        # 		AND cc.repo_id IS NOT NULL
-        # 		AND ( :include_bots OR NOT i.is_bot)
-        # 		GROUP BY i.user_id,cc.repo_id
-        # 		) AS c
-        # 		GROUP BY time_stamp
-        # 		''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
+        #   db.cursor.execute('''
+        #       SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM
+        #       (SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
+        #       INNER JOIN identities i
+        #       ON i.id=cc.author_id
+        #       AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
+        #       AND cc.repo_id IS NOT NULL
+        #       AND ( :include_bots OR NOT i.is_bot)
+        #       GROUP BY i.user_id,cc.repo_id
+        #       ) AS c
+        #       GROUP BY time_stamp
+        #       ''',{'startoftw':self.start_of_tw(time_window),'offsettw':self.offset_tw(time_window),'time_window':time_window,'start_date':start_date,'end_date':end_date,'include_bots':self.include_bots,})
         query_result = list(db.cursor.fetchall())
         # correcting for datetime issue in sqlite:
         if db.db_type == "sqlite":
@@ -1648,18 +1703,18 @@ class Developers(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),repo_id FROM
-				(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
-				INNER JOIN identities i
-				ON i.id=cc.author_id
-				--AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
-				AND cc.repo_id IS NOT NULL
-				AND ( %(include_bots)s OR NOT i.is_bot)
-				GROUP BY i.user_id,cc.repo_id
-				HAVING %(start_date)s <= MIN(cc.created_at) AND MIN(cc.created_at) < %(end_date)s
-				) AS c
-				GROUP BY repo_id
-				""",
+                SELECT COUNT(*),repo_id FROM
+                (SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
+                INNER JOIN identities i
+                ON i.id=cc.author_id
+                --AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
+                AND cc.repo_id IS NOT NULL
+                AND ( %(include_bots)s OR NOT i.is_bot)
+                GROUP BY i.user_id,cc.repo_id
+                HAVING %(start_date)s <= MIN(cc.created_at) AND MIN(cc.created_at) < %(end_date)s
+                ) AS c
+                GROUP BY repo_id
+                """,
                 {
                     "start_date": start_date,
                     "end_date": end_date,
@@ -1669,18 +1724,18 @@ class Developers(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),repo_id FROM
-				(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
-				INNER JOIN identities i
-				ON i.id=cc.author_id
-				--AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
-				AND cc.repo_id IS NOT NULL
-				AND ( :include_bots OR NOT i.is_bot)
-				GROUP BY i.user_id,cc.repo_id
-				HAVING datetime(:start_date) <= MIN(cc.created_at) AND MIN(cc.created_at) < datetime(:end_date)
-				) AS c
-				GROUP BY repo_id
-				""",
+                SELECT COUNT(*),repo_id FROM
+                (SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
+                INNER JOIN identities i
+                ON i.id=cc.author_id
+                --AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
+                AND cc.repo_id IS NOT NULL
+                AND ( :include_bots OR NOT i.is_bot)
+                GROUP BY i.user_id,cc.repo_id
+                HAVING datetime(:start_date) <= MIN(cc.created_at) AND MIN(cc.created_at) < datetime(:end_date)
+                ) AS c
+                GROUP BY repo_id
+                """,
                 {
                     "start_date": start_date,
                     "end_date": end_date,
@@ -1693,18 +1748,18 @@ class Developers(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval AS time_stamp,repo_id FROM
-				(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
-				INNER JOIN identities i
-				ON i.id=cc.author_id
-				--AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
-				AND cc.repo_id IS NOT NULL
-				AND ( %(include_bots)s OR NOT i.is_bot)
-				GROUP BY i.user_id,cc.repo_id
-				HAVING %(start_date)s <= MIN(cc.created_at) AND MIN(cc.created_at) < %(end_date)s
-				) AS c
-				GROUP BY time_stamp,repo_id
-				""",
+                SELECT COUNT(*),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval AS time_stamp,repo_id FROM
+                (SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
+                INNER JOIN identities i
+                ON i.id=cc.author_id
+                --AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
+                AND cc.repo_id IS NOT NULL
+                AND ( %(include_bots)s OR NOT i.is_bot)
+                GROUP BY i.user_id,cc.repo_id
+                HAVING %(start_date)s <= MIN(cc.created_at) AND MIN(cc.created_at) < %(end_date)s
+                ) AS c
+                GROUP BY time_stamp,repo_id
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -1717,18 +1772,18 @@ class Developers(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM
-				(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
-				INNER JOIN identities i
-				ON i.id=cc.author_id
-				AND cc.repo_id IS NOT NULL
-				--AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
-				AND ( :include_bots OR NOT i.is_bot)
-				GROUP BY i.user_id,cc.repo_id
-				HAVING datetime(:start_date) <= MIN(cc.created_at) AND MIN(cc.created_at) < datetime(:end_date)
-				) AS c
-				GROUP BY time_stamp,repo_id
-				""",
+                SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM
+                (SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
+                INNER JOIN identities i
+                ON i.id=cc.author_id
+                AND cc.repo_id IS NOT NULL
+                --AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
+                AND ( :include_bots OR NOT i.is_bot)
+                GROUP BY i.user_id,cc.repo_id
+                HAVING datetime(:start_date) <= MIN(cc.created_at) AND MIN(cc.created_at) < datetime(:end_date)
+                ) AS c
+                GROUP BY time_stamp,repo_id
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -1765,17 +1820,17 @@ class ActiveDevelopers(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*), time_stamp FROM
-				(SELECT date_trunc(%(time_window)s, cc.created_at) + CONCAT('1 ',%(time_window)s)::interval AS time_stamp,i.user_id,cc.repo_id FROM commits cc
-				INNER JOIN identities i
-				ON i.id=cc.author_id
-				AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
-				AND cc.repo_id=%(project_id)s
-				AND ( %(include_bots)s OR NOT i.is_bot)
-				GROUP BY time_stamp,i.user_id,cc.repo_id
-				) AS c
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*), time_stamp FROM
+                (SELECT date_trunc(%(time_window)s, cc.created_at) + CONCAT('1 ',%(time_window)s)::interval AS time_stamp,i.user_id,cc.repo_id FROM commits cc
+                INNER JOIN identities i
+                ON i.id=cc.author_id
+                AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
+                AND cc.repo_id=%(project_id)s
+                AND ( %(include_bots)s OR NOT i.is_bot)
+                GROUP BY time_stamp,i.user_id,cc.repo_id
+                ) AS c
+                GROUP BY time_stamp
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -1789,17 +1844,17 @@ class ActiveDevelopers(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*), time_stamp FROM
-				(SELECT date(datetime(cc.created_at,:startoftw),:offsettw) AS time_stamp,i.user_id,cc.repo_id FROM commits cc
-				INNER JOIN identities i
-				ON i.id=cc.author_id
-				AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
-				AND cc.repo_id=:project_id
-				AND ( :include_bots OR NOT i.is_bot)
-				GROUP BY time_stamp,i.user_id,cc.repo_id
-				) AS c
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*), time_stamp FROM
+                (SELECT date(datetime(cc.created_at,:startoftw),:offsettw) AS time_stamp,i.user_id,cc.repo_id FROM commits cc
+                INNER JOIN identities i
+                ON i.id=cc.author_id
+                AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
+                AND cc.repo_id=:project_id
+                AND ( :include_bots OR NOT i.is_bot)
+                GROUP BY time_stamp,i.user_id,cc.repo_id
+                ) AS c
+                GROUP BY time_stamp
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -1823,16 +1878,16 @@ class ActiveDevelopers(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*), time_stamp FROM
-				(SELECT date_trunc(%(time_window)s, cc.created_at) + CONCAT('1 ',%(time_window)s)::interval AS time_stamp,i.user_id FROM commits cc
-				INNER JOIN identities i
-				ON i.id=cc.author_id
-				AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
-				AND ( %(include_bots)s OR NOT i.is_bot)
-				GROUP BY time_stamp,i.user_id
-				) AS c
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*), time_stamp FROM
+                (SELECT date_trunc(%(time_window)s, cc.created_at) + CONCAT('1 ',%(time_window)s)::interval AS time_stamp,i.user_id FROM commits cc
+                INNER JOIN identities i
+                ON i.id=cc.author_id
+                AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
+                AND ( %(include_bots)s OR NOT i.is_bot)
+                GROUP BY time_stamp,i.user_id
+                ) AS c
+                GROUP BY time_stamp
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -1845,16 +1900,16 @@ class ActiveDevelopers(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*), time_stamp FROM
-				(SELECT date(datetime(cc.created_at,:startoftw),:offsettw) AS time_stamp,i.user_id FROM commits cc
-				INNER JOIN identities i
-				ON i.id=cc.author_id
-				AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
-				AND ( :include_bots OR NOT i.is_bot)
-				GROUP BY time_stamp,i.user_id
-				) AS c
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*), time_stamp FROM
+                (SELECT date(datetime(cc.created_at,:startoftw),:offsettw) AS time_stamp,i.user_id FROM commits cc
+                INNER JOIN identities i
+                ON i.id=cc.author_id
+                AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
+                AND ( :include_bots OR NOT i.is_bot)
+                GROUP BY time_stamp,i.user_id
+                ) AS c
+                GROUP BY time_stamp
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -1879,17 +1934,17 @@ class ActiveDevelopers(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(DISTINCT user_id),repo_id FROM
-				(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
-				INNER JOIN identities i
-				ON i.id=cc.author_id
-				AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
-				AND cc.repo_id IS NOT NULL
-				AND ( %(include_bots)s OR NOT i.is_bot)
-				GROUP BY i.user_id,cc.repo_id
-				) AS c
-				GROUP BY repo_id
-				""",
+                SELECT COUNT(DISTINCT user_id),repo_id FROM
+                (SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
+                INNER JOIN identities i
+                ON i.id=cc.author_id
+                AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
+                AND cc.repo_id IS NOT NULL
+                AND ( %(include_bots)s OR NOT i.is_bot)
+                GROUP BY i.user_id,cc.repo_id
+                ) AS c
+                GROUP BY repo_id
+                """,
                 {
                     "start_date": start_date,
                     "end_date": end_date,
@@ -1899,17 +1954,17 @@ class ActiveDevelopers(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(DISTINCT user_id),repo_id FROM
-				(SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
-				INNER JOIN identities i
-				ON i.id=cc.author_id
-				AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
-				AND cc.repo_id IS NOT NULL
-				AND ( :include_bots OR NOT i.is_bot)
-				GROUP BY i.user_id,cc.repo_id
-				) AS c
-				GROUP BY repo_id
-				""",
+                SELECT COUNT(DISTINCT user_id),repo_id FROM
+                (SELECT MIN(cc.created_at) AS created_at,i.user_id,cc.repo_id FROM commits cc
+                INNER JOIN identities i
+                ON i.id=cc.author_id
+                AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
+                AND cc.repo_id IS NOT NULL
+                AND ( :include_bots OR NOT i.is_bot)
+                GROUP BY i.user_id,cc.repo_id
+                ) AS c
+                GROUP BY repo_id
+                """,
                 {
                     "start_date": start_date,
                     "end_date": end_date,
@@ -1922,17 +1977,17 @@ class ActiveDevelopers(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*), time_stamp, repo_id FROM
-				(SELECT date_trunc(%(time_window)s, cc.created_at) + CONCAT('1 ',%(time_window)s)::interval AS time_stamp,i.user_id,cc.repo_id FROM commits cc
-				INNER JOIN identities i
-				ON i.id=cc.author_id
-				AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
-				AND cc.repo_id IS NOT NULL
-				AND ( %(include_bots)s OR NOT i.is_bot)
-				GROUP BY time_stamp,i.user_id,cc.repo_id
-				) AS c
-				GROUP BY time_stamp,repo_id
-				""",
+                SELECT COUNT(*), time_stamp, repo_id FROM
+                (SELECT date_trunc(%(time_window)s, cc.created_at) + CONCAT('1 ',%(time_window)s)::interval AS time_stamp,i.user_id,cc.repo_id FROM commits cc
+                INNER JOIN identities i
+                ON i.id=cc.author_id
+                AND %(start_date)s <= cc.created_at AND cc.created_at < %(end_date)s
+                AND cc.repo_id IS NOT NULL
+                AND ( %(include_bots)s OR NOT i.is_bot)
+                GROUP BY time_stamp,i.user_id,cc.repo_id
+                ) AS c
+                GROUP BY time_stamp,repo_id
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -1945,17 +2000,17 @@ class ActiveDevelopers(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*), time_stamp, repo_id FROM
-				(SELECT date(datetime(cc.created_at,:startoftw),:offsettw) AS time_stamp,i.user_id,cc.repo_id FROM commits cc
-				INNER JOIN identities i
-				ON i.id=cc.author_id
-				AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
-				AND cc.repo_id IS NOT NULL
-				AND ( :include_bots OR NOT i.is_bot)
-				GROUP BY time_stamp,i.user_id,cc.repo_id
-				) AS c
-				GROUP BY time_stamp,repo_id
-				""",
+                SELECT COUNT(*), time_stamp, repo_id FROM
+                (SELECT date(datetime(cc.created_at,:startoftw),:offsettw) AS time_stamp,i.user_id,cc.repo_id FROM commits cc
+                INNER JOIN identities i
+                ON i.id=cc.author_id
+                AND datetime(:start_date) <= cc.created_at AND cc.created_at < datetime(:end_date)
+                AND cc.repo_id IS NOT NULL
+                AND ( :include_bots OR NOT i.is_bot)
+                GROUP BY time_stamp,i.user_id,cc.repo_id
+                ) AS c
+                GROUP BY time_stamp,repo_id
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -1992,11 +2047,11 @@ class TotalLines(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT SUM(insertions+deletions),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM commits c
-				WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
-				AND repo_id=%(project_id)s
-				GROUP BY time_stamp
-				""",
+                SELECT SUM(insertions+deletions),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM commits c
+                WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
+                AND repo_id=%(project_id)s
+                GROUP BY time_stamp
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -2010,11 +2065,11 @@ class TotalLines(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT SUM(insertions+deletions),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM commits c
-				WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
-				AND repo_id=:project_id
-				GROUP BY time_stamp
-				""",
+                SELECT SUM(insertions+deletions),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM commits c
+                WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
+                AND repo_id=:project_id
+                GROUP BY time_stamp
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -2038,10 +2093,10 @@ class TotalLines(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT SUM(insertions+deletions),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM commits c
-				WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
-				GROUP BY time_stamp
-				""",
+                SELECT SUM(insertions+deletions),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM commits c
+                WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
+                GROUP BY time_stamp
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -2055,10 +2110,10 @@ class TotalLines(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT SUM(insertions+deletions),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM commits c
-				WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
-				GROUP BY time_stamp
-				""",
+                SELECT SUM(insertions+deletions),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM commits c
+                WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
+                GROUP BY time_stamp
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -2084,11 +2139,11 @@ class TotalLines(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT SUM(insertions+deletions),repo_id FROM commits c
-				WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
-				AND c.repo_id IS NOT NULL
-				GROUP BY repo_id
-				""",
+                SELECT SUM(insertions+deletions),repo_id FROM commits c
+                WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
+                AND c.repo_id IS NOT NULL
+                GROUP BY repo_id
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -2102,11 +2157,11 @@ class TotalLines(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT SUM(insertions+deletions),repo_id FROM commits c
-				WHERE :start_date <= created_at AND created_at < :end_date
-				AND c.repo_id IS NOT NULL
-				GROUP BY repo_id
-				""",
+                SELECT SUM(insertions+deletions),repo_id FROM commits c
+                WHERE :start_date <= created_at AND created_at < :end_date
+                AND c.repo_id IS NOT NULL
+                GROUP BY repo_id
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -2123,11 +2178,11 @@ class TotalLines(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT SUM(insertions+deletions),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp,repo_id FROM commits c
-				WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
-				AND c.repo_id IS NOT NULL
-				GROUP BY time_stamp,repo_id
-				""",
+                SELECT SUM(insertions+deletions),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp,repo_id FROM commits c
+                WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
+                AND c.repo_id IS NOT NULL
+                GROUP BY time_stamp,repo_id
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -2141,11 +2196,11 @@ class TotalLines(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT SUM(insertions+deletions),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM commits c
-				WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
-				AND c.repo_id IS NOT NULL
-				GROUP BY time_stamp,repo_id
-				""",
+                SELECT SUM(insertions+deletions),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM commits c
+                WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
+                AND c.repo_id IS NOT NULL
+                GROUP BY time_stamp,repo_id
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -2183,11 +2238,11 @@ class Lines(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT SUM(insertions-deletions),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM commits c
-				WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
-				AND repo_id=%(project_id)s
-				GROUP BY time_stamp
-				""",
+                SELECT SUM(insertions-deletions),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM commits c
+                WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
+                AND repo_id=%(project_id)s
+                GROUP BY time_stamp
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -2201,11 +2256,11 @@ class Lines(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT SUM(insertions-deletions),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM commits c
-				WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
-				AND repo_id=:project_id
-				GROUP BY time_stamp
-				""",
+                SELECT SUM(insertions-deletions),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM commits c
+                WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
+                AND repo_id=:project_id
+                GROUP BY time_stamp
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -2229,10 +2284,10 @@ class Lines(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT SUM(insertions-deletions),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM commits c
-				WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
-				GROUP BY time_stamp
-				""",
+                SELECT SUM(insertions-deletions),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM commits c
+                WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
+                GROUP BY time_stamp
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -2246,10 +2301,10 @@ class Lines(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT SUM(insertions-deletions),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM commits c
-				WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
-				GROUP BY time_stamp
-				""",
+                SELECT SUM(insertions-deletions),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM commits c
+                WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
+                GROUP BY time_stamp
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -2275,11 +2330,11 @@ class Lines(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT SUM(insertions-deletions),repo_id FROM commits c
-				WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
-				AND c.repo_id IS NOT NULL
-				GROUP BY repo_id
-				""",
+                SELECT SUM(insertions-deletions),repo_id FROM commits c
+                WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
+                AND c.repo_id IS NOT NULL
+                GROUP BY repo_id
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -2293,11 +2348,11 @@ class Lines(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT SUM(insertions-deletions),repo_id FROM commits c
-				WHERE :start_date <= created_at AND created_at < :end_date
-				AND c.repo_id IS NOT NULL
-				GROUP BY repo_id
-				""",
+                SELECT SUM(insertions-deletions),repo_id FROM commits c
+                WHERE :start_date <= created_at AND created_at < :end_date
+                AND c.repo_id IS NOT NULL
+                GROUP BY repo_id
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -2314,11 +2369,11 @@ class Lines(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT SUM(insertions-deletions),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp,repo_id FROM commits c
-				WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
-				AND c.repo_id IS NOT NULL
-				GROUP BY time_stamp,repo_id
-				""",
+                SELECT SUM(insertions-deletions),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp,repo_id FROM commits c
+                WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
+                AND c.repo_id IS NOT NULL
+                GROUP BY time_stamp,repo_id
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -2332,11 +2387,11 @@ class Lines(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT SUM(insertions-deletions),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM commits c
-				WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
-				AND c.repo_id IS NOT NULL
-				GROUP BY time_stamp,repo_id
-				""",
+                SELECT SUM(insertions-deletions),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM commits c
+                WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
+                AND c.repo_id IS NOT NULL
+                GROUP BY time_stamp,repo_id
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -2373,16 +2428,16 @@ class Downloads(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT SUM(vd.downloads),date_trunc(%(time_window)s, vd.downloaded_at)::timestamp + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp
-				FROM packages p
-				INNER JOIN package_versions v
-				ON p.repo_id=%(project_id)s
-				AND v.package_id=p.id
-				INNER JOIN package_version_downloads vd
-				ON vd.package_version=v.id
-				AND %(start_date)s <= vd.downloaded_at AND vd.downloaded_at < %(end_date)s
-				GROUP BY time_stamp;
-				""",
+                SELECT SUM(vd.downloads),date_trunc(%(time_window)s, vd.downloaded_at)::timestamp + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp
+                FROM packages p
+                INNER JOIN package_versions v
+                ON p.repo_id=%(project_id)s
+                AND v.package_id=p.id
+                INNER JOIN package_version_downloads vd
+                ON vd.package_version=v.id
+                AND %(start_date)s <= vd.downloaded_at AND vd.downloaded_at < %(end_date)s
+                GROUP BY time_stamp;
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -2395,17 +2450,17 @@ class Downloads(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT SUM(vd.downloads),date(datetime(vd.downloaded_at,:startoftw),:offsettw) AS time_stamp
-				FROM packages p
-				INNER JOIN package_versions v
-				ON p.repo_id=:project_id
-				AND v.package_id=p.id
-				INNER JOIN package_version_downloads vd
-				ON vd.package_version=v.id
-				AND datetime(:start_date) <= vd.downloaded_at AND vd.downloaded_at < datetime(:end_date)
-				GROUP BY time_stamp
-				;
-				""",
+                SELECT SUM(vd.downloads),date(datetime(vd.downloaded_at,:startoftw),:offsettw) AS time_stamp
+                FROM packages p
+                INNER JOIN package_versions v
+                ON p.repo_id=:project_id
+                AND v.package_id=p.id
+                INNER JOIN package_version_downloads vd
+                ON vd.package_version=v.id
+                AND datetime(:start_date) <= vd.downloaded_at AND vd.downloaded_at < datetime(:end_date)
+                GROUP BY time_stamp
+                ;
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -2428,15 +2483,15 @@ class Downloads(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT SUM(vd.downloads),date_trunc(%(time_window)s, vd.downloaded_at)::timestamp + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp
-				FROM packages p
-				INNER JOIN package_versions v
-				ON v.package_id=p.id AND p.repo_id IS NOT NULL
-				INNER JOIN package_version_downloads vd
-				ON vd.package_version=v.id
-				AND %(start_date)s <= vd.downloaded_at AND vd.downloaded_at < %(end_date)s
-				GROUP BY time_stamp;
-				""",
+                SELECT SUM(vd.downloads),date_trunc(%(time_window)s, vd.downloaded_at)::timestamp + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp
+                FROM packages p
+                INNER JOIN package_versions v
+                ON v.package_id=p.id AND p.repo_id IS NOT NULL
+                INNER JOIN package_version_downloads vd
+                ON vd.package_version=v.id
+                AND %(start_date)s <= vd.downloaded_at AND vd.downloaded_at < %(end_date)s
+                GROUP BY time_stamp;
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -2448,16 +2503,16 @@ class Downloads(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT SUM(vd.downloads),date(datetime(vd.downloaded_at,:startoftw),:offsettw) AS time_stamp
-				FROM packages p
-				INNER JOIN package_versions v
-				ON v.package_id=p.id AND p.repo_id IS NOT NULL
-				INNER JOIN package_version_downloads vd
-				ON vd.package_version=v.id
-				AND datetime(:start_date) <= vd.downloaded_at AND vd.downloaded_at < datetime(:end_date)
-				GROUP BY time_stamp
-				;
-				""",
+                SELECT SUM(vd.downloads),date(datetime(vd.downloaded_at,:startoftw),:offsettw) AS time_stamp
+                FROM packages p
+                INNER JOIN package_versions v
+                ON v.package_id=p.id AND p.repo_id IS NOT NULL
+                INNER JOIN package_version_downloads vd
+                ON vd.package_version=v.id
+                AND datetime(:start_date) <= vd.downloaded_at AND vd.downloaded_at < datetime(:end_date)
+                GROUP BY time_stamp
+                ;
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -2481,15 +2536,15 @@ class Downloads(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT SUM(vd.downloads),p.repo_id FROM packages p
-				INNER JOIN package_versions v
-				ON v.package_id=p.id AND p.repo_id IS NOT NULL
-				INNER JOIN package_version_downloads vd
-				ON vd.package_version=v.id
-				AND %(start_date)s <= vd.downloaded_at AND vd.downloaded_at < %(end_date)s
-				GROUP BY p.repo_id
-				;
-				""",
+                SELECT SUM(vd.downloads),p.repo_id FROM packages p
+                INNER JOIN package_versions v
+                ON v.package_id=p.id AND p.repo_id IS NOT NULL
+                INNER JOIN package_version_downloads vd
+                ON vd.package_version=v.id
+                AND %(start_date)s <= vd.downloaded_at AND vd.downloaded_at < %(end_date)s
+                GROUP BY p.repo_id
+                ;
+                """,
                 {
                     "start_date": start_date,
                     "end_date": end_date,
@@ -2498,15 +2553,15 @@ class Downloads(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT SUM(vd.downloads),p.repo_id FROM packages p
-				INNER JOIN package_versions v
-				ON v.package_id=p.id AND p.repo_id IS NOT NULL
-				INNER JOIN package_version_downloads vd
-				ON vd.package_version=v.id
-				AND :start_date <= vd.downloaded_at AND vd.downloaded_at < :end_date
-				GROUP BY p.repo_id
-				;
-				""",
+                SELECT SUM(vd.downloads),p.repo_id FROM packages p
+                INNER JOIN package_versions v
+                ON v.package_id=p.id AND p.repo_id IS NOT NULL
+                INNER JOIN package_version_downloads vd
+                ON vd.package_version=v.id
+                AND :start_date <= vd.downloaded_at AND vd.downloaded_at < :end_date
+                GROUP BY p.repo_id
+                ;
+                """,
                 {
                     "start_date": start_date,
                     "end_date": end_date,
@@ -2518,15 +2573,15 @@ class Downloads(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT SUM(vd.downloads),date_trunc(%(time_window)s, vd.downloaded_at)::timestamp + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp,p.repo_id
-				FROM packages p
-				INNER JOIN package_versions v
-				ON v.package_id=p.id AND p.repo_id IS NOT NULL
-				INNER JOIN package_version_downloads vd
-				ON vd.package_version=v.id
-				AND %(start_date)s <= vd.downloaded_at AND vd.downloaded_at < %(end_date)s
-				GROUP BY time_stamp,p.repo_id;
-				""",
+                SELECT SUM(vd.downloads),date_trunc(%(time_window)s, vd.downloaded_at)::timestamp + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp,p.repo_id
+                FROM packages p
+                INNER JOIN package_versions v
+                ON v.package_id=p.id AND p.repo_id IS NOT NULL
+                INNER JOIN package_version_downloads vd
+                ON vd.package_version=v.id
+                AND %(start_date)s <= vd.downloaded_at AND vd.downloaded_at < %(end_date)s
+                GROUP BY time_stamp,p.repo_id;
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -2538,16 +2593,16 @@ class Downloads(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT SUM(vd.downloads),date(datetime(vd.downloaded_at,:startoftw),:offsettw) AS time_stamp,p.repo_id
-				FROM packages p
-				INNER JOIN package_versions v
-				ON v.package_id=p.id AND p.repo_id IS NOT NULL
-				INNER JOIN package_version_downloads vd
-				ON vd.package_version=v.id
-				AND datetime(:start_date) <= vd.downloaded_at AND vd.downloaded_at < datetime(:end_date)
-				GROUP BY time_stamp,p.repo_id
-				;
-				""",
+                SELECT SUM(vd.downloads),date(datetime(vd.downloaded_at,:startoftw),:offsettw) AS time_stamp,p.repo_id
+                FROM packages p
+                INNER JOIN package_versions v
+                ON v.package_id=p.id AND p.repo_id IS NOT NULL
+                INNER JOIN package_version_downloads vd
+                ON vd.package_version=v.id
+                AND datetime(:start_date) <= vd.downloaded_at AND vd.downloaded_at < datetime(:end_date)
+                GROUP BY time_stamp,p.repo_id
+                ;
+                """,
                 {
                     "startoftw": self.start_of_tw(time_window),
                     "offsettw": self.offset_tw(time_window),
@@ -2580,12 +2635,12 @@ class Issues(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM issues c
-				WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
-				AND repo_id=%(project_id)s
-				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM issues c
+                WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
+                AND repo_id=%(project_id)s
+                AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
+                GROUP BY time_stamp
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -2600,12 +2655,12 @@ class Issues(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM issues c
-				WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
-				AND repo_id=:project_id
-				AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM issues c
+                WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
+                AND repo_id=:project_id
+                AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
+                GROUP BY time_stamp
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -2631,11 +2686,11 @@ class Issues(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM issues c
-				WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
-				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM issues c
+                WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
+                AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
+                GROUP BY time_stamp
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -2650,11 +2705,11 @@ class Issues(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM issues c
-				WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
-				AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM issues c
+                WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
+                AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
+                GROUP BY time_stamp
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -2681,11 +2736,11 @@ class Issues(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),repo_id FROM issues c
-				WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
-				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
-				GROUP BY repo_id
-				""",
+                SELECT COUNT(*),repo_id FROM issues c
+                WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
+                AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
+                GROUP BY repo_id
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -2700,11 +2755,11 @@ class Issues(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),repo_id FROM issues c
-				WHERE :start_date <= created_at AND created_at < :end_date
-				AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
-				GROUP BY repo_id
-				""",
+                SELECT COUNT(*),repo_id FROM issues c
+                WHERE :start_date <= created_at AND created_at < :end_date
+                AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
+                GROUP BY repo_id
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -2722,11 +2777,11 @@ class Issues(ProjectGetter):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp,repo_id FROM issues c
-				WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
-				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
-				GROUP BY time_stamp,repo_id
-				""",
+                SELECT COUNT(*),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp,repo_id FROM issues c
+                WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
+                AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
+                GROUP BY time_stamp,repo_id
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -2741,11 +2796,11 @@ class Issues(ProjectGetter):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM issues c
-				WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
-				AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
-				GROUP BY time_stamp,repo_id
-				""",
+                SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM issues c
+                WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
+                AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
+                GROUP BY time_stamp,repo_id
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -2778,12 +2833,12 @@ class ClosedIssues(Issues):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date_trunc(%(time_window)s, closed_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM issues c
-				WHERE %(start_date)s <= closed_at AND closed_at < %(end_date)s
-				AND repo_id=%(project_id)s
-				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date_trunc(%(time_window)s, closed_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM issues c
+                WHERE %(start_date)s <= closed_at AND closed_at < %(end_date)s
+                AND repo_id=%(project_id)s
+                AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
+                GROUP BY time_stamp
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -2798,12 +2853,12 @@ class ClosedIssues(Issues):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date(datetime(closed_at,:startoftw),:offsettw) AS time_stamp FROM issues c
-				WHERE datetime(:start_date) <= closed_at AND closed_at < datetime(:end_date)
-				AND repo_id=:project_id
-				AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date(datetime(closed_at,:startoftw),:offsettw) AS time_stamp FROM issues c
+                WHERE datetime(:start_date) <= closed_at AND closed_at < datetime(:end_date)
+                AND repo_id=:project_id
+                AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
+                GROUP BY time_stamp
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -2829,11 +2884,11 @@ class ClosedIssues(Issues):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date_trunc(%(time_window)s, closed_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM issues c
-				WHERE %(start_date)s <= closed_at AND closed_at < %(end_date)s
-				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date_trunc(%(time_window)s, closed_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM issues c
+                WHERE %(start_date)s <= closed_at AND closed_at < %(end_date)s
+                AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
+                GROUP BY time_stamp
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -2848,11 +2903,11 @@ class ClosedIssues(Issues):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date(datetime(closed_at,:startoftw),:offsettw) AS time_stamp FROM issues c
-				WHERE datetime(:start_date) <= closed_at AND closed_at < datetime(:end_date)
-				AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date(datetime(closed_at,:startoftw),:offsettw) AS time_stamp FROM issues c
+                WHERE datetime(:start_date) <= closed_at AND closed_at < datetime(:end_date)
+                AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
+                GROUP BY time_stamp
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -2879,11 +2934,11 @@ class ClosedIssues(Issues):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),repo_id FROM issues c
-				WHERE %(start_date)s <= closed_at AND closed_at < %(end_date)s
-				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
-				GROUP BY repo_id
-				""",
+                SELECT COUNT(*),repo_id FROM issues c
+                WHERE %(start_date)s <= closed_at AND closed_at < %(end_date)s
+                AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
+                GROUP BY repo_id
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -2898,11 +2953,11 @@ class ClosedIssues(Issues):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),repo_id FROM issues c
-				WHERE :start_date <= closed_at AND closed_at < :end_date
-				AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
-				GROUP BY repo_id
-				""",
+                SELECT COUNT(*),repo_id FROM issues c
+                WHERE :start_date <= closed_at AND closed_at < :end_date
+                AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
+                GROUP BY repo_id
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -2920,11 +2975,11 @@ class ClosedIssues(Issues):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date_trunc(%(time_window)s, closed_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp,repo_id FROM issues c
-				WHERE %(start_date)s <= closed_at AND closed_at < %(end_date)s
-				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
-				GROUP BY time_stamp,repo_id
-				""",
+                SELECT COUNT(*),date_trunc(%(time_window)s, closed_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp,repo_id FROM issues c
+                WHERE %(start_date)s <= closed_at AND closed_at < %(end_date)s
+                AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
+                GROUP BY time_stamp,repo_id
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -2939,11 +2994,11 @@ class ClosedIssues(Issues):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date(datetime(closed_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM issues c
-				WHERE datetime(:start_date) <= closed_at AND closed_at < datetime(:end_date)
-				AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
-				GROUP BY time_stamp,repo_id
-				""",
+                SELECT COUNT(*),date(datetime(closed_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM issues c
+                WHERE datetime(:start_date) <= closed_at AND closed_at < datetime(:end_date)
+                AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
+                GROUP BY time_stamp,repo_id
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -2975,12 +3030,12 @@ class PullRequests(Issues):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM pullrequests c
-				WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
-				AND repo_id=%(project_id)s
-				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM pullrequests c
+                WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
+                AND repo_id=%(project_id)s
+                AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
+                GROUP BY time_stamp
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -2995,12 +3050,12 @@ class PullRequests(Issues):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM pullrequests c
-				WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
-				AND repo_id=:project_id
-				AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM pullrequests c
+                WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
+                AND repo_id=:project_id
+                AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
+                GROUP BY time_stamp
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -3026,11 +3081,11 @@ class PullRequests(Issues):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM pullrequests c
-				WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
-				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM pullrequests c
+                WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
+                AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
+                GROUP BY time_stamp
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -3045,11 +3100,11 @@ class PullRequests(Issues):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM pullrequests c
-				WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
-				AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp FROM pullrequests c
+                WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
+                AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
+                GROUP BY time_stamp
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -3076,11 +3131,11 @@ class PullRequests(Issues):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),repo_id FROM pullrequests c
-				WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
-				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
-				GROUP BY repo_id
-				""",
+                SELECT COUNT(*),repo_id FROM pullrequests c
+                WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
+                AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
+                GROUP BY repo_id
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -3095,11 +3150,11 @@ class PullRequests(Issues):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),repo_id FROM pullrequests c
-				WHERE :start_date <= created_at AND created_at < :end_date
-				AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
-				GROUP BY repo_id
-				""",
+                SELECT COUNT(*),repo_id FROM pullrequests c
+                WHERE :start_date <= created_at AND created_at < :end_date
+                AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
+                GROUP BY repo_id
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -3117,11 +3172,11 @@ class PullRequests(Issues):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp,repo_id FROM pullrequests c
-				WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
-				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
-				GROUP BY time_stamp,repo_id
-				""",
+                SELECT COUNT(*),date_trunc(%(time_window)s, created_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp,repo_id FROM pullrequests c
+                WHERE %(start_date)s <= created_at AND created_at < %(end_date)s
+                AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
+                GROUP BY time_stamp,repo_id
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -3136,11 +3191,11 @@ class PullRequests(Issues):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM pullrequests c
-				WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
-				AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
-				GROUP BY time_stamp,repo_id
-				""",
+                SELECT COUNT(*),date(datetime(created_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM pullrequests c
+                WHERE datetime(:start_date) <= created_at AND created_at < datetime(:end_date)
+                AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
+                GROUP BY time_stamp,repo_id
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -3173,12 +3228,12 @@ class MergedPullRequests(PullRequests):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date_trunc(%(time_window)s, merged_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM pullrequests c
-				WHERE %(start_date)s <= merged_at AND merged_at < %(end_date)s
-				AND repo_id=%(project_id)s
-				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date_trunc(%(time_window)s, merged_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM pullrequests c
+                WHERE %(start_date)s <= merged_at AND merged_at < %(end_date)s
+                AND repo_id=%(project_id)s
+                AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
+                GROUP BY time_stamp
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -3193,12 +3248,12 @@ class MergedPullRequests(PullRequests):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date(datetime(merged_at,:startoftw),:offsettw) AS time_stamp FROM pullrequests c
-				WHERE datetime(:start_date) <= merged_at AND merged_at < datetime(:end_date)
-				AND repo_id=:project_id
-				AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date(datetime(merged_at,:startoftw),:offsettw) AS time_stamp FROM pullrequests c
+                WHERE datetime(:start_date) <= merged_at AND merged_at < datetime(:end_date)
+                AND repo_id=:project_id
+                AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
+                GROUP BY time_stamp
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -3224,11 +3279,11 @@ class MergedPullRequests(PullRequests):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date_trunc(%(time_window)s, merged_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM pullrequests c
-				WHERE %(start_date)s <= merged_at AND merged_at < %(end_date)s
-				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date_trunc(%(time_window)s, merged_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM pullrequests c
+                WHERE %(start_date)s <= merged_at AND merged_at < %(end_date)s
+                AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
+                GROUP BY time_stamp
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -3243,11 +3298,11 @@ class MergedPullRequests(PullRequests):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date(datetime(merged_at,:startoftw),:offsettw) AS time_stamp FROM pullrequests c
-				WHERE datetime(:start_date) <= merged_at AND merged_at < datetime(:end_date)
-				AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date(datetime(merged_at,:startoftw),:offsettw) AS time_stamp FROM pullrequests c
+                WHERE datetime(:start_date) <= merged_at AND merged_at < datetime(:end_date)
+                AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
+                GROUP BY time_stamp
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -3274,11 +3329,11 @@ class MergedPullRequests(PullRequests):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),repo_id FROM pullrequests c
-				WHERE %(start_date)s <= merged_at AND merged_at < %(end_date)s
-				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
-				GROUP BY repo_id
-				""",
+                SELECT COUNT(*),repo_id FROM pullrequests c
+                WHERE %(start_date)s <= merged_at AND merged_at < %(end_date)s
+                AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
+                GROUP BY repo_id
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -3293,11 +3348,11 @@ class MergedPullRequests(PullRequests):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),repo_id FROM pullrequests c
-				WHERE :start_date <= merged_at AND merged_at < :end_date
-				AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
-				GROUP BY repo_id
-				""",
+                SELECT COUNT(*),repo_id FROM pullrequests c
+                WHERE :start_date <= merged_at AND merged_at < :end_date
+                AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
+                GROUP BY repo_id
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -3315,11 +3370,11 @@ class MergedPullRequests(PullRequests):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date_trunc(%(time_window)s, merged_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp,repo_id FROM pullrequests c
-				WHERE %(start_date)s <= merged_at AND merged_at < %(end_date)s
-				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
-				GROUP BY time_stamp,repo_id
-				""",
+                SELECT COUNT(*),date_trunc(%(time_window)s, merged_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp,repo_id FROM pullrequests c
+                WHERE %(start_date)s <= merged_at AND merged_at < %(end_date)s
+                AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
+                GROUP BY time_stamp,repo_id
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -3334,11 +3389,11 @@ class MergedPullRequests(PullRequests):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date(datetime(merged_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM pullrequests c
-				WHERE datetime(:start_date) <= merged_at AND merged_at < datetime(:end_date)
-				AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
-				GROUP BY time_stamp,repo_id
-				""",
+                SELECT COUNT(*),date(datetime(merged_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM pullrequests c
+                WHERE datetime(:start_date) <= merged_at AND merged_at < datetime(:end_date)
+                AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
+                GROUP BY time_stamp,repo_id
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -3371,12 +3426,12 @@ class ClosedPullRequests(PullRequests):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date_trunc(%(time_window)s, closed_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM pullrequests c
-				WHERE %(start_date)s <= closed_at AND closed_at < %(end_date)s
-				AND repo_id=%(project_id)s
-				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date_trunc(%(time_window)s, closed_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM pullrequests c
+                WHERE %(start_date)s <= closed_at AND closed_at < %(end_date)s
+                AND repo_id=%(project_id)s
+                AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
+                GROUP BY time_stamp
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -3391,12 +3446,12 @@ class ClosedPullRequests(PullRequests):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date(datetime(closed_at,:startoftw),:offsettw) AS time_stamp FROM pullrequests c
-				WHERE datetime(:start_date) <= closed_at AND closed_at < datetime(:end_date)
-				AND repo_id=:project_id
-				AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date(datetime(closed_at,:startoftw),:offsettw) AS time_stamp FROM pullrequests c
+                WHERE datetime(:start_date) <= closed_at AND closed_at < datetime(:end_date)
+                AND repo_id=:project_id
+                AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
+                GROUP BY time_stamp
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -3422,11 +3477,11 @@ class ClosedPullRequests(PullRequests):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date_trunc(%(time_window)s, closed_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM pullrequests c
-				WHERE %(start_date)s <= closed_at AND closed_at < %(end_date)s
-				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date_trunc(%(time_window)s, closed_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp FROM pullrequests c
+                WHERE %(start_date)s <= closed_at AND closed_at < %(end_date)s
+                AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
+                GROUP BY time_stamp
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -3441,11 +3496,11 @@ class ClosedPullRequests(PullRequests):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date(datetime(closed_at,:startoftw),:offsettw) AS time_stamp FROM pullrequests c
-				WHERE datetime(:start_date) <= closed_at AND closed_at < datetime(:end_date)
-				AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
-				GROUP BY time_stamp
-				""",
+                SELECT COUNT(*),date(datetime(closed_at,:startoftw),:offsettw) AS time_stamp FROM pullrequests c
+                WHERE datetime(:start_date) <= closed_at AND closed_at < datetime(:end_date)
+                AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
+                GROUP BY time_stamp
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -3472,11 +3527,11 @@ class ClosedPullRequests(PullRequests):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),repo_id FROM pullrequests c
-				WHERE %(start_date)s <= closed_at AND closed_at < %(end_date)s
-				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
-				GROUP BY repo_id
-				""",
+                SELECT COUNT(*),repo_id FROM pullrequests c
+                WHERE %(start_date)s <= closed_at AND closed_at < %(end_date)s
+                AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
+                GROUP BY repo_id
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -3491,11 +3546,11 @@ class ClosedPullRequests(PullRequests):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),repo_id FROM pullrequests c
-				WHERE :start_date <= closed_at AND closed_at < :end_date
-				AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
-				GROUP BY repo_id
-				""",
+                SELECT COUNT(*),repo_id FROM pullrequests c
+                WHERE :start_date <= closed_at AND closed_at < :end_date
+                AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
+                GROUP BY repo_id
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -3513,11 +3568,11 @@ class ClosedPullRequests(PullRequests):
         if db.db_type == "postgres":
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date_trunc(%(time_window)s, closed_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp,repo_id FROM pullrequests c
-				WHERE %(start_date)s <= closed_at AND closed_at < %(end_date)s
-				AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
-				GROUP BY time_stamp,repo_id
-				""",
+                SELECT COUNT(*),date_trunc(%(time_window)s, closed_at) + CONCAT('1 ',%(time_window)s)::interval  AS time_stamp,repo_id FROM pullrequests c
+                WHERE %(start_date)s <= closed_at AND closed_at < %(end_date)s
+                AND ((NOT %(closed_only)s) OR (closed_at IS NOT NULL))
+                GROUP BY time_stamp,repo_id
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),
@@ -3532,11 +3587,11 @@ class ClosedPullRequests(PullRequests):
         else:
             db.cursor.execute(
                 """
-				SELECT COUNT(*),date(datetime(closed_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM pullrequests c
-				WHERE datetime(:start_date) <= closed_at AND closed_at < datetime(:end_date)
-				AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
-				GROUP BY time_stamp,repo_id
-				""",
+                SELECT COUNT(*),date(datetime(closed_at,:startoftw),:offsettw) AS time_stamp,repo_id FROM pullrequests c
+                WHERE datetime(:start_date) <= closed_at AND closed_at < datetime(:end_date)
+                AND ((NOT :closed_only) OR (closed_at IS NOT NULL))
+                GROUP BY time_stamp,repo_id
+                """,
                 {
                     "closed_only": self.closed_only,
                     "startoftw": self.start_of_tw(time_window),

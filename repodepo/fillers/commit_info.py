@@ -38,9 +38,11 @@ class CommitsFiller(fillers.Filler):
         clean_repo=False,
         temp_repodir=False,
         refresh_list=True,
+        solve_orig_repo=True,
         **kwargs
     ):
         self.force = force
+        self.solve_orig_repo = solve_orig_repo
         self.refresh_list = refresh_list
         self.temp_repodir = temp_repodir
         self.clone_folder = clone_folder
@@ -87,7 +89,8 @@ class CommitsFiller(fillers.Filler):
             )
         else:
             self.fill_commit_info(force=self.force, all_commits=self.all_commits)
-        self.fill_commit_orig_repo(only_null=self.only_null_commit_origs)
+        if self.solve_orig_repo:
+            self.fill_commit_orig_repo(only_null=self.only_null_commit_origs)
         if self.fix_created_at:
             self.fill_commit_created_at(batch_size=self.created_at_batchsize)
         self.db.connection.commit()

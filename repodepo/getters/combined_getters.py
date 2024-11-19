@@ -75,6 +75,7 @@ class UsageGetter(CombinedGetter):
         {"class": project_getters.ClosedIssues, "rename": {}, "extra_kwargs": {}},
         {"class": project_getters.PullRequests, "rename": {}, "extra_kwargs": {}},
         {"class": project_getters.MergedPullRequests, "rename": {}, "extra_kwargs": {}},
+        {"class": project_getters.ClosedPullRequests, "rename": {}, "extra_kwargs": {}},
     ]
 
     order = [
@@ -92,6 +93,7 @@ class UsageGetter(CombinedGetter):
         "issues_closed",
         "pullrequests",
         "pullrequests_merged",
+        "pullrequests_closed",
     ]
 
     def get_result(self):
@@ -147,6 +149,202 @@ class UsageGetter(CombinedGetter):
         df.fillna({c: 0 for c in cols}, inplace=True)
 
         return df
+
+
+class GlobalUsageGetter(UsageGetter):
+    """
+    Retrieves as a dataframe:
+    timestamp,stars,downloads,commits,commits_cumulative,forks,total contributors, active contributors
+    """
+
+    # subgetters = copy.deepcopy(UsageGetter.subgetters)
+    # subgetters+= [
+    #     {"class": project_getters.Stars, "rename": {}, "extra_kwargs": {}},
+
+    # ]
+
+    subgetters = [
+        {
+            "class": project_getters.Stars,
+            "rename": {},
+            "extra_kwargs": {"cumulative": False},
+        },
+        {"class": project_getters.Stargazers, "rename": {}, "extra_kwargs": {}},
+        {"class": project_getters.Forks, "rename": {}, "extra_kwargs": {}},
+        {
+            "class": project_getters.Commits,
+            "rename": {},
+            "extra_kwargs": {"cumulative": False},
+        },
+        {
+            "class": project_getters.Commits,
+            "rename": {"commits": "commits_cumul"},
+            "extra_kwargs": {"cumulative": True},
+        },
+        {"class": project_getters.Developers, "rename": {}, "extra_kwargs": {}},
+        {
+            "class": project_getters.ActiveDevelopers,
+            "rename": {},
+            "extra_kwargs": {"cumulative": False},
+        },
+        {
+            "class": project_getters.Downloads,
+            "rename": {},
+            "extra_kwargs": {"cumulative": False},
+        },
+        {
+            "class": project_getters.Issues,
+            "rename": {},
+            "extra_kwargs": {"cumulative": False},
+        },
+        {
+            "class": project_getters.ClosedIssues,
+            "rename": {},
+            "extra_kwargs": {"cumulative": False},
+        },
+        {
+            "class": project_getters.PullRequests,
+            "rename": {},
+            "extra_kwargs": {"cumulative": False},
+        },
+        {
+            "class": project_getters.MergedPullRequests,
+            "rename": {},
+            "extra_kwargs": {"cumulative": False},
+        },
+        {
+            "class": project_getters.ClosedPullRequests,
+            "rename": {},
+            "extra_kwargs": {"cumulative": False},
+        },
+    ]
+    order = [
+        # 'repo_id',
+        # 'timestamp',
+        # "repo_name",
+        "stars",
+        "stargazers",
+        "forks",
+        "commits",
+        "commits_cumul",
+        "developers",
+        "active_developers",
+        "downloads",
+        "issues",
+        "issues_closed",
+        "pullrequests",
+        "pullrequests_merged",
+        "pullrequests_closed",
+    ]
+
+    def get_result(self):
+        df = pd.DataFrame(columns=["project_id", "timestamp"])
+        # df = commits_cumul
+        for sg in self.subgetters:
+            sg_df = sg["class"](db=self.db).get_result(
+                time_window=self.time_window,
+                start_date=self.start_date,
+                end_date=self.end_date,
+                aggregated=True,
+                **sg["extra_kwargs"]
+            )
+            sg_df.rename(columns=sg["rename"], inplace=True)
+            df = pd.merge(
+                df,
+                sg_df,
+                how="outer",
+                left_on=["timestamp"],
+                right_on=["timestamp"],
+            )
+
+        df.set_index(
+            [
+                "timestamp",
+            ],
+            inplace=True,
+        )
+
+        # reordering columns
+        order = copy.deepcopy(self.order)
+        df = df[order]
+
+        cols = df.select_dtypes(exclude=["string"])
+        df.fillna({c: 0 for c in cols}, inplace=True)
+
+        return df
+
+
+class NoCumulUsageGetter(UsageGetter):
+    """ """
+
+    # subgetters = copy.deepcopy(UsageGetter.subgetters)
+    # subgetters+= [
+    #     {"class": project_getters.Stars, "rename": {}, "extra_kwargs": {}},
+
+    # ]
+
+    subgetters = [
+        {
+            "class": project_getters.Stars,
+            "rename": {},
+            "extra_kwargs": {"cumulative": False},
+        },
+        {
+            "class": project_getters.Forks,
+            "rename": {},
+            "extra_kwargs": {"cumulative": False},
+        },
+        {
+            "class": project_getters.Commits,
+            "rename": {},
+            "extra_kwargs": {"cumulative": False},
+        },
+        {
+            "class": project_getters.Commits,
+            "rename": {"commits": "commits_cumul"},
+            "extra_kwargs": {"cumulative": True},
+        },
+        {
+            "class": project_getters.Developers,
+            "rename": {},
+            "extra_kwargs": {"cumulative": False},
+        },
+        {
+            "class": project_getters.ActiveDevelopers,
+            "rename": {},
+            "extra_kwargs": {"cumulative": False},
+        },
+        {
+            "class": project_getters.Downloads,
+            "rename": {},
+            "extra_kwargs": {"cumulative": False},
+        },
+        {
+            "class": project_getters.Issues,
+            "rename": {},
+            "extra_kwargs": {"cumulative": False},
+        },
+        {
+            "class": project_getters.ClosedIssues,
+            "rename": {},
+            "extra_kwargs": {"cumulative": False},
+        },
+        {
+            "class": project_getters.PullRequests,
+            "rename": {},
+            "extra_kwargs": {"cumulative": False},
+        },
+        {
+            "class": project_getters.MergedPullRequests,
+            "rename": {},
+            "extra_kwargs": {"cumulative": False},
+        },
+        {
+            "class": project_getters.ClosedPullRequests,
+            "rename": {},
+            "extra_kwargs": {"cumulative": False},
+        },
+    ]
 
 
 class IdleReposGetter(UsageGetter):

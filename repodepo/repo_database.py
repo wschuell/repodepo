@@ -2205,14 +2205,69 @@ class Database(object):
     #       self.connection.commit()
 
     def merge_identities(
-        self, identity1, identity2, autocommit=True, record=True, reason=None
+        self,
+        identity1,
+        identity2,
+        it1=None,
+        it2=None,
+        autocommit=True,
+        record=True,
+        reason=None,
     ):
         """
         Merges the user corresponding to both identities.
         user of identity1 gets precedence
         """
-
+        # Translating to integers if given as string
         # Getting user_id that may disappear
+        if isinstance(identity1, str):
+            if self.db_type == "postgres":
+                self.cursor.execute(
+                    """
+                    SELECT i.id FROM identities i
+                    INNER JOIN identity_types it
+                    ON i.identity=%(identity)s
+                    AND it.id=i.identity_type_id
+                    AND it.name=%(it)s
+                    """,
+                    dict(it=it1, identity=identity1),
+                )
+            else:
+                self.cursor.execute(
+                    """
+                    SELECT i.id FROM identities i
+                    INNER JOIN identity_types it
+                    ON i.identity=:identity
+                    AND it.id=i.identity_type_id
+                    AND it.name=:it
+                    """,
+                    dict(it=it1, identity=identity1),
+                )
+            identity1 = self.cursor.fetchone()[0]
+        if isinstance(identity2, str):
+            if self.db_type == "postgres":
+                self.cursor.execute(
+                    """
+                    SELECT i.id FROM identities i
+                    INNER JOIN identity_types it
+                    ON i.identity=%(identity)s
+                    AND it.id=i.identity_type_id
+                    AND it.name=%(it)s
+                    """,
+                    dict(it=it2, identity=identity2),
+                )
+            else:
+                self.cursor.execute(
+                    """
+                    SELECT i.id FROM identities i
+                    INNER JOIN identity_types it
+                    ON i.identity=:identity
+                    AND it.id=i.identity_type_id
+                    AND it.name=:it
+                    """,
+                    dict(it=it2, identity=identity2),
+                )
+            identity2 = self.cursor.fetchone()[0]
         if self.db_type == "postgres":
             self.cursor.execute(
                 """

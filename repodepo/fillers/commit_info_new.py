@@ -101,7 +101,11 @@ def git_parents(repo_folder):
 
     cmd = f"""git rev-list --parents --all"""
     cmd_l = cmd.split(" ")
-    cmd_output = subprocess.check_output(cmd_l, cwd=repo_folder).decode("utf-8")
+    cmd_output = subprocess.check_output(cmd_l, cwd=repo_folder)
+    try:
+        cmd_output = cmd_output.decode("utf-8")
+    except UnicodeDecodeError:
+        cmd_output = cmd_output.decode("latin-1")
     ans = {p.split(" ")[0]: p.split(" ")[1:] for p in cmd_output.split("\n") if p != ""}
     return ans
 
@@ -135,10 +139,14 @@ def git_insertions(repo_folder):
         if repo_folder.endswith(ending):
             repo_folder = repo_folder[: -len(ending)]
 
-    cmd = f"""git log --pretty=tformat:%H --shortstat --all"""
+    cmd = f"""git log --encoding=UTF-8 --pretty=tformat:%H --shortstat --all"""
     cmd_l = cmd.split(" ")
 
-    cmd_output = subprocess.check_output(cmd_l, cwd=repo_folder).decode("utf-8")
+    cmd_output = subprocess.check_output(cmd_l, cwd=repo_folder)
+    try:
+        cmd_output = cmd_output.decode("utf-8")
+    except UnicodeDecodeError:
+        cmd_output = cmd_output.decode("latin-1")
     cmd_output = cmd_output.replace("\n\n", " ")
     # cmd_output = cmd_output.replace(" files changed, ", " ")
     # cmd_output = cmd_output.replace(" file changed, ", " ")
@@ -197,9 +205,13 @@ class CommitsGitLogFiller(commit_info.CommitsFiller):
             if repo_folder.endswith(ending):
                 repo_folder = repo_folder[: -len(ending)]
 
-        cmd = f"""git log --pretty=format:{delim_field.join([FIELDS[f] for f in field_names])} --all"""
+        cmd = f"""git log --encoding=UTF-8 --pretty=format:{delim_field.join([FIELDS[f] for f in field_names])} --all"""
         cmd_l = cmd.split(" ")
-        cmd_output = subprocess.check_output(cmd_l, cwd=repo_folder).decode("utf-8")
+        cmd_output = subprocess.check_output(cmd_l, cwd=repo_folder)
+        try:
+            cmd_output = cmd_output.decode("utf-8")
+        except UnicodeDecodeError:
+            cmd_output = cmd_output.decode("latin-1")
         ans = [
             {k: v for k, v in zip(field_names, l)}
             for l in extract_fields(
@@ -269,14 +281,18 @@ class CommitsGitLogFiller(commit_info.CommitsFiller):
             repo_id = self.db.get_repo_id(source=source, name=name, owner=owner)
 
         if not repo_obj.is_empty:
-            cmd = "git log --format=%H --all"
+            cmd = "git log --encoding=UTF-8 --format=%H --all"
             cmd_l = cmd.split(" ")
             repo_folder = repo_obj.path
             for ending in ("/.git", "/.git/"):
                 if repo_folder.endswith(ending):
                     repo_folder = repo_folder[: -len(ending)]
 
-            cmd_output = subprocess.check_output(cmd_l, cwd=repo_folder).decode("utf-8")
+            cmd_output = subprocess.check_output(cmd_l, cwd=repo_folder)
+            try:
+                cmd_output = cmd_output.decode("utf-8")
+            except UnicodeDecodeError:
+                cmd_output = cmd_output.decode("latin-1")
             commit_sha_list = [s for s in cmd_output.split("\n") if s != ""]
             nb_commits = len(commit_sha_list)
             # def process_commit(commit):

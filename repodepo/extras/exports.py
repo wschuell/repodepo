@@ -1015,86 +1015,904 @@ def generate_tables_file(filepath, db):
                         f.write(f" - {c}\n")
 
 
-def merge_export_commits(
-    orig_db,
-    dest_db,
-    page_size=10**5,
-    ignore_error=False,
-    force=False,
-    batch_size=10**6,
-):
-    """
-    Exporting data from one database to another, being SQLite or PostgreSQL for both
-    """
-    tables_info = dict()
-    if check_db_equal(orig_db, dest_db):
-        # orig_db.logger.info('Cannot export to self, skipping')
-        raise errors.RepoToolsExportSameDBError
-    else:
-        orig_db.cursor.execute(
-            """SELECT info_content FROM _dbinfo WHERE info_type='uuid';"""
-        )
-        orig_uuid = orig_db.cursor.fetchone()[0]
+class Merger(object):
+    def __init__(
+        self,
+        orig_db,
+        dest_db,
+        page_size=10**5,
+        ignore_error=False,
+        force=False,
+        batch_size=10**6,
+        disable_trig=False,
+        fix_seq=False,
+    ):
+        self.orig_db = orig_db
+        self.dest_db = dest_db
+        self.page_size = page_size
+        self.ignore_error = ignore_error
+        self.force = force
+        self.batch_size = batch_size
+        self.disable_trig = disable_trig
+        self.fix_seq = fix_seq
 
-        dest_db.cursor.execute(
-            """SELECT info_content FROM _dbinfo WHERE info_type='exported_from';"""
-        )
-        exportedfrom_uuid = dest_db.cursor.fetchone()
-        if exportedfrom_uuid is not None:
-            exportedfrom_uuid = exportedfrom_uuid[0]
-
-        if orig_uuid is None:
-            raise errors.RepoToolsError("No UUID for origin database")
+    def merge(self):
+        tables_info = dict()
+        if check_db_equal(self.orig_db, self.dest_db):
+            raise errors.RepoToolsExportSameDBError
         else:
-            if dest_db.db_type == "postgres":
-                dest_db.cursor.execute(
-                    disable_triggers_cmd(db=dest_db, tables_info=tables_info_dest)
-                )
-                if dest_db.connection.server_version >= 90600:
-                    dest_db.cursor.execute(
-                        """SET SESSION idle_in_transaction_session_timeout = 0;"""
-                    )
-                else:
-                    dest_db.logger.warning(
-                        "You may experience failure of export due to parameter idle_in_transaction_session_timeout not existing in PostgreSQL<9.6"
-                    )
-            try:
-                for t, columns in tables_info.items():
-                    check_sqlname_safe(t)
+            self.orig_db.cursor.execute(
+                """SELECT info_content FROM _dbinfo WHERE info_type='uuid';"""
+            )
+            orig_uuid = self.orig_db.cursor.fetchone()[0]
 
-                    dest_db.logger.info("Merging table {}".format(t))
-                    # table_data = get_table_data(
-                    #     table=t,
-                    #     columns=columns,
-                    #     db=orig_db,
-                    #     batch_size=batch_size,
-                    #     page_size=page_size,
-                    # )  # as a generator
-                    # insert_table_data(
-                    #     table=t,
-                    #     columns=columns,
-                    #     db=dest_db,
-                    #     table_data=table_data,
-                    #     page_size=page_size,
-                    # )
-
-                    dest_db.connection.commit()
-                    # else:
-                    #     dest_db.logger.info(
-                    #         "Skipping table {}, not in schema of destination DB".format(
-                    #             t
-                    #         )
-                    #     )
-                if dest_db.db_type == "postgres":
-                    dest_db.cursor.execute(
-                        enable_triggers_cmd(db=dest_db, tables_info=tables_info_dest)
-                    )
-                    fix_sequences(db=dest_db)
-            except:
-                # closing connection manually because idle_in_transaction_session_timeout is infinite
+            self.dest_db.cursor.execute(
+                """SELECT info_content FROM _dbinfo WHERE info_type='exported_from';"""
+            )
+            exportedfrom_uuid = self.dest_db.cursor.fetchone()
+            if exportedfrom_uuid is not None:
+                exportedfrom_uuid = exportedfrom_uuid[0]
+            tables_info = get_tables_info(db=self.dest_db)
+            if orig_uuid is None:
+                raise errors.RepoToolsError("No UUID for origin database")
+            else:
+                if self.dest_db.db_type == "postgres":
+                    if self.disable_trig:
+                        self.dest_db.cursor.execute(
+                            disable_triggers_cmd(
+                                db=self.dest_db, tables_info=tables_info
+                            )
+                        )
+                    if self.dest_db.connection.server_version >= 90600:
+                        self.dest_db.cursor.execute(
+                            """SET SESSION idle_in_transaction_session_timeout = 0;"""
+                        )
+                    else:
+                        self.dest_db.logger.warning(
+                            "You may experience failure of export due to parameter idle_in_transaction_session_timeout not existing in PostgreSQL<9.6"
+                        )
                 try:
-                    dest_db.connection.close()
+                    self.merge_steps()
+                    # TODO tables_info
+                    # for t, columns in tables_info.items():
+                    #     check_sqlname_safe(t)
+
+                    #     self.dest_db.logger.info("Merging table {}".format(t))
+
+                    if self.dest_db.db_type == "postgres":
+                        if self.disable_trig:
+                            self.dest_db.cursor.execute(
+                                enable_triggers_cmd(
+                                    db=self.dest_db, tables_info=tables_info
+                                )
+                            )
+                        if self.fix_seq:
+                            fix_sequences(db=self.dest_db)
                 except:
-                    pass
-                raise
-            dest_db.connection.commit()
+                    # closing connection manually because idle_in_transaction_session_timeout is infinite
+                    try:
+                        self.dest_db.connection.close()
+                    except:
+                        pass
+                    raise
+                self.dest_db.connection.commit()
+
+    def merge_steps(self):
+        self.merge_sources()
+        self.merge_urls()
+        self.merge_repos()
+        self.merge_identities()
+        self.merge_commits()
+        self.merge_updates()
+        self.merge_errors()
+
+    def merge_sources(self):
+        self.dest_db.logger.info("Merging sources")
+        self.orig_db.cursor.execute(
+            """
+            SELECT name,url_root
+            FROM sources
+            ;
+            """
+        )
+        sources = list(self.orig_db.cursor.fetchall())
+        if self.dest_db.db_type == "postgres":
+            psycopg2.extras.execute_batch(
+                self.dest_db.cursor,
+                """
+                INSERT INTO sources(name,url_root)
+                SELECT %(source)s,%(url_root)s
+                WHERE NOT EXISTS(
+                    SELECT 1 FROM sources WHERE name=%(source)s)
+                """,
+                [dict(source=s, url_root=u) for s, u in sources],
+            )
+        else:
+            self.dest_db.cursor.executemany(
+                """
+                INSERT INTO sources(name,url_root)
+                SELECT :source,:url_root
+                WHERE NOT EXISTS(
+                    SELECT 1 FROM sources WHERE name=:source)
+                """,
+                [dict(source=s, url_root=u) for s, u in sources],
+            )
+
+    def merge_urls(self):
+        self.dest_db.logger.info("Merging URLs")
+        self.orig_db.cursor.execute(
+            """
+            SELECT u.url,us.name,usr.url_root,u.inserted_at,uc.url
+            FROM urls u
+            LEFT OUTER JOIN sources us
+            ON us.id=u.source
+            LEFT OUTER JOIN sources usr
+            ON usr.id=u.source_root
+            LEFT OUTER JOIN urls uc
+            ON uc.id=u.cleaned_url
+            ;
+            """
+        )
+        info = [
+            dict(
+                url=url,
+                usource=usource,
+                usroot=usroot,
+                uinsert=uinsert,
+                uclean=uclean,
+            )
+            for (
+                url,
+                usource,
+                usroot,
+                uinsert,
+                uclean,
+            ) in self.orig_db.cursor.fetchall()
+        ]
+        if self.dest_db.db_type == "postgres":
+            psycopg2.extras.execute_batch(
+                self.dest_db.cursor,
+                """
+                INSERT INTO urls(url,source,source_root,inserted_at)
+                SELECT %(url)s,us.id,usr.id,%(uinsert)s
+                FROM sources us
+                INNER JOIN sources usr
+                ON us.name=%(usource)s
+                AND usr.url_root=%(usroot)s
+                AND NOT EXISTS(
+                    SELECT url FROM urls WHERE url=%(url)s)
+                """,
+                info,
+            )
+            psycopg2.extras.execute_batch(
+                self.dest_db.cursor,
+                """
+                UPDATE urls SET cleaned_url=uc.id
+                FROM urls uc
+                WHERE urls.url=%(url)s AND uc.url=%(uclean)s
+                """,
+                info,
+            )
+        else:
+            self.dest_db.cursor.executemany(
+                """
+                INSERT INTO urls(url,source,source_root,inserted_at)
+                SELECT :url,us.id,usr.id,:uinsert
+                FROM sources us
+                INNER JOIN sources usr
+                ON us.name=:usource
+                AND usr.url_root=:usroot
+                AND NOT EXISTS(
+                    SELECT url FROM urls WHERE url=:url)
+                """,
+                info,
+            )
+            self.dest_db.cursor.executemany(
+                """
+                UPDATE urls SET cleaned_url=uc.id
+                FROM urls uc
+                WHERE urls.url=:url AND uc.url=:uclean
+                """,
+                info,
+            )
+
+    def merge_repos(self):
+        self.dest_db.logger.info("Merging repositories")
+
+        self.orig_db.cursor.execute(
+            """
+            SELECT s.name,r.owner,r.name,r.created_at,r.updated_at,r.latest_commit_time,r.cloned,u.url
+            FROM repositories r
+            INNER JOIN sources s
+            ON s.id=r.source
+            INNER JOIN urls u
+            ON r.url_id=u.id
+            ;
+            """
+        )
+        info = [
+            dict(
+                source=source,
+                rowner=rowner,
+                rname=rname,
+                rcreatedat=rcreatedat,
+                rupdatedat=rupdatedat,
+                rlatest=rlatest,
+                rcloned=rcloned,
+                url=url,
+            )
+            for (
+                source,
+                rowner,
+                rname,
+                rcreatedat,
+                rupdatedat,
+                rlatest,
+                rcloned,
+                url,
+            ) in self.orig_db.cursor.fetchall()
+        ]
+        if self.dest_db.db_type == "postgres":
+            psycopg2.extras.execute_batch(
+                self.dest_db.cursor,
+                """
+                INSERT INTO repositories(owner,name,source,url_id,created_at,updated_at,cloned,latest_commit_time)
+                SELECT %(rowner)s,%(rname)s,s.id,u.id,%(rcreatedat)s,%(rupdatedat)s,%(rcloned)s,%(rlatest)s
+                FROM urls u
+                INNER JOIN sources s
+                ON s.name=%(source)s
+                AND u.url=%(url)s
+                AND NOT EXISTS(
+                    SELECT 1 FROM repositories r 
+                    INNER JOIN sources s
+                    ON s.name=%(source)s AND r.source=s.id
+                    AND r.owner=%(rowner)s AND r.name=%(rname)s
+                    )
+                """,
+                info,
+            )
+            psycopg2.extras.execute_batch(
+                self.dest_db.cursor,
+                """
+                UPDATE repositories SET 
+                    created_at=%(rcreatedat)s,
+                    updated_at=%(rupdatedat)s,
+                    cloned=%(rcloned)s,
+                    latest_commit_time=%(rlatest)s
+                FROM sources s
+                WHERE s.name=%(source)s
+                AND repositories.source=s.id
+                AND repositories.owner=%(rowner)s
+                AND repositories.name=%(rname)s
+                """,
+                info,
+            )
+        else:
+            self.dest_db.cursor.executemany(
+                """
+                INSERT INTO repositories(owner,name,source,url_id,created_at,updated_at,cloned,latest_commit_time)
+                SELECT :rowner,:rname,s.id,u.id,:rcreatedat,:rupdatedat,:rcloned,:rlatest
+                FROM urls u
+                INNER JOIN sources s
+                ON s.name=:source
+                AND u.url=:url
+                AND NOT EXISTS(
+                    SELECT 1 FROM repositories r 
+                    INNER JOIN sources s
+                    ON s.name=:source AND r.source=s.id
+                    AND r.owner=:rowner AND r.name=:rname
+                    )
+                """,
+                info,
+            )
+            self.dest_db.cursor.executemany(
+                """
+                UPDATE repositories SET 
+                    created_at=:rcreatedat,
+                    updated_at=:rupdatedat,
+                    cloned=:rcloned,
+                    latest_commit_time=:rlatest
+                FROM sources s
+                WHERE s.name=:source
+                AND repositories.source=s.id
+                AND repositories.owner=:rowner
+                AND repositories.name=:rname
+                """,
+                info,
+            )
+
+    def merge_identities(self):
+        self.dest_db.logger.info("Merging identities")
+
+        # insert identity types
+        self.orig_db.cursor.execute(
+            """
+            SELECT it.name FROM identity_types it
+            ;
+            """
+        )
+        info = list(self.orig_db.cursor.fetchall())
+        if self.dest_db.db_type == "postgres":
+            psycopg2.extras.execute_batch(
+                self.dest_db.cursor,
+                """
+                INSERT INTO identity_types(name)
+                SELECT %(it)s
+                WHERE NOT EXISTS(
+                    SELECT 1 FROM identity_types WHERE name=%(it)s)
+                """,
+                [dict(it=a[0]) for a in info],
+            )
+        else:
+            self.dest_db.cursor.executemany(
+                """
+                INSERT INTO identity_types(name)
+                SELECT :it
+                WHERE NOT EXISTS(
+                    SELECT 1 FROM identity_types WHERE name=:it)
+                """,
+                [dict(it=a[0]) for a in info],
+            )
+
+        # insert all identities with their own user
+        self.orig_db.cursor.execute(
+            """
+            SELECT i.identity,it.name,i.attributes,i.created_at,i.inserted_at,i.is_bot FROM identities i
+            INNER JOIN identity_types it
+            ON it.id=i.identity_type_id
+            ;
+            """
+        )
+        info = [
+            dict(identity=i, it=it, att=att, cat=cat, iat=iat, bot=bot)
+            for i, it, att, cat, iat, bot in self.orig_db.cursor.fetchall()
+        ]
+        if self.dest_db.db_type == "postgres":
+            psycopg2.extras.execute_batch(
+                self.dest_db.cursor,
+                """
+                INSERT INTO users(
+                        creation_identity,
+                        creation_identity_type_id)
+                            SELECT %(identity)s,id FROM identity_types WHERE name=%(it)s
+                    AND NOT EXISTS (SELECT 1 FROM identities i
+                        INNER JOIN identity_types it
+                        ON i.identity=%(identity)s AND i.identity_type_id=it.id AND it.name=%(it)s)
+                ;
+                INSERT INTO identities(identity,identity_type_id,attributes,created_at,inserted_at,is_bot,user_id)
+                SELECT %(identity)s,
+                    it.id,
+                    %(att)s,
+                    %(cat)s,
+                    %(iat)s,
+                    %(bot)s,
+                    u.id
+                FROM identity_types it
+                INNER JOIN users u
+                ON  u.creation_identity=%(identity)s AND u.creation_identity_type_id=it.id
+                    AND it.name=%(it)s AND NOT EXISTS(
+                        SELECT 1 FROM identities i INNER JOIN identity_types it
+                        ON it.name=%(it)s AND it.id=i.identity_type_id
+                        AND i.identity=%(identity)s)
+                """,
+                info,
+            )
+        else:
+            self.dest_db.cursor.executemany(
+                """
+                INSERT INTO users(
+                        creation_identity,
+                        creation_identity_type_id)
+                            SELECT :identity,id FROM identity_types WHERE name=:it
+                    AND NOT EXISTS (SELECT 1 FROM identities i
+                        INNER JOIN identity_types it
+                        ON i.identity=:identity AND i.identity_type_id=it.id AND it.name=:it)
+                ;""",
+                info,
+            )
+            self.dest_db.cursor.executemany(
+                """
+                INSERT INTO identities(identity,identity_type_id,attributes,created_at,inserted_at,is_bot,user_id)
+                SELECT :identity,
+                    it.id,
+                    :att,
+                    :cat,
+                    :iat,
+                    :bot,
+                    u.id
+                FROM identity_types it
+                INNER JOIN users u
+                ON  u.creation_identity=:identity AND u.creation_identity_type_id=it.id
+                    AND it.name=:it AND NOT EXISTS(
+                        SELECT 1 FROM identities i INNER JOIN identity_types it
+                        ON it.name=:it AND it.id=i.identity_type_id
+                        AND i.identity=:identity)
+                """,
+                info,
+            )
+
+        # redo all identity merges
+        self.orig_db.cursor.execute(
+            """
+            SELECT i1.identity,it1.name,i2.identity,it2.name,mi.reason
+            FROM merged_identities mi 
+            INNER JOIN identities i1
+            ON i1.id=mi.main_identity_id
+            INNER JOIN identity_types it1
+            ON it1.id=i1.identity_type_id
+            INNER JOIN identities i2
+            ON i2.id=mi.secondary_identity_id
+            INNER JOIN identity_types it2
+            ON it2.id=i2.identity_type_id
+            ;
+            """
+        )
+        info = [
+            dict(i1=i1, it1=it1, i2=i2, it2=it2, reason=reason)
+            for i1, it1, i2, it2, reason in self.orig_db.cursor.fetchall()
+        ]
+        for i, d in enumerate(info):
+            self.dest_db.logger.info(f"Merge identity {i+1}/{len(info)}")
+            self.dest_db.merge_identities(
+                identity1=d["i1"],
+                it1=d["it1"],
+                identity2=d["i2"],
+                it2=d["it2"],
+                reason=d["reason"],
+            )
+
+    def merge_commits(self):
+        self.dest_db.logger.info("Merging commits")
+        # commits
+        self.orig_db.cursor.execute(
+            """
+            SELECT c.sha,
+                    c.insertions,
+                    c.deletions,
+                    c.message,
+                    c.created_at,
+                    c.local_created_at,
+                    c.time_offset,
+                    c.original_created_at,
+                    c.committed_at,
+                    c.local_committed_at,
+                    c.time_offset_committed,
+                    c.original_committed_at,
+                    r.owner,
+                    r.name,
+                    s.name,
+                    ai.identity,
+                    ait.name,
+                    ci.identity,
+                    cit.name
+            FROM commits c
+            INNER JOIN identities ai
+            ON ai.id=c.author_id
+            INNER JOIN identity_types ait
+            ON ait.id=ai.identity_type_id
+            INNER JOIN identities ci
+            ON ci.id=c.committer_id
+            INNER JOIN identity_types cit
+            ON cit.id=ci.identity_type_id
+            LEFT OUTER JOIN repositories r
+            ON r.id=c.repo_id
+            LEFT OUTER JOIN sources s
+            ON s.id=r.source
+            ;
+            """
+        )
+        info = [
+            dict(
+                csha=csha,
+                cinsertions=cinsertions,
+                cdeletions=cdeletions,
+                cmessage=cmessage,
+                ccreated_at=ccreated_at,
+                clocal_created_at=clocal_created_at,
+                ctime_offset=ctime_offset,
+                coriginal_created_at=coriginal_created_at,
+                ccommitted_at=ccommitted_at,
+                clocal_committed_at=clocal_committed_at,
+                ctime_offset_committed=ctime_offset_committed,
+                coriginal_committed_at=coriginal_committed_at,
+                rowner=rowner,
+                rname=rname,
+                sname=sname,
+                aiidentity=aiidentity,
+                aitname=aitname,
+                ciidentity=ciidentity,
+                citname=citname,
+            )
+            for (
+                csha,
+                cinsertions,
+                cdeletions,
+                cmessage,
+                ccreated_at,
+                clocal_created_at,
+                ctime_offset,
+                coriginal_created_at,
+                ccommitted_at,
+                clocal_committed_at,
+                ctime_offset_committed,
+                coriginal_committed_at,
+                rowner,
+                rname,
+                sname,
+                aiidentity,
+                aitname,
+                ciidentity,
+                citname,
+            ) in self.orig_db.cursor.fetchall()
+        ]
+        if self.dest_db.db_type == "postgres":
+            psycopg2.extras.execute_batch(
+                self.dest_db.cursor,
+                """
+                INSERT INTO commits(
+                    sha,
+                    insertions,
+                    deletions,
+                    message,
+                    created_at,
+                    local_created_at,
+                    time_offset,
+                    original_created_at,
+                    committed_at,
+                    local_committed_at,
+                    time_offset_committed,
+                    original_committed_at,
+                    repo_id,
+                    author_id,
+                    committer_id)
+                SELECT 
+                    %(csha)s,
+                    %(cinsertions)s,
+                    %(cdeletions)s,
+                    %(cmessage)s,
+                    %(ccreated_at)s,
+                    %(clocal_created_at)s,
+                    %(ctime_offset)s,
+                    %(coriginal_created_at)s,
+                    %(ccommitted_at)s,
+                    %(clocal_committed_at)s,
+                    %(ctime_offset_committed)s,
+                    %(coriginal_committed_at)s,
+                    r.id,
+                    ai.id,
+                    ci.id
+                FROM identity_types ait
+                INNER JOIN identities ai
+                    ON NOT EXISTS (SELECT 1 FROM commits WHERE sha=%(csha)s)
+                    AND ai.identity=%(aiidentity)s
+                    AND %(aitname)s=ait.name
+                INNER JOIN identity_types cit
+                    ON %(citname)s=cit.name
+                INNER JOIN identities ci
+                    ON ci.identity=%(ciidentity)s
+                LEFT OUTER JOIN sources s
+                    ON s.name=%(sname)s
+                LEFT OUTER JOIN repositories r
+                    ON r.owner=%(rowner)s
+                    AND r.name=%(rname)s
+                    AND s.id=r.source
+                    ;
+                """,
+                info,
+            )
+        else:
+            self.dest_db.cursor.executemany(
+                """
+                INSERT INTO commits(
+                    sha,
+                    insertions,
+                    deletions,
+                    message,
+                    created_at,
+                    local_created_at,
+                    time_offset,
+                    original_created_at,
+                    committed_at,
+                    local_committed_at,
+                    time_offset_committed,
+                    original_committed_at,
+                    repo_id,
+                    author_id,
+                    committer_id)
+                SELECT 
+                    :csha,
+                    :cinsertions,
+                    :cdeletions,
+                    :cmessage,
+                    :ccreated_at,
+                    :clocal_created_at,
+                    :ctime_offset,
+                    :coriginal_created_at,
+                    :ccommitted_at,
+                    :clocal_committed_at,
+                    :ctime_offset_committed,
+                    :coriginal_committed_at,
+                    r.id,
+                    ai.id,
+                    ci.id
+                FROM identity_types ait
+                INNER JOIN identities ai
+                    ON NOT EXISTS (SELECT 1 FROM commits WHERE sha=:csha)
+                    AND ai.identity=:aiidentity
+                    AND :aitname=ait.name
+                INNER JOIN identity_types cit
+                    ON :citname=cit.name
+                INNER JOIN identities ci
+                    ON ci.identity=:ciidentity
+                LEFT OUTER JOIN sources s
+                    ON s.name=:sname
+                LEFT OUTER JOIN repositories r
+                    ON r.owner=:rowner
+                    AND r.name=:rname
+                    AND s.id=r.source
+                    ;
+                """,
+                info,
+            )
+
+        # commit parents
+        self.orig_db.cursor.execute(
+            """
+            SELECT ch.sha,pa.sha
+            FROM commit_parents cp
+            INNER JOIN commits ch
+            ON ch.id=cp.child_id
+            INNER JOIN commits pa
+            ON pa.id=cp.parent_id
+            ;
+            """
+        )
+        info = [
+            dict(child_sha=child_sha, parent_sha=parent_sha)
+            for (child_sha, parent_sha) in self.orig_db.cursor.fetchall()
+        ]
+        if self.dest_db.db_type == "postgres":
+            psycopg2.extras.execute_batch(
+                self.dest_db.cursor,
+                """
+                INSERT INTO commit_parents(
+                    child_id,parent_id)
+                SELECT ch.id,pa.id
+                FROM commits ch
+                INNER JOIN commits pa
+                ON ch.sha=%(child_sha)s
+                AND pa.sha=%(parent_sha)s
+                ON CONFLICT DO NOTHING
+                    ;
+                """,
+                info,
+            )
+        else:
+            self.dest_db.cursor.executemany(
+                """
+                INSERT OR IGNORE INTO commit_parents(
+                    child_id,parent_id)
+                SELECT ch.id,pa.id
+                FROM commits ch
+                INNER JOIN commits pa
+                ON ch.sha=:child_sha
+                AND pa.sha=:parent_sha
+                    ;
+                """,
+                info,
+            )
+
+        # commit repos
+        self.orig_db.cursor.execute(
+            """
+            SELECT c.sha,r.owner,r.name,s.name
+            FROM commit_repos cr
+            INNER JOIN commits c
+            ON c.id=cr.commit_id
+            INNER JOIN repositories r
+            ON r.id=cr.repo_id
+            INNER JOIN sources s
+            ON s.id=r.source
+            ;
+            """
+        )
+        info = [
+            dict(sha=sha, owner=owner, name=name, source=source)
+            for (sha, owner, name, source) in self.orig_db.cursor.fetchall()
+        ]
+        if self.dest_db.db_type == "postgres":
+            psycopg2.extras.execute_batch(
+                self.dest_db.cursor,
+                """
+                INSERT INTO commit_repos(
+                    commit_id,repo_id)
+                SELECT c.id,r.id
+                FROM sources s
+                INNER JOIN repositories r
+                ON s.name=%(source)s
+                AND r.owner=%(owner)s AND r.name=%(name)s
+                AND s.id=r.source
+                INNER JOIN commits c
+                ON c.sha=%(sha)s
+                ON CONFLICT DO NOTHING
+                    ;
+                """,
+                info,
+            )
+        else:
+            self.dest_db.cursor.executemany(
+                """
+                INSERT OR IGNORE INTO commit_repos(
+                    commit_id,repo_id)
+                SELECT c.id,r.id
+                FROM sources s
+                INNER JOIN repositories r
+                ON s.name=:source
+                AND r.owner=:owner AND r.name=:name
+                AND s.id=r.source
+                INNER JOIN commits c
+                ON c.sha=:sha
+                    ;
+                """,
+                info,
+            )
+
+    def merge_updates(self):
+        self.dest_db.logger.info("Merging updates")
+        # table updates
+        self.orig_db.cursor.execute(
+            """
+            SELECT table_name,
+                success,
+                tu.updated_at,
+                info,
+                r.owner,
+                r.name,
+                s.name,
+                i.identity,
+                it.name
+            FROM table_updates tu
+            LEFT OUTER JOIN repositories r
+            ON r.id=tu.repo_id
+            LEFT OUTER JOIN sources s
+            ON r.source=s.id
+            LEFT OUTER JOIN identities i
+            ON i.id=tu.identity_id
+            LEFT OUTER JOIN identity_types it
+            ON it.id=i.identity_type_id
+            ;
+            """
+        )
+        info = [
+            dict(
+                table_name=table_name,
+                success=success,
+                updated_at=updated_at,
+                info=info,
+                rowner=rowner,
+                rname=rname,
+                sname=sname,
+                identity=identity,
+                it=it,
+            )
+            for (
+                table_name,
+                success,
+                updated_at,
+                info,
+                rowner,
+                rname,
+                sname,
+                identity,
+                it,
+            ) in self.orig_db.cursor.fetchall()
+        ]
+        if self.dest_db.db_type == "postgres":
+            psycopg2.extras.execute_batch(
+                self.dest_db.cursor,
+                """
+                INSERT INTO table_updates(
+                    table_name,success,updated_at,info,repo_id,identity_id)
+                SELECT 
+                    %(table_name)s,
+                    %(success)s,
+                    %(updated_at)s,
+                    %(info)s,
+                    (SELECT r.id FROM sources s
+                INNER JOIN repositories r
+                ON s.name=%(sname)s
+                AND r.owner=%(rowner)s AND r.name=%(rname)s
+                AND s.id=r.source),
+                    (SELECT i.id FROM identity_types it
+                        INNER JOIN identities i
+                    ON i.identity=%(identity)s
+                    AND %(it)s=it.name)
+                    ;
+                """,
+                info,
+            )
+        else:
+            self.dest_db.cursor.executemany(
+                """
+                INSERT INTO table_updates(
+                    table_name,success,updated_at,info,repo_id,identity_id)
+                SELECT 
+                    :table_name,
+                    :success,
+                    :updated_at,
+                    :info,
+                    (SELECT r.id FROM sources s
+                INNER JOIN repositories r
+                ON s.name=:sname
+                AND r.owner=:rowner AND r.name=:rname
+                AND s.id=r.source),
+                    (SELECT i.id FROM identity_types it
+                        INNER JOIN identities i
+                    ON i.identity=:identity
+                    AND :it=it.name)
+                    ;
+                """,
+                info,
+            )
+        # full updates
+        self.orig_db.cursor.execute(
+            """
+            SELECT update_type,updated_at FROM full_updates
+            ;
+            """
+        )
+        info = [
+            dict(utype=utype, uat=uat)
+            for (utype, uat) in self.orig_db.cursor.fetchall()
+        ]
+        if self.dest_db.db_type == "postgres":
+            psycopg2.extras.execute_batch(
+                self.dest_db.cursor,
+                """
+                INSERT INTO full_updates(update_type,updated_at)
+                SELECT %(utype)s,%(uat)s
+                    ;
+                """,
+                info,
+            )
+        else:
+            self.dest_db.cursor.executemany(
+                """
+                INSERT INTO full_updates(update_type,updated_at)
+                SELECT :utype,:uat
+                    ;
+                """,
+                info,
+            )
+
+    def merge_errors(self):
+        self.dest_db.logger.info("Merging errors")
+        self.orig_db.cursor.execute(
+            """
+            SELECT error,created_at FROM _error_logs
+            ;
+            """
+        )
+        info = [
+            dict(error=error, cat=cat)
+            for (error, cat) in self.orig_db.cursor.fetchall()
+        ]
+        if self.dest_db.db_type == "postgres":
+            psycopg2.extras.execute_batch(
+                self.dest_db.cursor,
+                """
+                INSERT INTO _error_logs(error,created_at)
+                SELECT %(error)s,%(cat)s
+                    ;
+                """,
+                info,
+            )
+        else:
+            self.dest_db.cursor.executemany(
+                """
+                INSERT INTO _error_logs(error,created_at)
+                SELECT :error,:cat
+                    ;
+                """,
+                info,
+            )
