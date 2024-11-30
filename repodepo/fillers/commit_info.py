@@ -521,7 +521,35 @@ class CommitsFiller(fillers.Filler):
             clone_folder=clone_folder,
         )
         clone_filler.prepare()
-        clone_filler.apply()
+        try:
+            clone_filler.apply()
+        except:
+            if self.db.db_type == "postgres":
+                self.db.cursor.execute(
+                    """INSERT INTO table_updates(repo_id,table_name,success) 
+                        SELECT r.id,'commits',false
+                        FROM sources s
+                        INNER JOIN repositories r
+                        ON s.name=%(source)s AND s.id=r.source
+                        AND r.owner=%(owner)s
+                        AND r.name=%(name)s
+                        ;""",
+                    dict(source=source, name=name, owner=owner),
+                )
+            else:
+                self.db.cursor.execute(
+                    """INSERT INTO table_updates(repo_id,table_name,success) 
+                        SELECT r.id,'commits',0
+                        FROM sources s
+                        INNER JOIN repositories r
+                        ON s.name=:source AND s.id=r.source
+                        AND r.owner=:owner
+                        AND r.name=:name
+                        ;""",
+                    dict(source=source, name=name, owner=owner),
+                )
+            self.db.connection.commit()
+            raise
 
     def list_commits(
         self,
