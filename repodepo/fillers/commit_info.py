@@ -40,6 +40,7 @@ class CommitsFiller(fillers.Filler):
         refresh_list=True,
         solve_orig_repo=True,
         full_updates_notif=True,
+        skip_errored=False,
         **kwargs
     ):
         self.full_updates_notif = full_updates_notif
@@ -57,6 +58,7 @@ class CommitsFiller(fillers.Filler):
         self.fix_created_at = fix_created_at
         self.url_roots = dict()
         self.clean_repo = clean_repo
+        self.skip_errored = skip_errored
         if workers is None:
             try:
                 nb_cpu = psutil.Process().cpu_affinity()
@@ -142,7 +144,7 @@ class CommitsFiller(fillers.Filler):
                         INNER JOIN sources s
                         ON s.id=r.source AND (r.cloned OR (NOT %(clone_check)s))
                         INNER JOIN table_updates tu
-                        ON tu.table_name=%(option)s AND tu.repo_id=r.id AND tu.success)
+                        ON tu.table_name=%(option)s AND tu.repo_id=r.id AND (tu.success OR %(skip_err)s))
                         EXCEPT
                         (SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id,extract(epoch from r.latest_commit_time)
                         FROM repositories r
@@ -155,7 +157,11 @@ class CommitsFiller(fillers.Filler):
                         )
                         ORDER BY sname,rowner,rname
                         ;""",
-                        dict(option=option, clone_check=not self.clone_absent),
+                        dict(
+                            option=option,
+                            clone_check=not self.clone_absent,
+                            skip_err=self.skip_errored,
+                        ),
                     )
                 else:
                     self.db.cursor.execute(
@@ -170,7 +176,7 @@ class CommitsFiller(fillers.Filler):
                         INNER JOIN sources s
                         ON s.id=r.source AND (r.cloned OR ( NOT :clone_check))
                         INNER JOIN table_updates tu
-                        ON tu.table_name=:option AND tu.repo_id=r.id AND tu.success
+                        ON tu.table_name=:option AND tu.repo_id=r.id AND (tu.success OR :skip_err)
                         EXCEPT
                         SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
                         FROM repositories r
@@ -179,10 +185,14 @@ class CommitsFiller(fillers.Filler):
                         INNER JOIN table_updates tu
                         ON tu.table_name='clones' AND tu.repo_id=r.id
                         GROUP BY s.name ,r.owner  ,r.name  ,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
-                        HAVING NOT BOOL_AND(tu.success)
+                        HAVING COUNT(tu.success)>SUM(tu.success)
                         ORDER BY sname,rowner,rname
                         ;""",
-                        dict(option=option, clone_check=not self.clone_absent),
+                        dict(
+                            option=option,
+                            clone_check=not self.clone_absent,
+                            skip_err=self.skip_errored,
+                        ),
                     )
             else:
                 if self.db.db_type == "postgres":
@@ -192,9 +202,19 @@ class CommitsFiller(fillers.Filler):
                         FROM repositories r
                         INNER JOIN sources s
                         ON s.id=r.source AND (r.cloned OR ( NOT %(clone_check)s))
+                        EXCEPT
+                        (SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id,extract(epoch from r.latest_commit_time)
+                        FROM repositories r
+                        INNER JOIN sources s
+                        ON s.id=r.source AND (r.cloned OR (NOT %(clone_check)s))
+                        INNER JOIN table_updates tu
+                        ON %(skip_err)s AND tu.table_name LIKE 'commit%' AND tu.repo_id=r.id)
                         ORDER BY s.name,r.owner,r.name
                         ;""",
-                        dict(clone_check=not self.clone_absent),
+                        dict(
+                            clone_check=not self.clone_absent,
+                            skip_err=self.skip_errored,
+                        ),
                     )
                 else:
                     self.db.cursor.execute(
@@ -203,9 +223,19 @@ class CommitsFiller(fillers.Filler):
                         FROM repositories r
                         INNER JOIN sources s
                         ON s.id=r.source AND (r.cloned OR ( NOT :clone_check))
+                        EXCEPT
+                        SELECT s.name AS sname,r.owner AS rowner,r.name AS rname,r.id,CAST(strftime('%s', r.latest_commit_time) AS INTEGER)
+                        FROM repositories r
+                        INNER JOIN sources s
+                        ON s.id=r.source AND (r.cloned OR ( NOT :clone_check))
+                        INNER JOIN table_updates tu
+                        ON :skip_err AND tu.table_name=LIKE 'commit%' AND tu.repo_id=r.id
                         ORDER BY s.name,r.owner,r.name
                         ;""",
-                        dict(clone_check=not self.clone_absent),
+                        dict(
+                            clone_check=not self.clone_absent,
+                            skip_err=self.skip_errored,
+                        ),
                     )
 
             return [

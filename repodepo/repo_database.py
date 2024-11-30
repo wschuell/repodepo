@@ -312,39 +312,45 @@ class Database(object):
         """
         return self.__class__(do_init=False, timeout=timeout, **self.db_conninfo)
 
-    def init_db(self):
+    def init_db(self, retries=1):
         """
         Initializing the database, with correct tables, constraints and indexes.
         """
         logger.info("Creating database ({}) table and indexes".format(self.db_type))
-        if self.db_type == "sqlite":
-            # with open(os.path.join(os.path.dirname(__file__),'initscript_sqlite.sql'),'r') as f:
-            #   self.DB_INIT = f.read()
-            for q in self.DB_INIT.split(";")[:-1]:
-                self.cursor.execute(q)
+        while retries >= 0:
+            try:
+                if self.db_type == "sqlite":
+                    # with open(os.path.join(os.path.dirname(__file__),'initscript_sqlite.sql'),'r') as f:
+                    #   self.DB_INIT = f.read()
+                    for q in self.DB_INIT.split(";")[:-1]:
+                        self.cursor.execute(q)
 
-            self.cursor.execute(
-                """INSERT OR IGNORE INTO _dbinfo(info_type,info_content) VALUES('uuid',?) ;""",
-                (str(uuid.uuid1()),),
-            )
-            self.cursor.execute(
-                """INSERT OR IGNORE INTO _dbinfo(info_type,info_content) VALUES('DB_INIT',?) ;""",
-                (self.DB_INIT,),
-            )
+                    self.cursor.execute(
+                        """INSERT OR IGNORE INTO _dbinfo(info_type,info_content) VALUES('uuid',?) ;""",
+                        (str(uuid.uuid1()),),
+                    )
+                    self.cursor.execute(
+                        """INSERT OR IGNORE INTO _dbinfo(info_type,info_content) VALUES('DB_INIT',?) ;""",
+                        (self.DB_INIT,),
+                    )
 
-        elif self.db_type == "postgres":
-            # with open(os.path.join(os.path.dirname(__file__),'initscript_postgres.sql'),'r') as f:
-            #   self.DB_INIT = f.read()
-            self.cursor.execute(self.DB_INIT)
-            self.cursor.execute(
-                """INSERT INTO _dbinfo(info_type,info_content) VALUES('uuid',%s) ON CONFLICT (info_type) DO NOTHING ;""",
-                (str(uuid.uuid1()),),
-            )
-            # self.cursor.execute('''INSERT INTO _dbinfo(info_type,info_content) VALUES('DB_INIT',%s) ON CONFLICT (info_type) DO UPDATE SET info_content=EXCLUDED.info_content;''',(self.DB_INIT,))
-            self.cursor.execute(
-                """INSERT INTO _dbinfo(info_type,info_content) VALUES('DB_INIT',%s) ON CONFLICT DO NOTHING;""",
-                (self.DB_INIT,),
-            )
+                elif self.db_type == "postgres":
+                    # with open(os.path.join(os.path.dirname(__file__),'initscript_postgres.sql'),'r') as f:
+                    #   self.DB_INIT = f.read()
+                    self.cursor.execute(self.DB_INIT)
+                    self.cursor.execute(
+                        """INSERT INTO _dbinfo(info_type,info_content) VALUES('uuid',%s) ON CONFLICT (info_type) DO NOTHING ;""",
+                        (str(uuid.uuid1()),),
+                    )
+                    # self.cursor.execute('''INSERT INTO _dbinfo(info_type,info_content) VALUES('DB_INIT',%s) ON CONFLICT (info_type) DO UPDATE SET info_content=EXCLUDED.info_content;''',(self.DB_INIT,))
+                    self.cursor.execute(
+                        """INSERT INTO _dbinfo(info_type,info_content) VALUES('DB_INIT',%s) ON CONFLICT DO NOTHING;""",
+                        (self.DB_INIT,),
+                    )
+                retries = -1
+                break
+            except:
+                retries -= 1
 
         self.connection.commit()
 
