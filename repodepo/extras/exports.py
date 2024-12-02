@@ -1268,6 +1268,7 @@ class Merger(object):
                     ON s.name=%(source)s AND r.source=s.id
                     AND r.owner=%(rowner)s AND r.name=%(rname)s
                     )
+                ;
                 """,
                 info,
             )

@@ -1491,6 +1491,8 @@ class ClonesFiller(fillers.Filler):
                 success = True
             except pygit2.GitError as e:
                 if "No space left on device" in str(e):
+                    self.logger.info(err_txt)
+                    self.db.log_error(err_txt)
                     raise
                 else:
                     err_txt = "Git Error for repo {}/{}/{}: {}".format(

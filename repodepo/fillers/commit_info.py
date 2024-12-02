@@ -394,7 +394,9 @@ class CommitsFiller(fillers.Filler):
         repo_list = self.get_repo_list(all_commits=all_commits, option="commit_parents")
         if force or (last_fu is None) or (last_dl is not None and last_fu < last_dl):
             for repo_info in repo_list:
-                with tempfile.TemporaryDirectory() as temp_clonedir:
+                with tempfile.TemporaryDirectory(
+                    prefix="repodepo_clones_"
+                ) as temp_clonedir:
                     if self.temp_repodir:
                         clone_folder = temp_clonedir
                     else:
