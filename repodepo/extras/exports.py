@@ -1225,7 +1225,7 @@ class Merger(object):
             FROM repositories r
             INNER JOIN sources s
             ON s.id=r.source
-            INNER JOIN urls u
+            LEFT OUTER JOIN urls u
             ON r.url_id=u.id
             ;
             """
