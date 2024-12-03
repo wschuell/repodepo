@@ -1378,7 +1378,9 @@ class Merger(object):
                             SELECT %(identity)s,id FROM identity_types WHERE name=%(it)s
                     AND NOT EXISTS (SELECT 1 FROM identities i
                         INNER JOIN identity_types it
-                        ON i.identity=%(identity)s AND i.identity_type_id=it.id AND it.name=%(it)s)
+                        ON i.identity=%(identity)s AND i.identity_type_id=it.id AND it.name=%(it)s
+                        )
+                ON CONFLICT DO NOTHING
                 ;
                 INSERT INTO identities(identity,identity_type_id,attributes,created_at,inserted_at,is_bot,user_id)
                 SELECT %(identity)s,
@@ -1401,7 +1403,7 @@ class Merger(object):
         else:
             self.dest_db.cursor.executemany(
                 """
-                INSERT INTO users(
+                INSERT OR IGNORE INTO users(
                         creation_identity,
                         creation_identity_type_id)
                             SELECT :identity,id FROM identity_types WHERE name=:it
