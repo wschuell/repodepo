@@ -1258,8 +1258,8 @@ class Merger(object):
                 """
                 INSERT INTO repositories(owner,name,source,url_id,created_at,updated_at,cloned,latest_commit_time)
                 SELECT %(rowner)s,%(rname)s,s.id,u.id,%(rcreatedat)s,%(rupdatedat)s,%(rcloned)s,%(rlatest)s
-                FROM urls u
-                INNER JOIN sources s
+                FROM sources s
+                LEFT OUTER JOIN urls u
                 ON s.name=%(source)s
                 AND u.url=%(url)s
                 AND NOT EXISTS(
@@ -1293,8 +1293,8 @@ class Merger(object):
                 """
                 INSERT INTO repositories(owner,name,source,url_id,created_at,updated_at,cloned,latest_commit_time)
                 SELECT :rowner,:rname,s.id,u.id,:rcreatedat,:rupdatedat,:rcloned,:rlatest
-                FROM urls u
-                INNER JOIN sources s
+                FROM sources s
+                LEFT OUTER JOIN urls u
                 ON s.name=:source
                 AND u.url=:url
                 AND NOT EXISTS(
