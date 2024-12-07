@@ -1262,12 +1262,9 @@ class Merger(object):
                 LEFT OUTER JOIN urls u
                 ON s.name=%(source)s
                 AND u.url=%(url)s
-                AND NOT EXISTS(
-                    SELECT 1 FROM repositories r 
-                    INNER JOIN sources s
-                    ON s.name=%(source)s AND r.source=s.id
-                    AND r.owner=%(rowner)s AND r.name=%(rname)s
-                    )
+                LEFT OUTER JOIN repositories r 
+                ON r.source=s.id AND r.owner=%(rowner)s AND r.name=%(rname)s
+                WHERE r.id IS NULL
                 ;
                 """,
                 info,
@@ -1297,12 +1294,10 @@ class Merger(object):
                 LEFT OUTER JOIN urls u
                 ON s.name=:source
                 AND u.url=:url
-                AND NOT EXISTS(
-                    SELECT 1 FROM repositories r 
-                    INNER JOIN sources s
-                    ON s.name=:source AND r.source=s.id
-                    AND r.owner=:rowner AND r.name=:rname
-                    )
+                LEFT OUTER JOIN repositories r 
+                ON r.source=s.id AND r.owner=:rowner AND r.name=:rname
+                WHERE r.id IS NULL
+                ;
                 """,
                 info,
             )
