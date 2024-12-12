@@ -1654,6 +1654,7 @@ class Merger(object):
             )
 
         # commit parents
+        self.dest_db.logger.info("Merging commit parenthood")
         self.orig_db.cursor.execute(
             """
             SELECT ch.sha,pa.sha
@@ -1701,6 +1702,8 @@ class Merger(object):
             )
 
         # commit repos
+        self.dest_db.logger.info("Merging commit repo links")
+
         self.orig_db.cursor.execute(
             """
             SELECT c.sha,r.owner,r.name,s.name
@@ -1726,12 +1729,12 @@ class Merger(object):
                     commit_id,repo_id)
                 SELECT c.id,r.id
                 FROM sources s
-                INNER JOIN repositories r
-                ON s.name=%(source)s
-                AND r.owner=%(owner)s AND r.name=%(name)s
-                AND s.id=r.source
                 INNER JOIN commits c
                 ON c.sha=%(sha)s
+                AND s.name=%(source)s
+                INNER JOIN repositories r
+                ON r.owner=%(owner)s AND r.name=%(name)s
+                AND s.id=r.source
                 ON CONFLICT DO NOTHING
                     ;
                 """,
@@ -1744,12 +1747,12 @@ class Merger(object):
                     commit_id,repo_id)
                 SELECT c.id,r.id
                 FROM sources s
-                INNER JOIN repositories r
-                ON s.name=:source
-                AND r.owner=:owner AND r.name=:name
-                AND s.id=r.source
                 INNER JOIN commits c
                 ON c.sha=:sha
+                AND s.name=:source
+                INNER JOIN repositories r
+                ON r.owner=:owner AND r.name=:name
+                AND s.id=r.source
                     ;
                 """,
                 info,
