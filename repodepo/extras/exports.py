@@ -1220,7 +1220,7 @@ class Merger(object):
                 if conflict_column and conflict_update_columns:
                     update_set = ", ".join(
                         [
-                            f"{col} = EXCLUDED.{col} WHERE EXCLUDED.{col} IS NOT NULL"
+                            f"{col} = CASE WHEN EXCLUDED.{col} IS NOT NULL THEN EXCLUDED.{col} ELSE {original_table}.{col} END"
                             for col in conflict_update_columns
                         ]
                     )
