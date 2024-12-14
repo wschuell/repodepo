@@ -1418,7 +1418,7 @@ class Merger(object):
         )
         self.dest_db.cursor.execute(
             f"""
-            DROP TABLE temp_{self.uuid_val}_sources;
+            DROP TABLE temp_{self.uuid_val}_sources
             ;"""
         )
 
@@ -1511,7 +1511,7 @@ class Merger(object):
         )
         self.dest_db.cursor.execute(
             f"""
-            DROP TABLE temp_{self.uuid_val}_urls;
+            DROP TABLE temp_{self.uuid_val}_urls
             ;"""
         )
 
@@ -1626,7 +1626,7 @@ class Merger(object):
         )
         self.dest_db.cursor.execute(
             f"""
-            DROP TABLE temp_{self.uuid_val}_repositories;
+            DROP TABLE temp_{self.uuid_val}_repositories
             ;"""
         )
 
@@ -1800,17 +1800,17 @@ class Merger(object):
 
         self.dest_db.cursor.execute(
             f"""
-            DROP TABLE temp_{self.uuid_val}_identities;
+            DROP TABLE temp_{self.uuid_val}_identities
             ;"""
         )
         self.dest_db.cursor.execute(
             f"""
-            DROP TABLE temp_{self.uuid_val}_users;
+            DROP TABLE temp_{self.uuid_val}_users
             ;"""
         )
         self.dest_db.cursor.execute(
             f"""
-            DROP TABLE temp_{self.uuid_val}_identity_types;
+            DROP TABLE temp_{self.uuid_val}_identity_types
             ;"""
         )
 
@@ -2131,17 +2131,17 @@ class Merger(object):
         )
         self.dest_db.cursor.execute(
             f"""
-            DROP TABLE temp_{self.uuid_val}_commits;
+            DROP TABLE temp_{self.uuid_val}_commits
             ;"""
         )
         self.dest_db.cursor.execute(
             f"""
-            DROP TABLE temp_{self.uuid_val}_commit_parents;
+            DROP TABLE temp_{self.uuid_val}_commit_parents
             ;"""
         )
         self.dest_db.cursor.execute(
             f"""
-            DROP TABLE temp_{self.uuid_val}_commit_repos;
+            DROP TABLE temp_{self.uuid_val}_commit_repos
             ;"""
         )
 
@@ -2280,7 +2280,7 @@ class Merger(object):
             )
         self.dest_db.cursor.execute(
             f"""
-            DROP TABLE temp_{self.uuid_val}_table_updates;
+            DROP TABLE temp_{self.uuid_val}_table_updates
             ;"""
         )
 
