@@ -1193,7 +1193,7 @@ class Merger(object):
                     f"""
                     SELECT column_name
                     FROM information_schema.columns
-                    WHERE table_name = %s AND column_default NOT LIKE 'nextval%%';
+                    WHERE table_name = %s AND (column_default IS NULL OR column_default NOT LIKE 'nextval%%');
                 """,
                     (original_table,),
                 )
