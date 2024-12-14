@@ -11,6 +11,8 @@ import psycopg2
 import psycopg2.extras
 from . import errors
 from . import check_sqlname_safe
+import string
+import re
 
 
 def sizeof_fmt(num, suffix="B"):
@@ -1036,7 +1038,270 @@ class Merger(object):
         self.disable_trig = disable_trig
         self.fix_seq = fix_seq
 
+    def get_allowed_tables(self):
+        if self.orig_db.db_type == "postgres":
+            self.orig_db.cursor.execute(
+                """SELECT table_name
+                        FROM information_schema.tables
+                        WHERE table_schema = 'public' AND table_type = 'BASE TABLE';"""
+            )
+        else:
+            self.orig_db.cursor.execute(
+                """SELECT name
+                    FROM sqlite_master
+                    WHERE type = 'table' AND name NOT LIKE 'sqlite_%';
+                ;"""
+            )
+        self.ALLOWED_TABLES = [r[0] for r in self.orig_db.cursor.fetchall()]
+
+    def create_temp_table(self, original_table):
+        """
+        Create a new table with the same defaults and separate sequences for serial columns.
+
+        The new table will have the name temp_{self.uuid_val}_{original_table}.
+
+        Args:
+            original_table (str): Name of the original table.
+        """
+        if not hasattr(self, "ALLOWED_TABLES"):
+            self.get_allowed_tables()
+
+        if original_table not in self.ALLOWED_TABLES:
+            raise ValueError(
+                f"Table '{original_table}' is not in the allowed tables list."
+            )
+
+        db_type = self.dest_db.db_type
+        connection = self.dest_db.connection
+
+        new_table = f"temp_{self.uuid_val}_{original_table}"
+
+        if db_type == "postgres":
+            with connection.cursor() as cursor:
+                # Get column definitions with defaults
+                cursor.execute(
+                    f"""
+                    SELECT column_name, data_type, column_default, is_nullable
+                    FROM information_schema.columns
+                    WHERE table_name = %s;
+                """,
+                    (original_table,),
+                )
+                columns = cursor.fetchall()
+
+                # Build CREATE TABLE statement
+                create_table_query = f"CREATE TEMP TABLE {new_table} (\n"
+                for col in columns:
+                    column_name, data_type, column_default, is_nullable = col
+
+                    # Handle defaults
+                    default_clause = (
+                        f" DEFAULT {column_default}" if column_default else ""
+                    )
+                    nullable_clause = " NOT NULL" if is_nullable == "NO" else ""
+
+                    create_table_query += f"    {column_name} {data_type}{default_clause}{nullable_clause},\n"
+
+                create_table_query = create_table_query.rstrip(",\n") + "\n);"
+
+                cursor.execute(create_table_query)
+
+                # Handle SERIAL columns (create new sequences)
+                for col in columns:
+                    column_name, data_type, column_default, _ = col
+                    if column_default and "nextval" in column_default:
+                        match = re.search(
+                            r"nextval\('(.+?)'::regclass\)", column_default
+                        )
+                        if match:
+                            original_sequence = match.group(1)
+                            new_sequence = f"{new_table}_{column_name}_seq"
+
+                            cursor.execute(f"CREATE SEQUENCE {new_sequence};")
+                            cursor.execute(
+                                f"ALTER TABLE {new_table} ALTER COLUMN {column_name} SET DEFAULT nextval('{new_sequence}');"
+                            )
+
+        elif db_type == "sqlite":
+            cursor = connection.cursor()
+
+            # Get the table schema
+            cursor.execute(f"PRAGMA table_info({original_table});")
+            columns = cursor.fetchall()
+
+            # Build CREATE TABLE statement
+            create_table_query = f"CREATE TABLE {new_table} (\n"
+            for col in columns:
+                column_name, column_type, not_null, default_value, _, pk = col
+
+                # Handle defaults
+                default_clause = f" DEFAULT {default_value}" if default_value else ""
+                nullable_clause = " NOT NULL" if not_null else ""
+
+                create_table_query += f"    {column_name} {column_type}{default_clause}{nullable_clause},\n"
+
+            create_table_query = create_table_query.rstrip(",\n") + "\n);"
+
+            cursor.execute(create_table_query)
+
+        else:
+            raise ValueError("Unsupported database type. Use 'postgres' or 'sqlite'.")
+
+    def flush_temp_table_to_original(
+        self,
+        original_table,
+        conflict_column=None,
+        conflict_update_columns=None,
+        ignore_columns=None,
+    ):
+        """
+        Flush the data from a temporary table into the original table using an INSERT ... SELECT query.
+
+        This method avoids inserting into serial primary key columns for both PostgreSQL and SQLite.
+        If a conflict occurs, it resolves using the conflict_column and updates specified columns with values from the new row.
+        If conflict_column is None, it performs an ON CONFLICT DO NOTHING.
+
+        Args:
+            original_table (str): The name of the original table to flush data into.
+            conflict_column (str, optional): The column to check for conflicts.
+            conflict_update_columns (list, optional): A list of column names to update in case of a conflict.
+            ignore_columns (list, optional): A list of column names to exclude from the INSERT statement.
+
+        Returns:
+            int: The number of rows inserted into the original table.
+        """
+        if original_table not in self.ALLOWED_TABLES:
+            raise ValueError(
+                f"Table '{original_table}' is not in the allowed tables list."
+            )
+
+        db_type = self.orig_db.db_type
+        connection = self.orig_db.connection
+
+        temp_table = f"temp_{self.uuid_val}_{original_table}"
+
+        if db_type == "postgres":
+            with connection.cursor() as cursor:
+                # Get column names excluding serial primary key columns
+                cursor.execute(
+                    f"""
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_name = %s AND column_default NOT LIKE 'nextval%%';
+                """,
+                    (original_table,),
+                )
+                columns = [row[0] for row in cursor.fetchall()]
+
+                if not columns:
+                    raise ValueError(
+                        f"No columns available for insertion into '{original_table}'."
+                    )
+                if ignore_columns:
+                    columns = [col for col in columns if col not in ignore_columns]
+
+                if conflict_update_columns:
+                    invalid_columns = [
+                        col for col in conflict_update_columns if col not in columns
+                    ]
+                    if invalid_columns:
+                        raise ValueError(
+                            f"Invalid conflict update columns: {invalid_columns}. They are not in the list of columns for '{original_table}'."
+                        )
+
+                column_list = ", ".join(columns)
+
+                if conflict_column and conflict_update_columns:
+                    update_set = ", ".join(
+                        [
+                            f"{col} = EXCLUDED.{col} WHERE EXCLUDED.{col} IS NOT NULL"
+                            for col in conflict_update_columns
+                        ]
+                    )
+                    insert_query = f"""
+                        INSERT INTO {original_table} ({column_list})
+                        SELECT {column_list} FROM {temp_table}
+                        ON CONFLICT ({conflict_column}) DO UPDATE SET {update_set};
+                    """
+                elif conflict_column:
+                    insert_query = f"""
+                        INSERT INTO {original_table} ({column_list})
+                        SELECT {column_list} FROM {temp_table}
+                        ON CONFLICT ({conflict_column}) DO NOTHING;
+                    """
+                else:
+                    insert_query = f"""
+                        INSERT INTO {original_table} ({column_list})
+                        SELECT {column_list} FROM {temp_table}
+                        ON CONFLICT DO NOTHING;
+                    """
+
+                cursor.execute(insert_query)
+                connection.commit()
+                return cursor.rowcount
+
+        elif db_type == "sqlite":
+            cursor = connection.cursor()
+
+            # Get column names excluding AUTOINCREMENT primary key columns
+            cursor.execute(f"PRAGMA table_info({original_table});")
+            columns = [row[1] for row in cursor.fetchall() if not row[-1]]
+
+            if not columns:
+                raise ValueError(
+                    f"No columns available for insertion into '{original_table}'."
+                )
+            if ignore_columns:
+                columns = [col for col in columns if col not in ignore_columns]
+
+            if conflict_update_columns:
+                invalid_columns = [
+                    col for col in conflict_update_columns if col not in columns
+                ]
+                if invalid_columns:
+                    raise ValueError(
+                        f"Invalid conflict update columns: {invalid_columns}. They are not in the list of columns for '{original_table}'."
+                    )
+
+            column_list = ", ".join(columns)
+
+            if conflict_column and conflict_update_columns:
+                update_set = ", ".join(
+                    [
+                        f"{col} = excluded.{col} WHERE EXCLUDED.{col} IS NOT NULL"
+                        for col in conflict_update_columns
+                    ]
+                )
+                insert_query = f"""
+                    INSERT INTO {original_table} ({column_list})
+                    SELECT {column_list} FROM {temp_table}
+                    ON CONFLICT ({conflict_column}) DO UPDATE SET {update_set};
+                """
+            elif conflict_column:
+                insert_query = f"""
+                    INSERT INTO {original_table} ({column_list})
+                    SELECT {column_list} FROM {temp_table}
+                    ON CONFLICT ({conflict_column}) DO NOTHING;
+                """
+            else:
+                insert_query = f"""
+                    INSERT INTO {original_table} ({column_list})
+                    SELECT {column_list} FROM {temp_table};
+                """
+
+            cursor.execute(insert_query)
+            connection.commit()
+            return cursor.rowcount
+
+        else:
+            raise ValueError("Unsupported database type. Use 'postgres' or 'sqlite'.")
+
+    def gen_uuid(self, length=10):
+        characters = string.ascii_lowercase + string.digits
+        self.uuid_val = "".join(random.choice(characters) for _ in range(length))
+
     def merge(self):
+        self.gen_uuid()
         tables_info = dict()
         if check_db_equal(self.orig_db, self.dest_db):
             raise errors.RepoToolsExportSameDBError
@@ -1116,27 +1381,42 @@ class Merger(object):
             """
         )
         sources = list(self.orig_db.cursor.fetchall())
+        self.create_temp_table(original_table="sources")
         if self.dest_db.db_type == "postgres":
             psycopg2.extras.execute_batch(
                 self.dest_db.cursor,
-                """
-                INSERT INTO sources(name,url_root)
+                f"""
+                INSERT INTO temp_{self.uuid_val}_sources(name,url_root)
                 SELECT %(source)s,%(url_root)s
-                WHERE NOT EXISTS(
-                    SELECT 1 FROM sources WHERE name=%(source)s)
+                EXCEPT
+                SELECT s.name,s.url_root FROM sources s WHERE name=%(source)s
                 """,
                 [dict(source=s, url_root=u) for s, u in sources],
             )
         else:
             self.dest_db.cursor.executemany(
-                """
-                INSERT INTO sources(name,url_root)
+                f"""
+                INSERT INTO temp_{self.uuid_val}_sources(name,url_root)
                 SELECT :source,:url_root
-                WHERE NOT EXISTS(
-                    SELECT 1 FROM sources WHERE name=:source)
+                EXCEPT
+                SELECT s.name,s.url_root FROM sources s WHERE name=:source
                 """,
                 [dict(source=s, url_root=u) for s, u in sources],
             )
+        self.dest_db.cursor.execute(
+            """
+            INSERT INTO sources(name,url_root)
+            SELECT  name, url_root
+            FROM temp_sources
+            ON CONFLICT(name)
+            DO NOTHING
+            ;"""
+        )
+        self.dest_db.cursor.execute(
+            f"""
+            DROP TABLE temp_{self.uuid_val}_sources;
+            ;"""
+        )
 
     def merge_urls(self):
         self.dest_db.logger.info("Merging URLs")
@@ -1169,52 +1449,67 @@ class Merger(object):
                 uclean,
             ) in self.orig_db.cursor.fetchall()
         ]
+        self.create_temp_table(original_table="urls")
         if self.dest_db.db_type == "postgres":
             psycopg2.extras.execute_batch(
                 self.dest_db.cursor,
-                """
-                INSERT INTO urls(url,source,source_root,inserted_at)
+                f"""
+                INSERT INTO temp_{self.uuid_val}_urls(url,source,source_root,inserted_at)
                 SELECT %(url)s,us.id,usr.id,%(uinsert)s
                 FROM sources us
                 INNER JOIN sources usr
                 ON us.name=%(usource)s
                 AND usr.url_root=%(usroot)s
-                AND NOT EXISTS(
-                    SELECT url FROM urls WHERE url=%(url)s)
+                LEFT OUTER JOIN urls u
+                ON u.url=%(url)s
+                WHERE u.id IS NULL
+                ; 
                 """,
                 info,
             )
-            psycopg2.extras.execute_batch(
-                self.dest_db.cursor,
-                """
-                UPDATE urls SET cleaned_url=uc.id
-                FROM urls uc
-                WHERE urls.url=%(url)s AND uc.url=%(uclean)s
-                """,
-                info,
-            )
+            # psycopg2.extras.execute_batch(
+            #     self.dest_db.cursor,
+            #     """
+            #     UPDATE urls SET cleaned_url=uc.id
+            #     FROM urls uc
+            #     WHERE urls.url=%(url)s AND uc.url=%(uclean)s
+            #     """,
+            #     info,
+            # )
         else:
             self.dest_db.cursor.executemany(
-                """
-                INSERT INTO urls(url,source,source_root,inserted_at)
+                f"""
+                INSERT INTO temp_{self.uuid_val}_urls(url,source,source_root,inserted_at)
                 SELECT :url,us.id,usr.id,:uinsert
                 FROM sources us
                 INNER JOIN sources usr
                 ON us.name=:usource
                 AND usr.url_root=:usroot
-                AND NOT EXISTS(
-                    SELECT url FROM urls WHERE url=:url)
+                LEFT OUTER JOIN urls u
+                ON u.url=:url
+                WHERE u.id IS NULL
+                ;
                 """,
                 info,
             )
-            self.dest_db.cursor.executemany(
-                """
-                UPDATE urls SET cleaned_url=uc.id
-                FROM urls uc
-                WHERE urls.url=:url AND uc.url=:uclean
-                """,
-                info,
-            )
+            # self.dest_db.cursor.executemany(
+            #     """
+            #     UPDATE urls SET cleaned_url=uc.id
+            #     FROM temp_{self.uuid_val}_urls tu
+            #     WHERE urls.url=tu.url AND uc.url=tu.cleaned_url
+            #     """,
+            #     info,
+            # )
+        self.flush_temp_table_to_original(
+            original_table="urls",
+            conflict_column="id",
+            ignore_columns=["cleaned_url"],
+        )
+        self.dest_db.cursor.execute(
+            f"""
+            DROP TABLE temp_{self.uuid_val}_urls;
+            ;"""
+        )
 
     def merge_repos(self):
         self.dest_db.logger.info("Merging repositories")
@@ -1252,70 +1547,84 @@ class Merger(object):
                 url,
             ) in self.orig_db.cursor.fetchall()
         ]
+        self.create_temp_table(original_table="repositories")
         if self.dest_db.db_type == "postgres":
             psycopg2.extras.execute_batch(
                 self.dest_db.cursor,
-                """
-                INSERT INTO repositories(owner,name,source,url_id,created_at,updated_at,cloned,latest_commit_time)
+                f"""
+                INSERT INTO temp_{self.uuid_val}_repositories(owner,name,source,url_id,created_at,updated_at,cloned,latest_commit_time)
                 SELECT %(rowner)s,%(rname)s,s.id,u.id,%(rcreatedat)s,%(rupdatedat)s,%(rcloned)s,%(rlatest)s
                 FROM sources s
                 LEFT OUTER JOIN urls u
-                ON s.name=%(source)s
-                AND u.url=%(url)s
+                ON u.url=%(url)s
                 LEFT OUTER JOIN repositories r 
                 ON r.source=s.id AND r.owner=%(rowner)s AND r.name=%(rname)s
-                WHERE r.id IS NULL
+                WHERE r.id IS NULL AND s.name=%(source)s
                 ;
                 """,
                 info,
             )
-            psycopg2.extras.execute_batch(
-                self.dest_db.cursor,
-                """
-                UPDATE repositories SET 
-                    created_at=%(rcreatedat)s,
-                    updated_at=%(rupdatedat)s,
-                    cloned=%(rcloned)s,
-                    latest_commit_time=%(rlatest)s
-                FROM sources s
-                WHERE s.name=%(source)s
-                AND repositories.source=s.id
-                AND repositories.owner=%(rowner)s
-                AND repositories.name=%(rname)s
-                """,
-                info,
-            )
+            # psycopg2.extras.execute_batch(
+            #     self.dest_db.cursor,
+            #     """
+            #     UPDATE repositories SET
+            #         created_at=%(rcreatedat)s,
+            #         updated_at=%(rupdatedat)s,
+            #         cloned=%(rcloned)s,
+            #         latest_commit_time=%(rlatest)s
+            #     FROM sources s
+            #     WHERE s.name=%(source)s
+            #     AND repositories.source=s.id
+            #     AND repositories.owner=%(rowner)s
+            #     AND repositories.name=%(rname)s
+            #     """,
+            #     info,
+            # )
         else:
             self.dest_db.cursor.executemany(
-                """
-                INSERT INTO repositories(owner,name,source,url_id,created_at,updated_at,cloned,latest_commit_time)
+                f"""
+                INSERT INTO temp_{self.uuid_val}_repositories(owner,name,source,url_id,created_at,updated_at,cloned,latest_commit_time)
                 SELECT :rowner,:rname,s.id,u.id,:rcreatedat,:rupdatedat,:rcloned,:rlatest
                 FROM sources s
                 LEFT OUTER JOIN urls u
-                ON s.name=:source
-                AND u.url=:url
+                ON u.url=:url
                 LEFT OUTER JOIN repositories r 
                 ON r.source=s.id AND r.owner=:rowner AND r.name=:rname
-                WHERE r.id IS NULL
+                WHERE r.id IS NULL AND s.name=:source
                 ;
                 """,
                 info,
             )
-            self.dest_db.cursor.executemany(
-                """
-                UPDATE repositories SET 
-                    created_at=:rcreatedat,
-                    updated_at=:rupdatedat,
-                    cloned=:rcloned,
-                    latest_commit_time=:rlatest
-                FROM sources s
-                WHERE s.name=:source
-                AND repositories.source=s.id
-                AND repositories.owner=:rowner
-                AND repositories.name=:rname
-                """,
-                info,
-            )
+            # self.dest_db.cursor.executemany(
+            #     """
+            #     UPDATE repositories SET
+            #         created_at=:rcreatedat,
+            #         updated_at=:rupdatedat,
+            #         cloned=:rcloned,
+            #         latest_commit_time=:rlatest
+            #     FROM sources s
+            #     WHERE s.name=:source
+            #     AND repositories.source=s.id
+            #     AND repositories.owner=:rowner
+            #     AND repositories.name=:rname
+            #     """,
+            #     info,
+            # )
+        self.flush_temp_table_to_original(
+            original_table="repositories",
+            conflict_column="id",
+            conflict_update_columns=[
+                "created_at",
+                "updated_at",
+                "cloned",
+                "latest_commit_time",
+            ],
+        )
+        self.dest_db.cursor.execute(
+            f"""
+            DROP TABLE temp_{self.uuid_val}_repositories;
+            ;"""
+        )
 
     def merge_identities(self):
         self.dest_db.logger.info("Merging identities")
@@ -1328,28 +1637,35 @@ class Merger(object):
             """
         )
         info = list(self.orig_db.cursor.fetchall())
+        self.create_temp_table(original_table="identity_types")
         if self.dest_db.db_type == "postgres":
             psycopg2.extras.execute_batch(
                 self.dest_db.cursor,
-                """
-                INSERT INTO identity_types(name)
+                f"""
+                INSERT INTO temp_{self.uuid_val}_identity_types(name)
                 SELECT %(it)s
-                WHERE NOT EXISTS(
-                    SELECT 1 FROM identity_types WHERE name=%(it)s)
-                """,
-                [dict(it=a[0]) for a in info],
-            )
-        else:
-            self.dest_db.cursor.executemany(
-                """
-                INSERT INTO identity_types(name)
-                SELECT :it
-                WHERE NOT EXISTS(
-                    SELECT 1 FROM identity_types WHERE name=:it)
+                EXCEPT
+                SELECT it.name FROM identity_types it WHERE it.name=%(it)s
+                ;
                 """,
                 [dict(it=a[0]) for a in info],
             )
 
+        else:
+            self.dest_db.cursor.executemany(
+                f"""
+                INSERT INTO temp_{self.uuid_val}_identity_types(name)
+                SELECT :it
+                SELECT it.name FROM identity_types it WHERE it.name=:it
+                ;
+                """,
+                [dict(it=a[0]) for a in info],
+            )
+        self.flush_temp_table_to_original(
+            original_table="identity_types",
+            conflict_column="id",
+            conflict_update_columns=[],
+        )
         # insert all identities with their own user
         self.orig_db.cursor.execute(
             """
@@ -1363,21 +1679,32 @@ class Merger(object):
             dict(identity=i, it=it, att=att, cat=cat, iat=iat, bot=bot)
             for i, it, att, cat, iat, bot in self.orig_db.cursor.fetchall()
         ]
+        self.create_temp_table(original_table="users")
+        self.create_temp_table(original_table="identities")
+
         if self.dest_db.db_type == "postgres":
             psycopg2.extras.execute_batch(
                 self.dest_db.cursor,
-                """
-                INSERT INTO users(
+                f"""
+                INSERT INTO temp_{self.uuid_val}_users(
                         creation_identity,
                         creation_identity_type_id)
                             SELECT %(identity)s,id FROM identity_types WHERE name=%(it)s
-                    AND NOT EXISTS (SELECT 1 FROM identities i
+                    EXCEPT 
+                    SELECT i.identity,it.name FROM identities i
                         INNER JOIN identity_types it
                         ON i.identity=%(identity)s AND i.identity_type_id=it.id AND it.name=%(it)s
-                        )
                 ON CONFLICT DO NOTHING
-                ;
-                INSERT INTO identities(identity,identity_type_id,attributes,created_at,inserted_at,is_bot,user_id)
+                ;""",
+                info,
+            )
+            self.flush_temp_table_to_original(
+                original_table="users", conflict_column="id"
+            )
+            psycopg2.extras.execute_batch(
+                self.dest_db.cursor,
+                f"""
+                INSERT INTO temp_{self.uuid_val}_identities(identity,identity_type_id,attributes,created_at,inserted_at,is_bot,user_id)
                 SELECT %(identity)s,
                     it.id,
                     %(att)s,
@@ -1397,20 +1724,24 @@ class Merger(object):
             )
         else:
             self.dest_db.cursor.executemany(
-                """
-                INSERT OR IGNORE INTO users(
+                f"""
+                INSERT OR IGNORE INTO temp_{self.uuid_val}_users(
                         creation_identity,
                         creation_identity_type_id)
                             SELECT :identity,id FROM identity_types WHERE name=:it
-                    AND NOT EXISTS (SELECT 1 FROM identities i
+                    EXCEPT 
+                    SELECT i.identity,it.name FROM identities i
                         INNER JOIN identity_types it
-                        ON i.identity=:identity AND i.identity_type_id=it.id AND it.name=:it)
+                        ON i.identity=:identity AND i.identity_type_id=it.id AND it.name=:it
                 ;""",
                 info,
             )
+            self.flush_temp_table_to_original(
+                original_table="users", conflict_column="id"
+            )
             self.dest_db.cursor.executemany(
-                """
-                INSERT INTO identities(identity,identity_type_id,attributes,created_at,inserted_at,is_bot,user_id)
+                f"""
+                INSERT INTO temp_{self.uuid_val}_identities(identity,identity_type_id,attributes,created_at,inserted_at,is_bot,user_id)
                 SELECT :identity,
                     it.id,
                     :att,
@@ -1428,7 +1759,11 @@ class Merger(object):
                 """,
                 info,
             )
-
+        self.flush_temp_table_to_original(
+            original_table="identities",
+            conflict_column="id",
+            conflict_update_columns=[],
+        )
         # redo all identity merges
         self.orig_db.cursor.execute(
             """
@@ -1458,6 +1793,22 @@ class Merger(object):
                 it2=d["it2"],
                 reason=d["reason"],
             )
+
+        self.dest_db.cursor.execute(
+            f"""
+            DROP TABLE temp_{self.uuid_val}_identities;
+            ;"""
+        )
+        self.dest_db.cursor.execute(
+            f"""
+            DROP TABLE temp_{self.uuid_val}_users;
+            ;"""
+        )
+        self.dest_db.cursor.execute(
+            f"""
+            DROP TABLE temp_{self.uuid_val}_identity_types;
+            ;"""
+        )
 
     def merge_commits(self):
         self.dest_db.logger.info("Merging commits")
@@ -1543,11 +1894,13 @@ class Merger(object):
                 citname,
             ) in self.orig_db.cursor.fetchall()
         ]
+        self.create_temp_table(original_table="commits")
+
         if self.dest_db.db_type == "postgres":
             psycopg2.extras.execute_batch(
                 self.dest_db.cursor,
-                """
-                INSERT INTO commits(
+                f"""
+                INSERT INTO temp_{self.uuid_val}_commits(
                     sha,
                     insertions,
                     deletions,
@@ -1600,8 +1953,8 @@ class Merger(object):
             )
         else:
             self.dest_db.cursor.executemany(
-                """
-                INSERT INTO commits(
+                f"""
+                INSERT INTO temp_{self.uuid_val}_commits(
                     sha,
                     insertions,
                     deletions,
@@ -1652,7 +2005,11 @@ class Merger(object):
                 """,
                 info,
             )
-
+        self.flush_temp_table_to_original(
+            original_table="commits",
+            conflict_column="id",
+            conflict_update_columns=[],
+        )
         # commit parents
         self.dest_db.logger.info("Merging commit parenthood")
         self.orig_db.cursor.execute(
@@ -1670,11 +2027,12 @@ class Merger(object):
             dict(child_sha=child_sha, parent_sha=parent_sha)
             for (child_sha, parent_sha) in self.orig_db.cursor.fetchall()
         ]
+        self.create_temp_table(original_table="commit_parents")
         if self.dest_db.db_type == "postgres":
             psycopg2.extras.execute_batch(
                 self.dest_db.cursor,
-                """
-                INSERT INTO commit_parents(
+                f"""
+                INSERT INTO temp_{self.uuid_val}_commit_parents(
                     child_id,parent_id)
                 SELECT ch.id,pa.id
                 FROM commits ch
@@ -1700,7 +2058,11 @@ class Merger(object):
                 """,
                 info,
             )
-
+        self.flush_temp_table_to_original(
+            original_table="commit_parents",
+            conflict_column="id",
+            conflict_update_columns=[],
+        )
         # commit repos
         self.dest_db.logger.info("Merging commit repo links")
 
@@ -1721,11 +2083,12 @@ class Merger(object):
             dict(sha=sha, owner=owner, name=name, source=source)
             for (sha, owner, name, source) in self.orig_db.cursor.fetchall()
         ]
+        self.create_temp_table(original_table="commit_repos")
         if self.dest_db.db_type == "postgres":
             psycopg2.extras.execute_batch(
                 self.dest_db.cursor,
-                """
-                INSERT INTO commit_repos(
+                f"""
+                INSERT INTO temp_{self.uuid_val}_commit_repos(
                     commit_id,repo_id)
                 SELECT c.id,r.id
                 FROM sources s
@@ -1757,6 +2120,26 @@ class Merger(object):
                 """,
                 info,
             )
+        self.flush_temp_table_to_original(
+            original_table="commit_repos",
+            conflict_column="id",
+            conflict_update_columns=[],
+        )
+        self.dest_db.cursor.execute(
+            f"""
+            DROP TABLE temp_{self.uuid_val}_commits;
+            ;"""
+        )
+        self.dest_db.cursor.execute(
+            f"""
+            DROP TABLE temp_{self.uuid_val}_commit_parents;
+            ;"""
+        )
+        self.dest_db.cursor.execute(
+            f"""
+            DROP TABLE temp_{self.uuid_val}_commit_repos;
+            ;"""
+        )
 
     def merge_updates(self):
         self.dest_db.logger.info("Merging updates")
@@ -1808,11 +2191,12 @@ class Merger(object):
                 it,
             ) in self.orig_db.cursor.fetchall()
         ]
+        self.create_temp_table(original_table="table_updates")
         if self.dest_db.db_type == "postgres":
             psycopg2.extras.execute_batch(
                 self.dest_db.cursor,
-                """
-                INSERT INTO table_updates(
+                f"""
+                INSERT INTO temp_{self.uuid_val}_table_updates(
                     table_name,success,updated_at,info,repo_id,identity_id)
                 SELECT 
                     %(table_name)s,
@@ -1834,8 +2218,8 @@ class Merger(object):
             )
         else:
             self.dest_db.cursor.executemany(
-                """
-                INSERT INTO table_updates(
+                f"""
+                INSERT INTO temp_{self.uuid_val}_table_updates(
                     table_name,success,updated_at,info,repo_id,identity_id)
                 SELECT 
                     :table_name,
@@ -1855,6 +2239,11 @@ class Merger(object):
                 """,
                 info,
             )
+        self.flush_temp_table_to_original(
+            original_table="table_updates",
+            conflict_column="id",
+            conflict_update_columns=[],
+        )
         # full updates
         self.orig_db.cursor.execute(
             """
@@ -1885,6 +2274,11 @@ class Merger(object):
                 """,
                 info,
             )
+        self.dest_db.cursor.execute(
+            f"""
+            DROP TABLE temp_{self.uuid_val}_table_updates;
+            ;"""
+        )
 
     def merge_errors(self):
         self.dest_db.logger.info("Merging errors")
