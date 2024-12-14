@@ -1103,8 +1103,11 @@ class Merger(object):
                     create_table_query += f"    {column_name} {data_type}{default_clause}{nullable_clause},\n"
 
                 create_table_query = create_table_query.rstrip(",\n") + "\n);"
-
-                cursor.execute(create_table_query)
+                try:
+                    cursor.execute(create_table_query)
+                except:
+                    print(create_table_query)
+                    raise
 
                 # Handle SERIAL columns (create new sequences)
                 for col in columns:
