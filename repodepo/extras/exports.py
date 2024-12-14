@@ -1280,9 +1280,8 @@ class Merger(object):
                     ]
                 )
                 insert_query = f"""
-                    INSERT INTO {original_table} ({column_list})
+                    INSERT OR IGNORE INTO {original_table} ({column_list})
                     SELECT {column_list} FROM {temp_table}
-                    ON CONFLICT IGNORE
                     --ON CONFLICT ({conflict_column}) DO UPDATE SET {update_set}
                     ;
                 """
