@@ -1135,7 +1135,7 @@ class Merger(object):
             # Build CREATE TABLE statement
             create_table_query = f"CREATE TABLE {new_table} (\n"
             for col in columns:
-                column_name, column_type, not_null, default_value, _, pk = col
+                cid, column_name, column_type, not_null, default_value, pk = col
 
                 # Handle defaults
                 default_clause = f" DEFAULT {default_value}" if default_value else ""
