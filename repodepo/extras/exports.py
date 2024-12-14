@@ -1406,12 +1406,8 @@ class Merger(object):
                 """,
                 [dict(source=s, url_root=u) for s, u in sources],
             )
-        self.dest_db.cursor.execute(
-            f"""
-            INSERT OR IGNORE INTO sources(name,url_root)
-            SELECT  name, url_root
-            FROM temp_{self.uuid_val}_sources
-            ;"""
+        self.flush_temp_table_to_original(
+            original_table="sources", conflict_column="id"
         )
         self.dest_db.cursor.execute(
             f"""
