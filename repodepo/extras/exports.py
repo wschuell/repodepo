@@ -1410,10 +1410,10 @@ class Merger(object):
                 [dict(source=s, url_root=u) for s, u in sources],
             )
         self.dest_db.cursor.execute(
-            """
+            f"""
             INSERT OR IGNORE INTO sources(name,url_root)
             SELECT  name, url_root
-            FROM temp_sources
+            FROM temp_{self.uuid_val}_sources
             ;"""
         )
         self.dest_db.cursor.execute(
