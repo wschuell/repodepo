@@ -1247,6 +1247,7 @@ class Merger(object):
                 return cursor.rowcount
 
         elif db_type == "sqlite":
+            # !!! SQLite does not support on conflict do statements: defaulting to ignore
             cursor = self.dest_db.cursor
 
             # Get column names excluding AUTOINCREMENT primary key columns
@@ -1281,7 +1282,9 @@ class Merger(object):
                 insert_query = f"""
                     INSERT INTO {original_table} ({column_list})
                     SELECT {column_list} FROM {temp_table}
-                    ON CONFLICT ({conflict_column}) DO UPDATE SET {update_set};
+                    ON CONFLICT IGNORE
+                    --ON CONFLICT ({conflict_column}) DO UPDATE SET {update_set}
+                    ;
                 """
             else:
                 insert_query = f"""
