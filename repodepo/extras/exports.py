@@ -2058,7 +2058,7 @@ class Merger(object):
             )
         self.flush_temp_table_to_original(
             original_table="commit_parents",
-            conflict_column="id",
+            # conflict_column="id",
             conflict_update_columns=[],
         )
         # commit repos
@@ -2120,7 +2120,7 @@ class Merger(object):
             )
         self.flush_temp_table_to_original(
             original_table="commit_repos",
-            conflict_column="id",
+            # conflict_column="id",
             conflict_update_columns=[],
         )
         self.dest_db.cursor.execute(
