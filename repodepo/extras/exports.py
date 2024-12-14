@@ -1144,8 +1144,11 @@ class Merger(object):
                 create_table_query += f"    {column_name} {column_type}{default_clause}{nullable_clause},\n"
 
             create_table_query = create_table_query.rstrip(",\n") + "\n);"
-
-            cursor.execute(create_table_query)
+            try:
+                cursor.execute(create_table_query)
+            except:
+                print(create_table_query)
+                raise
 
         else:
             raise ValueError("Unsupported database type. Use 'postgres' or 'sqlite'.")
