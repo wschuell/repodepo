@@ -1657,6 +1657,7 @@ class Merger(object):
                 f"""
                 INSERT INTO temp_{self.uuid_val}_identity_types(name)
                 SELECT :it
+                EXCEPT
                 SELECT it.name FROM identity_types it WHERE it.name=:it
                 ;
                 """,
