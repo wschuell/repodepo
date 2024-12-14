@@ -1411,11 +1411,9 @@ class Merger(object):
             )
         self.dest_db.cursor.execute(
             """
-            INSERT INTO sources(name,url_root)
+            INSERT OR IGNORE INTO sources(name,url_root)
             SELECT  name, url_root
             FROM temp_sources
-            ON CONFLICT(name)
-            DO NOTHING
             ;"""
         )
         self.dest_db.cursor.execute(
