@@ -1181,8 +1181,8 @@ class Merger(object):
                 f"Table '{original_table}' is not in the allowed tables list."
             )
 
-        db_type = self.orig_db.db_type
-        connection = self.orig_db.connection
+        db_type = self.dest_db.db_type
+        connection = self.dest_db.connection
 
         temp_table = f"temp_{self.uuid_val}_{original_table}"
 
@@ -1247,7 +1247,7 @@ class Merger(object):
                 return cursor.rowcount
 
         elif db_type == "sqlite":
-            cursor = connection.cursor()
+            cursor = self.dest_db.cursor
 
             # Get column names excluding AUTOINCREMENT primary key columns
             cursor.execute(f"PRAGMA table_info({original_table});")
