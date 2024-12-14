@@ -1049,7 +1049,7 @@ class Merger(object):
             self.orig_db.cursor.execute(
                 """SELECT name
                     FROM sqlite_master
-                    WHERE type = 'table' AND name NOT LIKE 'sqlite_%';
+                    WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
                 ;"""
             )
         self.ALLOWED_TABLES = [r[0] for r in self.orig_db.cursor.fetchall()]
