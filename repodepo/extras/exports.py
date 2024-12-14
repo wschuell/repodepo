@@ -1283,16 +1283,11 @@ class Merger(object):
                     SELECT {column_list} FROM {temp_table}
                     ON CONFLICT ({conflict_column}) DO UPDATE SET {update_set};
                 """
-            elif conflict_column:
-                insert_query = f"""
-                    INSERT INTO {original_table} ({column_list})
-                    SELECT {column_list} FROM {temp_table}
-                    ON CONFLICT ({conflict_column}) DO NOTHING;
-                """
             else:
                 insert_query = f"""
-                    INSERT INTO {original_table} ({column_list})
-                    SELECT {column_list} FROM {temp_table};
+                    INSERT OR IGNORE INTO {original_table} ({column_list})
+                    SELECT {column_list} FROM {temp_table}
+                   
                 """
 
             cursor.execute(insert_query)
