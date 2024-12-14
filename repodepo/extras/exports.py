@@ -1689,7 +1689,7 @@ class Merger(object):
                         creation_identity_type_id)
                             SELECT %(identity)s,id FROM identity_types WHERE name=%(it)s
                     EXCEPT 
-                    SELECT i.identity,it.name FROM identities i
+                    SELECT i.identity,it.id FROM identities i
                         INNER JOIN identity_types it
                         ON i.identity=%(identity)s AND i.identity_type_id=it.id AND it.name=%(it)s
                 ON CONFLICT DO NOTHING
