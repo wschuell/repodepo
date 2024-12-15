@@ -178,6 +178,10 @@ class Database(object):
                     database=db_name,
                     password=password,
                     options=options,
+                    keepalives=1,  # Enable TCP keepalive
+                    keepalives_idle=30,  # 30 seconds of idle time before probing
+                    keepalives_interval=10,  # Probes sent every 10 seconds
+                    keepalives_count=5,  # Declare connection dead after 5 failed probes
                 )
             except psycopg2.OperationalError as e:
                 self.db_conninfo = {
@@ -212,7 +216,13 @@ class Database(object):
                     )
                     cur.close()
                     conn.close()
-                    self.connection = psycopg2.connect(**self.db_conninfo)
+                    self.connection = psycopg2.connect(
+                        keepalives=1,  # Enable TCP keepalive
+                        keepalives_idle=30,  # 30 seconds of idle time before probing
+                        keepalives_interval=10,  # Probes sent every 10 seconds
+                        keepalives_count=5,  # Declare connection dead after 5 failed probes,
+                        **self.db_conninfo,
+                    )
                 else:
                     pgpass_env = "PGPASSFILE"
                     default_pgpass = os.path.join(os.environ["HOME"], ".pgpass")
@@ -221,7 +231,13 @@ class Database(object):
                         self.logger.info(
                             "Password authentication failed,trying to set .pgpass env variable"
                         )
-                        self.connection = psycopg2.connect(**self.db_conninfo)
+                        self.connection = psycopg2.connect(
+                            keepalives=1,  # Enable TCP keepalive
+                            keepalives_idle=30,  # 30 seconds of idle time before probing
+                            keepalives_interval=10,  # Probes sent every 10 seconds
+                            keepalives_count=5,  # Declare connection dead after 5 failed probes
+                            **self.db_conninfo,
+                        )
                     else:
                         raise
             self.cursor = self.connection.cursor()

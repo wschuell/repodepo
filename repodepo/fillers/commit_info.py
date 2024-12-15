@@ -10,11 +10,40 @@ import psutil
 import shutil
 import tempfile
 import subprocess
+from pathlib import Path
 
 from .. import fillers
 from ..fillers import generic
 
 import multiprocessing as mp
+
+
+def get_directory_size(directory):
+    """Calculate the size of a directory in bytes."""
+    total_size = 0
+    for dirpath, dirnames, filenames in os.walk(directory):
+        for filename in filenames:
+            file_path = os.path.join(dirpath, filename)
+            # Add file size
+            total_size += os.path.getsize(file_path)
+    return total_size
+
+
+def get_directory_size_subprocess(directory):
+    """Get the size of a directory using the `du` command."""
+    try:
+        result = subprocess.run(
+            ["du", "-sb", directory],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True,
+        )
+        size_in_bytes = int(result.stdout.split()[0])
+        return size_in_bytes
+    except Exception as e:
+        print(f"Error calculating directory size: {e}")
+        return None
 
 
 class CommitsFiller(fillers.Filler):
@@ -41,7 +70,7 @@ class CommitsFiller(fillers.Filler):
         solve_orig_repo=True,
         full_updates_notif=True,
         skip_errored=False,
-        **kwargs
+        **kwargs,
     ):
         self.full_updates_notif = full_updates_notif
         self.force = force
@@ -292,7 +321,7 @@ class CommitsFiller(fillers.Filler):
                             group_by="authors",
                             basic_info_only=True,
                             allbranches=self.allbranches,
-                            **repo_info
+                            **repo_info,
                         ),
                         repo_id=repo_info["repo_id"],
                     )
@@ -313,7 +342,7 @@ class CommitsFiller(fillers.Filler):
                         self.list_commits(
                             basic_info_only=False,
                             allbranches=self.allbranches,
-                            **repo_info
+                            **repo_info,
                         ),
                         repo_id=repo_info["repo_id"],
                     )
@@ -337,7 +366,7 @@ class CommitsFiller(fillers.Filler):
                         self.list_commits(
                             basic_info_only=True,
                             allbranches=self.allbranches,
-                            **repo_info
+                            **repo_info,
                         ),
                         repo_id=repo_info["repo_id"],
                     )
@@ -361,7 +390,7 @@ class CommitsFiller(fillers.Filler):
                         self.list_commits(
                             basic_info_only=True,
                             allbranches=self.allbranches,
-                            **repo_info
+                            **repo_info,
                         ),
                         repo_id=repo_info["repo_id"],
                     )
@@ -412,7 +441,7 @@ class CommitsFiller(fillers.Filler):
                             basic_info_only=True,
                             allbranches=self.allbranches,
                             clone_folder=clone_folder,
-                            **repo_info
+                            **repo_info,
                         )
                     except pygit2.GitError:
                         self.logger.error("Not cloned: {}".format(repo_info))
@@ -434,7 +463,7 @@ class CommitsFiller(fillers.Filler):
                         basic_info_only=False,
                         allbranches=self.allbranches,
                         clone_folder=clone_folder,
-                        **repo_info
+                        **repo_info,
                     )
 
                 try:
@@ -1041,7 +1070,7 @@ class CommitsFiller(fillers.Filler):
                         commit_gmt_timestamp=datetime.datetime.fromtimestamp(
                             float(c["commit_gmt_time"]), datetime.timezone.utc
                         ),
-                        **c
+                        **c,
                     )
                     for c in tracked_gen(commit_info_list)
                 ),
@@ -1084,7 +1113,7 @@ class CommitsFiller(fillers.Filler):
                         commit_gmt_timestamp=datetime.datetime.fromtimestamp(
                             float(c["commit_gmt_time"]), datetime.timezone.utc
                         ),
-                        **c
+                        **c,
                     )
                     for c in tracked_gen(commit_info_list)
                 ),

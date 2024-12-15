@@ -11,7 +11,7 @@ import subprocess
 import itertools
 import langdetect
 import uuid
-
+from pathlib import Path
 from psycopg2 import extras
 
 from .. import fillers
@@ -1415,6 +1415,7 @@ class ClonesFiller(fillers.Filler):
         Executing update_repo if repo already exists and update is True
 
         """
+
         if bare is None:
             bare = self.bare
         os.environ["GIT_SSL_NO_VERIFY"] = "1"
@@ -1488,7 +1489,9 @@ class ClonesFiller(fillers.Filler):
                     path=repo_path,
                     callbacks=callbacks,
                 )
+
                 success = True
+
             except pygit2.GitError as e:
                 if "No space left on device" in str(e):
                     self.logger.info(err_txt)
@@ -1516,6 +1519,7 @@ class ClonesFiller(fillers.Filler):
             self.db.submit_download_attempt(
                 success=success, source=source, repo=name, owner=owner
             )
+
             # else:
             #   self.logger.info('Skipping repo {}/{}/{}, already failed to download'.format(source,owner,name))
 
