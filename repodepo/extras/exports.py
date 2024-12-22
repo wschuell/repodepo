@@ -1735,7 +1735,7 @@ class Merger(object):
                 info,
             )
             self.flush_temp_table_to_original(
-                original_table="users", conflict_column="id"
+                original_table="users",  # conflict_column="id"
             )
             self.dest_db.cursor.executemany(
                 f"""
