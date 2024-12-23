@@ -1697,7 +1697,7 @@ class Merger(object):
                 info,
             )
             self.flush_temp_table_to_original(
-                original_table="users", conflict_column="id"
+                original_table="users",  # conflict_column="id"
             )
             psycopg2.extras.execute_batch(
                 self.dest_db.cursor,
